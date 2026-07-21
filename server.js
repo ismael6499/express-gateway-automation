@@ -539,6 +539,40 @@ app.post('/browser/browser', async (req, res) => {
   }
 });
 
+// Endpoint POST /browser/programacion - Actualizar horario y días de la simulación
+app.post('/browser/programacion', (req, res) => {
+  const { startHour, endHour, days, browserCloseHour, browserCloseEnabled } = req.body;
+
+  if (startHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(startHour)) {
+    browserSimulacionStartHour = startHour;
+  }
+  if (endHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(endHour)) {
+    browserSimulacionEndHour = endHour;
+  }
+  if (days && Array.isArray(days)) {
+    browserSimulacionDays = days.map(Number);
+  }
+  if (browserCloseHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(browserCloseHour)) {
+    browserBrowserCloseHour = browserCloseHour;
+  }
+  if (browserCloseEnabled !== undefined) {
+    browserBrowserCloseEnabled = !!browserCloseEnabled;
+  }
+
+  saveSimulationState();
+  log(`Programación actualizada: Rango: ${browserSimulacionStartHour}-${browserSimulacionEndHour}, Días: ${browserSimulacionDays.join(',')}, Cierre: ${browserBrowserCloseHour} (Activo=${browserBrowserCloseEnabled})`);
+
+  res.json({
+    status: 'ok',
+    message: 'Programación actualizada con éxito.',
+    browserSimulacionStartHour,
+    browserSimulacionEndHour,
+    browserSimulacionDays,
+    browserBrowserCloseHour,
+    browserBrowserCloseEnabled
+  });
+});
+
 // Endpoint POST /browser/presencia para controlar la simulación de actividad
 app.post('/browser/presencia', (req, res) => {
   const { accion, intervaloMs } = req.body;
@@ -571,6 +605,7 @@ app.post('/browser/presencia', (req, res) => {
 
     setupBrowserInterval();
     browserPresenciaActiva = true;
+    saveSimulationState();
     log('Simulación de presencia activada.');
     
     // Ejecutar una simulación inicial inmediatamente
@@ -590,6 +625,7 @@ app.post('/browser/presencia', (req, res) => {
       log('Simulación de presencia pausada.');
     }
     browserPresenciaActiva = false;
+    saveSimulationState();
     return res.status(200).json({
       status: 'ok',
       message: 'Simulación de presencia pausada.'
