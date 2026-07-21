@@ -114,6 +114,21 @@ async function autoLoginTargetSession(page) {
 
       const url = page.url();
 
+      // Si la URL contiene "theme=light" o "theme=default", forzar modo oscuro redirigiendo
+      if (url.includes('theme=light') || url.includes('theme=default')) {
+        let newUrl = url;
+        if (url.includes('theme=light')) {
+          newUrl = url.replace('theme=light', 'theme=dark');
+        } else if (url.includes('theme=default')) {
+          newUrl = url.replace('theme=default', 'theme=dark');
+        }
+        log(`Auto-Login: Detectado tema claro/default en la URL. Redirigiendo a modo oscuro: ${newUrl}`);
+        await page.goto(newUrl).catch((err) => {
+          log(`Error al redirigir a modo oscuro: ${err.message}`);
+        });
+        continue;
+      }
+
       // Si ya estamos en Browser
       if (url.includes('cloud.example.com') || url.includes('example.com')) {
         // Verificar si está la pantalla de carga lenta
