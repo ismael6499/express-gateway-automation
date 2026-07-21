@@ -469,6 +469,31 @@ app.post('/sistema/ejecutar', (req, res) => {
   });
 });
 
+// Endpoint POST /gateway/restart para reiniciar el servidor de forma remota y controlada
+app.post('/gateway/restart', (req, res) => {
+  log('Solicitud de reinicio remoto del servidor recibida.');
+  res.json({
+    status: 'ok',
+    message: 'Reiniciando el Gateway Server en la PC. Por favor espera unos segundos...'
+  });
+
+  const { spawn } = require('child_process');
+  const batPath = path.join(__dirname, 'restart_server.bat');
+
+  // Ejecutar el restart en un hilo independiente detached
+  const child = spawn('cmd.exe', ['/c', batPath], {
+    detached: true,
+    stdio: 'ignore'
+  });
+  child.unref();
+
+  // Apagar este proceso después de 1 segundo para dar tiempo a enviar la respuesta
+  setTimeout(() => {
+    log('Cerrando proceso actual para reiniciar...');
+    process.exit(0);
+  }, 1000);
+});
+
 // HTML para la Pantalla de Login Segura (Glassmorphism)
 const LOGIN_HTML = `
 <!DOCTYPE html>
@@ -1142,6 +1167,20 @@ const DASHBOARD_HTML = `
       </button>
     </div>
 
+    <!-- CARD 3: REINICIAR GATEWAY -->
+    <div class="card" id="cardReiniciar" style="margin-top: 10px; border-color: rgba(239, 68, 68, 0.15);">
+      <div class="card-header" style="margin-bottom: 0; display: flex; align-items: center; justify-content: space-between;">
+        <div class="card-title-group" style="flex: 1;">
+          <h2>Reiniciar Servidor</h2>
+          <p>Reinicia el gateway y reconecta el túnel</p>
+        </div>
+        <button class="btn btn-danger" onclick="confirmarReinicio()" style="padding: 10px 16px; font-size: 0.85rem; flex: 0 0 auto; width: auto; margin-top: 0; display: inline-flex; align-items: center; gap: 4px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+          Reiniciar
+        </button>
+      </div>
+    </div>
+
     <!-- Barra de info de túnel ngrok -->
     <div class="tunnel-bar" id="tunnelBar" style="display: none;">
       <span class="badge">Remoto</span>
@@ -1379,6 +1418,37 @@ const DASHBOARD_HTML = `
         }
       } catch (error) {
         showToast('Error al conectar con la PC', 'error');
+      }
+    }
+
+    async function confirmarReinicio() {
+      const confirmar = confirm("¿Estás seguro de que deseas reiniciar el Gateway Server? La conexión se perderá temporalmente.");
+      if (!confirmar) return;
+
+      showToast('Enviando señal de reinicio...', 'info');
+
+      try {
+        const response = await fetch('/gateway/restart', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          showToast(data.message, 'success');
+          setTimeout(() => {
+            showToast('Reconectando...', 'info');
+            window.location.reload();
+          }, 4000);
+        } else {
+          showToast(data.message || 'Error al reiniciar', 'error');
+        }
+      } catch (error) {
+        // En caso de corte de red rápido por apagado de Node, lo tratamos como éxito
+        showToast('Reiniciando servidor. Reconectando en 5 segundos...', 'success');
+        setTimeout(() => {
+          window.location.reload();
+        }, 5000);
       }
     }
   </script>
