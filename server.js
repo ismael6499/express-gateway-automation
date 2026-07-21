@@ -297,7 +297,9 @@ app.post('/browser/browser', async (req, res) => {
             '--disable-features=ImplicitSignin', // Evita que use el inicio de sesión automático del S.O.
             '--test-type', // Elimina la advertencia de bandera experimental no soportada
             '--restore-last-session', // Restaura la sesión anterior y cookies temporales
-            '--hide-crash-restore-bubble' // Oculta el cartel molesto de restauración de páginas por cierre sucio
+            '--hide-crash-restore-bubble', // Oculta el cartel molesto de restauración de páginas por cierre sucio
+            '--window-size=900,700', // Iniciar el navegador con tamaño pequeño
+            '--window-position=0,0' // Ubicar en la esquina superior izquierda
           ]
         });
       } catch (errChrome) {
@@ -312,7 +314,9 @@ app.post('/browser/browser', async (req, res) => {
               '--disable-features=ImplicitSignin',
               '--test-type',
               '--restore-last-session',
-              '--hide-crash-restore-bubble'
+              '--hide-crash-restore-bubble',
+              '--window-size=900,700',
+              '--window-position=0,0'
             ]
           });
         } catch (errChromium) {
@@ -327,7 +331,9 @@ app.post('/browser/browser', async (req, res) => {
               '--disable-features=ImplicitSignin',
               '--test-type',
               '--restore-last-session',
-              '--hide-crash-restore-bubble'
+              '--hide-crash-restore-bubble',
+              '--window-size=900,700',
+              '--window-position=0,0'
             ]
           });
         }
