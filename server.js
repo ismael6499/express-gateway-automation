@@ -83,6 +83,56 @@ function isSimulationInSchedule() {
   }
 }
 
+const stateFilePath = path.join(__dirname, 'simulation_state.json');
+
+function saveSimulationState() {
+  try {
+    fs.writeFileSync(stateFilePath, JSON.stringify({
+      browserPresenciaActiva,
+      browserIntervalMs,
+      browserSimulacionStartHour,
+      browserSimulacionEndHour,
+      browserSimulacionDays,
+      browserBrowserCloseHour,
+      browserBrowserCloseEnabled
+    }, null, 2));
+  } catch (err) {
+    log(`Error al guardar estado de simulación: ${err.message}`);
+  }
+}
+
+function loadSimulationState() {
+  try {
+    if (fs.existsSync(stateFilePath)) {
+      const data = JSON.parse(fs.readFileSync(stateFilePath, 'utf8'));
+      if (data.browserPresenciaActiva !== undefined) {
+        browserPresenciaActiva = data.browserPresenciaActiva;
+      }
+      if (data.browserIntervalMs !== undefined) {
+        browserIntervalMs = data.browserIntervalMs;
+      }
+      if (data.browserSimulacionStartHour !== undefined) {
+        browserSimulacionStartHour = data.browserSimulacionStartHour;
+      }
+      if (data.browserSimulacionEndHour !== undefined) {
+        browserSimulacionEndHour = data.browserSimulacionEndHour;
+      }
+      if (data.browserSimulacionDays !== undefined) {
+        browserSimulacionDays = data.browserSimulacionDays;
+      }
+      if (data.browserBrowserCloseHour !== undefined) {
+        browserBrowserCloseHour = data.browserBrowserCloseHour;
+      }
+      if (data.browserBrowserCloseEnabled !== undefined) {
+        browserBrowserCloseEnabled = data.browserBrowserCloseEnabled;
+      }
+      log(`Estado de simulación cargado: Habilitada=${browserPresenciaActiva}, Intervalo=${browserIntervalMs}ms, Horario=${browserSimulacionStartHour}-${browserSimulacionEndHour}, Cierre=${browserBrowserCloseHour} (Activo=${browserBrowserCloseEnabled})`);
+    }
+  } catch (err) {
+    log(`Error al cargar estado de simulación: ${err.message}`);
+  }
+}
+
 // URL del túnel público ngrok
 let ngrokUrl = '';
 let ngrokListener = null;
