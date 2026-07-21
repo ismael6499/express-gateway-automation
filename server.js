@@ -522,6 +522,23 @@ app.post('/browser/browser', async (req, res) => {
       });
 
       browserBrowserAbierto = true;
+
+      // Si la simulación (Mantener Activo) está activa, iniciarla automáticamente después de 20 segundos
+      if (browserPresenciaActiva) {
+        log('Mantener Activo está encendido. Iniciando simulación automática en 20 segundos...');
+        setTimeout(() => {
+          if (browserBrowserContext && browserPresenciaActiva) {
+            if (!browserIntervalId) {
+              log('Iniciando simulación automática planificada...');
+              setupBrowserInterval();
+              runBrowserActivityLoop().catch((err) => {
+                log(`Error en simulación inicial automática: ${err.message}`);
+              });
+            }
+          }
+        }, 20000);
+      }
+
       return res.status(200).json({
         status: 'ok',
         message: 'Navegador de Browser abierto con éxito y cargando página.'
