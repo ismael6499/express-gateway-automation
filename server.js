@@ -346,6 +346,17 @@ app.get('/gateway/status', (req, res) => {
         audioData = JSON.parse(stdout.trim());
       } catch (e) {}
     }
+
+    let lastActivityFormatted = 'Sin actividad';
+    let lastActivitySecondsAgo = null;
+    if (lastActivityTime) {
+      const now = new Date();
+      lastActivitySecondsAgo = Math.floor((now - lastActivityTime) / 1000);
+      const pad = (n) => String(n).padStart(2, '0');
+      const d = lastActivityTime;
+      lastActivityFormatted = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    }
+
     res.json({
       browserBrowserAbierto,
       browserPresenciaActiva,
@@ -359,7 +370,9 @@ app.get('/gateway/status', (req, res) => {
       hasEmulatorPath: !!process.env.EMULATOR_BAT_PATH,
       audioVolume: audioData.volume,
       audioMuted: audioData.muted,
-      audioPlaying: audioData.playing
+      audioPlaying: audioData.playing,
+      lastActivityFormatted,
+      lastActivitySecondsAgo
     });
   });
 });
@@ -375,14 +388,20 @@ app.post('/browser/browser', async (req, res) => {
     });
   }
 
-  if (isLaunchingBrowser && (accion === 'abrir' || accion === 'cerrar')) {
+  // Permitir la acción "cerrar" siempre (incluso si isLaunchingBrowser está activo)
+  if (accion === 'cerrar') {
+    isLaunchingBrowser = false;
+  } else if (isLaunchingBrowser && accion === 'abrir') {
     return res.status(409).json({
       error: 'Conflict',
-      message: 'Ya hay una operaci\u00f3n de navegador en curso. Por favor espera.',
-      msg: 'Operaci\u00f3n en curso'
+      message: 'Ya hay una operación de navegador en curso. Por favor espera.',
+      msg: 'Operación en curso'
     });
   }
-  isLaunchingBrowser = (accion === 'abrir' || accion === 'cerrar');
+
+  if (accion === 'abrir') {
+    isLaunchingBrowser = true;
+  }
 
   try {
     if (accion === 'minimizar') {
@@ -1871,7 +1890,10 @@ const DASHBOARD_HTML = `
       <div class="divider"></div>
 
       <!-- SECCIÓN 1.B: AUTOMATIZACIÓN DE ACTIVIDAD -->
-      <div class="card-section-title">Mantener Activo (Simulador de Presencia)</div>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+        <div class="card-section-title" style="margin-bottom: 0;">Mantener Activo (Presencia)</div>
+        <div id="lastActivityLabel" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500; letter-spacing: 0.3px;">Última: Sin actividad</div>
+      </div>
       
       <div class="form-group">
         <div class="form-label-row">
@@ -2411,6 +2433,16 @@ const DASHBOARD_HTML = `
           }
           statusStr += ' | ' + (playing ? '▶ Reproduciendo' : '⏸ Pausado');
           audioTextEl.innerText = statusStr;
+        }
+
+        // Actualizar label de última actividad
+        const lastActEl = document.getElementById('lastActivityLabel');
+        if (lastActEl && data.lastActivityFormatted) {
+          let actStr = 'Última: ' + data.lastActivityFormatted;
+          if (data.lastActivitySecondsAgo !== null) {
+            actStr += ' (Hace ' + data.lastActivitySecondsAgo + 's)';
+          }
+          lastActEl.innerText = actStr;
         }
 
       } catch (err) {
