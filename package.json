@@ -1,0 +1,15 @@
+{
+  "name": "express-gateway-automation",
+  "version": "1.0.0",
+  "description": "API Gateway local con Express, Playwright y control de climatización",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "playwright": "^1.45.0",
+    "@ngrok/ngrok": "^1.4.1"
+  }
+}

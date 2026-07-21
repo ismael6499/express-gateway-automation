@@ -1,0 +1,3 @@
+node_modules/
+browser_user_data/
+.env
