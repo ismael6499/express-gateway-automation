@@ -90,6 +90,69 @@ async function cleanupBrowserSession() {
   browserBrowserAbierto = false;
 }
 
+// Bucle asíncrono para automatizar el login de Browser en las redirecciones de Microsoft
+async function autoLoginTargetSession(page) {
+  log('Iniciando monitoreo de auto-login de Browser Session...');
+  
+  const startTime = Date.now();
+  const maxWaitMs = 120000; // 120 segundos máximo de tolerancia para cargas lentas
+
+  while (Date.now() - startTime < maxWaitMs) {
+    try {
+      await new Promise(r => setTimeout(r, 2000));
+
+      if (page.isClosed()) {
+        log('Auto-Login: La página se cerró, cancelando monitoreo.');
+        break;
+      }
+
+      const url = page.url();
+
+      // Si ya estamos en Browser
+      if (url.includes('cloud.example.com') || url.includes('example.com')) {
+        // Verificar si está la pantalla de carga lenta
+        const loadingText = page.locator('text="We\'re setting things up for you"');
+        const isSettingUp = await loadingText.isVisible().catch(() => false);
+        if (isSettingUp) {
+          log('Auto-Login: Pantalla "We\'re setting things up for you" detectada. Esperando a que finalice...');
+          continue;
+        }
+
+        // Si ya cargó la app (por ejemplo, el buscador o la barra lateral)
+        const chatInput = page.locator('input[placeholder*="Search"], input[placeholder*="Buscar"], div[data-testid="chat-list"]');
+        const isLoaded = await chatInput.first().isVisible().catch(() => false);
+        if (isLoaded) {
+          log('¡Auto-Login exitoso! Browser Session ha cargado por completo.');
+          break;
+        }
+      }
+
+      // Si estamos en la página de login de Microsoft
+      if (url.includes('login.microsoftonline.com')) {
+        // 1. Pantalla "Pick an account" (Seleccionar cuenta)
+        const accountRow = page.locator('div[role="button"]:has-text("user@example.com"), text=user@example.com');
+        if (await accountRow.first().isVisible().catch(() => false)) {
+          log('Auto-Login: Detectado panel de selección de cuentas. Seleccionando user@example.com...');
+          await accountRow.first().click();
+          continue;
+        }
+
+        // 2. Pantalla de Contraseña / Stay signed in? (Usa el botón genérico #idSIButton9)
+        const actionBtn = page.locator('#idSIButton9');
+        if (await actionBtn.isVisible().catch(() => false)) {
+          const btnVal = await actionBtn.getAttribute('value') || 'Sign in';
+          log(`Auto-Login: Botón de acción detectado (${btnVal}). Presionando...`);
+          await actionBtn.click();
+          continue;
+        }
+      }
+    } catch (err) {
+      log(`Auto-Login (Aviso en bucle): ${err.message}`);
+    }
+  }
+  log('Monitoreo de auto-login finalizado.');
+}
+
 // Endpoint GET /gateway/status
 app.get('/gateway/status', (req, res) => {
   res.json({
@@ -189,6 +252,11 @@ app.post('/browser/browser', async (req, res) => {
       log('Navegando asíncronamente a https://example.com...');
       browserPage.goto('https://example.com').catch((err) => {
         log(`Error al navegar a Browser: ${err.message}`);
+      });
+
+      // Ejecutar el asistente de auto-login en segundo plano
+      autoLoginTargetSession(browserPage).catch((err) => {
+        log(`Error de fondo en auto-login: ${err.message}`);
       });
 
       browserBrowserAbierto = true;
