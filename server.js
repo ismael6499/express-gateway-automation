@@ -900,7 +900,8 @@ app.post('/sistema/portapapeles', (req, res) => {
 // Endpoint GET /sistema/screenshot - Captura de pantalla de Windows
 app.get('/sistema/screenshot', (req, res) => {
   const screenshotPath = path.join(__dirname, 'temp_screenshot.png');
-  const psCommand = `powershell -Command "[Reflection.Assembly]::LoadWithPartialName('System.Drawing'); $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds; $bmp = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height; $graphics = [System.Drawing.Graphics]::FromImage($bmp); $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size); $bmp.Save('${screenshotPath}', [System.Drawing.Imaging.ImageFormat]::Png); $graphics.Dispose(); $bmp.Dispose();"`;
+  const escapedPath = screenshotPath.replace(/\\/g, '\\\\');
+  const psCommand = `powershell -Command "[Reflection.Assembly]::LoadWithPartialName('System.Drawing'); [Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds; $bmp = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height; $graphics = [System.Drawing.Graphics]::FromImage($bmp); $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size); $bmp.Save('${escapedPath}', [System.Drawing.Imaging.ImageFormat]::Png); $graphics.Dispose(); $bmp.Dispose();"`;
   
   exec(psCommand, (error) => {
     if (error) {
