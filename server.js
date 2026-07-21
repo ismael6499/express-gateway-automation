@@ -1959,12 +1959,21 @@ const DASHBOARD_HTML = `
         icon = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
       }
 
-      toast.innerHTML = \`\${icon} <span>\${message}</span>\`;
+      toast.innerHTML = icon + ' <span>' + message + '</span>';
+      
+      // Descartar rápido al hacer click/tap
+      toast.onclick = () => {
+        toast.style.animation = 'slideInRight 0.3s ease reverse forwards';
+        setTimeout(() => { if (toast.parentNode) toast.remove(); }, 300);
+      };
+
       container.appendChild(toast);
       
       setTimeout(() => {
-        toast.style.animation = 'slideInRight 0.3s ease reverse forwards';
-        setTimeout(() => toast.remove(), 300);
+        if (toast.parentNode) {
+          toast.style.animation = 'slideInRight 0.3s ease reverse forwards';
+          setTimeout(() => { if (toast.parentNode) toast.remove(); }, 300);
+        }
       }, 4000);
     }
 
