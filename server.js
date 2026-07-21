@@ -710,6 +710,7 @@ app.post('/browser/presencia', (req, res) => {
     return res.status(200).json({
       status: 'ok',
       message: 'Simulación de presencia activada e iniciada inmediatamente.',
+      msg: 'Simulación activa',
       config: { browserIntervalMs }
     });
   } else {
@@ -722,7 +723,8 @@ app.post('/browser/presencia', (req, res) => {
     saveSimulationState();
     return res.status(200).json({
       status: 'ok',
-      message: 'Simulación de presencia pausada.'
+      message: 'Simulación de presencia pausada.',
+      msg: 'Simulación pausada'
     });
   }
 });
