@@ -1006,6 +1006,77 @@ app.get('/sistema/screenshot', (req, res) => {
   });
 });
 
+// Endpoint GET /sistema/recursos - Telemetría e info de hardware
+app.get('/sistema/recursos', (req, res) => {
+  const psCommand = `powershell -Command "
+    $cpu = (Get-CimInstance Win32_Processor).LoadPercentage;
+    if ($cpu -eq $null) { $cpu = 0 };
+    $mem = Get-CimInstance Win32_OperatingSystem;
+    $totalRam = [Math]::Round($mem.TotalVisibleMemorySize / 1024 / 1024, 1);
+    $freeRam = [Math]::Round($mem.FreePhysicalMemory / 1024 / 1024, 1);
+    $usedRam = [Math]::Round($totalRam - $freeRam, 1);
+    $ramPct = [Math]::Round(($usedRam / $totalRam) * 100, 1);
+    $bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue;
+    $batPct = if ($bat) { $bat.EstimatedChargeRemaining } else { $null };
+    $temp = Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue;
+    $tempVal = if ($temp) {
+        $t = ($temp | Select-Object -First 1).CurrentTemperature;
+        [Math]::Round(($t / 10) - 273.15, 1);
+    } else { $null };
+    @{cpu=$cpu; ramTotal=$totalRam; ramUsed=$usedRam; ramPct=$ramPct; battery=$batPct; temp=$tempVal} | ConvertTo-Json -Compress
+  "`;
+
+  exec(psCommand, { encoding: 'utf8', timeout: 8000 }, (error, stdout) => {
+    if (error) {
+      log(`Error al obtener recursos: ${error.message}`);
+      return res.status(500).json({ error: 'Error al leer recursos del sistema', message: error.message });
+    }
+    try {
+      const data = JSON.parse(stdout.trim());
+      res.json(data);
+    } catch (e) {
+      res.status(500).json({ error: 'Error al parsear recursos', output: stdout });
+    }
+  });
+});
+
+// Endpoint GET /sistema/procesos - Listado Top 5 procesos por RAM
+app.get('/sistema/procesos', (req, res) => {
+  const psCommand = `powershell -Command "Get-Process | Sort-Object WS -Descending | Select-Object -First 5 | ForEach-Object { @{pid=$_.Id; name=$_.ProcessName; ram=[Math]::Round($_.WS / 1024 / 1024, 1)} } | ConvertTo-Json -Compress"`;
+  
+  exec(psCommand, { encoding: 'utf8', timeout: 8000 }, (error, stdout) => {
+    if (error) {
+      log(`Error al obtener procesos: ${error.message}`);
+      return res.status(500).json({ error: 'Error al leer procesos', message: error.message });
+    }
+    try {
+      const data = JSON.parse(stdout.trim());
+      // Si solo hay 1 proceso devuelto, ConvertTo-Json no lo envuelve en un array. Aseguramos array:
+      const arrayData = Array.isArray(data) ? data : [data];
+      res.json(arrayData);
+    } catch (e) {
+      res.status(500).json({ error: 'Error al parsear procesos', output: stdout });
+    }
+  });
+});
+
+// Endpoint POST /sistema/matar-proceso - Matar proceso por PID
+app.post('/sistema/matar-proceso', (req, res) => {
+  const { pid } = req.body;
+  if (!pid) {
+    return res.status(400).json({ error: 'Bad Request', message: 'Falta el parámetro pid.' });
+  }
+
+  log(`Procesos: Matando proceso PID ${pid}`);
+  exec(`taskkill /f /pid ${pid}`, (error, stdout) => {
+    if (error) {
+      log(`Error al matar proceso ${pid}: ${error.message}`);
+      return res.status(500).json({ error: 'Error al finalizar el proceso', message: error.message });
+    }
+    res.json({ status: 'ok', message: `Proceso con PID ${pid} finalizado correctamente.`, msg: `Matado PID ${pid}` });
+  });
+});
+
 // Endpoint POST /sistema/tts - Text to Speech nativo en Windows
 app.post('/sistema/tts', (req, res) => {
   const { texto } = req.body;
@@ -2151,6 +2222,51 @@ const DASHBOARD_HTML = `
       </div>
     </div>
 
+    <!-- CARD 6: RECURSOS Y PROCESOS -->
+    <div class="card" id="cardRecursos" style="margin-top: 10px;">
+      <div class="card-header" style="margin-bottom: 15px;">
+        <div class="card-title-group">
+          <h2>Telemetría & Procesos</h2>
+          <p>Estado del hardware y monitor de memoria RAM</p>
+        </div>
+        <button class="btn" onclick="actualizarRecursosYProcesos()" style="padding: 8px 12px; font-size: 0.75rem; flex: 0 0 auto; width: auto; margin-top: 0; display: inline-flex; align-items: center; gap: 4px;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+          Refrescar
+        </button>
+      </div>
+
+      <!-- Telemetría de Hardware -->
+      <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 5px;">
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--card-border); border-radius: 12px; padding: 10px; text-align: center;">
+          <div style="font-size: 0.75rem; color: var(--text-muted);">Uso de CPU</div>
+          <div id="telemetriaCpu" style="font-size: 1.1rem; font-weight: 700; color: var(--primary); margin-top: 4px;">-- %</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--card-border); border-radius: 12px; padding: 10px; text-align: center;">
+          <div style="font-size: 0.75rem; color: var(--text-muted);">Uso de RAM</div>
+          <div id="telemetriaRam" style="font-size: 1.1rem; font-weight: 700; color: var(--success); margin-top: 4px;">-- %</div>
+          <div id="telemetriaRamDetalle" style="font-size: 0.65rem; color: var(--text-muted); margin-top: 2px;">-- GB / -- GB</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--card-border); border-radius: 12px; padding: 10px; text-align: center;">
+          <div style="font-size: 0.75rem; color: var(--text-muted);">Batería</div>
+          <div id="telemetriaBateria" style="font-size: 1.1rem; font-weight: 700; color: var(--text); margin-top: 4px;">-- %</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--card-border); border-radius: 12px; padding: 10px; text-align: center;">
+          <div style="font-size: 0.75rem; color: var(--text-muted);">Temperatura</div>
+          <div id="telemetriaTemp" style="font-size: 1.1rem; font-weight: 700; color: #ef4444; margin-top: 4px;">-- °C</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Top 5 Procesos -->
+      <div class="card-section-title">Top 5 Procesos que más RAM consumen</div>
+      <div id="procesosLista" style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+        <div style="text-align: center; font-size: 0.8rem; color: var(--text-muted); padding: 10px;">
+          Cargando listado de procesos...
+        </div>
+      </div>
+    </div>
+
     <!-- Barra de info de túnel ngrok -->
     <div class="tunnel-bar" id="tunnelBar" style="display: none;">
       <span class="badge">Remoto</span>
@@ -2168,6 +2284,8 @@ const DASHBOARD_HTML = `
       setInterval(pollGatewayStatus, 5000);
       probarPing();
       setInterval(probarPing, 20000);
+      actualizarRecursosYProcesos();
+      setInterval(actualizarRecursosYProcesos, 30000);
     });
 
     function logout() {
@@ -2262,6 +2380,83 @@ const DASHBOARD_HTML = `
         }
       } catch (err) {
         showToast('Error de conexión con el servidor', 'error');
+      }
+    }
+
+    async function actualizarRecursosYProcesos() {
+      try {
+        const response = await fetch('/sistema/recursos');
+        if (response.ok) {
+          const data = await response.json();
+          document.getElementById('telemetriaCpu').innerText = data.cpu + ' %';
+          document.getElementById('telemetriaRam').innerText = data.ramPct + ' %';
+          document.getElementById('telemetriaRamDetalle').innerText = data.ramUsed + ' GB / ' + data.ramTotal + ' GB';
+          
+          if (data.battery !== null) {
+            document.getElementById('telemetriaBateria').innerText = data.battery + ' %';
+          } else {
+            document.getElementById('telemetriaBateria').innerText = 'AC (Fija)';
+          }
+
+          if (data.temp !== null) {
+            document.getElementById('telemetriaTemp').innerText = data.temp + ' °C';
+          } else {
+            document.getElementById('telemetriaTemp').innerText = 'N/A';
+          }
+        }
+      } catch (err) {
+        console.error('Error al actualizar recursos:', err);
+      }
+
+      try {
+        const response = await fetch('/sistema/procesos');
+        if (response.ok) {
+          const procesos = await response.json();
+          const listEl = document.getElementById('procesosLista');
+          listEl.innerHTML = '';
+          
+          procesos.forEach(p => {
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.alignItems = 'center';
+            row.style.justifyContent = 'space-between';
+            row.style.background = 'rgba(255,255,255,0.02)';
+            row.style.border = '1px solid var(--card-border)';
+            row.style.borderRadius = '10px';
+            row.style.padding = '8px 12px';
+            row.style.fontSize = '0.8rem';
+            
+            row.innerHTML = '<div><strong style="color: var(--text);">' + p.name + '</strong> <span style="color: var(--text-muted); font-size: 0.7rem; margin-left: 5px;">(PID ' + p.pid + ')</span></div>' +
+                            '<div style="display: flex; align-items: center; gap: 10px;">' +
+                              '<span style="font-weight: 600; color: var(--success);">' + p.ram + ' MB</span>' +
+                              '<button class="btn btn-danger" onclick="matarProceso(' + p.pid + ')" style="padding: 4px 8px; font-size: 0.65rem; margin-top: 0; width: auto; box-shadow: none; border-radius: 6px; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68);">Kill</button>' +
+                            '</div>';
+            listEl.appendChild(row);
+          });
+        }
+      } catch (err) {
+        console.error('Error al actualizar procesos:', err);
+      }
+    }
+
+    async function matarProceso(pid) {
+      if (!confirm('¿Seguro que deseas forzar el cierre del proceso con PID ' + pid + '?')) return;
+      showToast('Finalizando proceso...', 'info');
+      try {
+        const response = await fetch('/sistema/matar-proceso', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pid })
+        });
+        const data = await response.json();
+        if (response.ok) {
+          showToast(data.message, 'success');
+          actualizarRecursosYProcesos();
+        } else {
+          showToast(data.message || 'Error al matar proceso', 'error');
+        }
+      } catch (err) {
+        showToast('Error al conectar con la PC', 'error');
       }
     }
 
