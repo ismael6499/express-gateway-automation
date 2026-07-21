@@ -1,14 +1,14 @@
 const fs = require('fs');
 const path = require('path');
 
-const src = path.join(process.env.LOCALAPPDATA, 'Google', 'Chrome', 'User Data', 'Profile 4');
+const src = path.join(process.env.LOCALAPPDATA, 'Microsoft', 'Edge', 'User Data', 'Profile 1');
 const dest = path.join(__dirname, 'browser_user_data', 'Default');
 
-console.log(`Copiando perfil de:\n  ${src}\nhacia:\n  ${dest}\n`);
+console.log(`Copiando perfil de Edge desde:\n  ${src}\nhacia:\n  ${dest}\n`);
 
 // Crear directorios si no existen
 if (!fs.existsSync(src)) {
-  console.log('Error: La carpeta de origen no existe.');
+  console.log('Error: La carpeta de origen de Edge no existe.');
   process.exit(1);
 }
 
@@ -20,7 +20,7 @@ function copyRecursive(srcDir, destDir) {
   const items = fs.readdirSync(srcDir);
   for (let item of items) {
     // Ignorar cache y archivos temporales gigantescos para que sea rápido
-    if (['cache', 'code cache', 'lock', 'lockfile', 'gpuCache', 'session storage', 'snapshots'].includes(item.toLowerCase())) {
+    if (['cache', 'code cache', 'lock', 'lockfile', 'gpucache', 'session storage', 'snapshots'].includes(item.toLowerCase())) {
       continue;
     }
 
@@ -53,7 +53,7 @@ if (fs.existsSync(dest)) {
 
 try {
   copyRecursive(src, dest);
-  console.log('\n¡Copia de perfil completada con éxito!');
+  console.log('\n¡Copia de perfil de Edge completada con éxito!');
 } catch (e) {
   console.error('Error durante la copia:', e);
 }
