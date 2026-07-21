@@ -25,7 +25,11 @@ function getApiKeyFromCookie(cookieHeader) {
   if (!cookieHeader) return null;
   const cookies = cookieHeader.split(';');
   for (let cookie of cookies) {
-    const [name, value] = cookie.trim().split('=');
+    const trimmed = cookie.trim();
+    const index = trimmed.indexOf('=');
+    if (index === -1) continue;
+    const name = trimmed.substring(0, index);
+    const value = trimmed.substring(index + 1);
     if (name === 'api_key') return decodeURIComponent(value);
   }
   return null;
@@ -582,7 +586,7 @@ const LOGIN_HTML = `
 
         if (response.ok) {
           // Guardar en cookie para la sesión de navegación GET /
-          document.cookie = "api_key=" + encodeURIComponent(key) + "; path=/; max-age=" + (365*24*60*60) + "; SameSite=Strict";
+          document.cookie = "api_key=" + encodeURIComponent(key) + "; path=/; max-age=" + (365*24*60*60) + "; SameSite=Lax";
           // Guardar en localStorage para migrar/mantener sesiones guardadas y auto-login
           localStorage.setItem('X-API-KEY', key);
           window.location.reload();
