@@ -126,23 +126,39 @@ app.post('/browser/browser', async (req, res) => {
       log(`Abriendo ventana de Playwright en: ${userDataDir}`);
       
       try {
+        log('Intentando iniciar con Microsoft Edge oficial...');
         browserBrowserContext = await chromium.launchPersistentContext(userDataDir, {
           headless: false,
-          channel: 'chrome', // Usar Chrome oficial para mayor compatibilidad con Microsoft
+          channel: 'msedge', // Microsoft Edge es nativo en Windows y comparte políticas corporativas/AD
           viewport: null,
           args: [
-            '--disable-blink-features=AutomationControlled'
+            '--disable-blink-features=AutomationControlled',
+            '--disable-features=ImplicitSignin' // Evita que use el inicio de sesión automático del S.O.
           ]
         });
-      } catch (err) {
-        log('Chrome oficial no detectado, iniciando con Chromium por defecto...');
-        browserBrowserContext = await chromium.launchPersistentContext(userDataDir, {
-          headless: false,
-          viewport: null,
-          args: [
-            '--disable-blink-features=AutomationControlled'
-          ]
-        });
+      } catch (errEdge) {
+        try {
+          log('Edge oficial no disponible, intentando con Google Chrome...');
+          browserBrowserContext = await chromium.launchPersistentContext(userDataDir, {
+            headless: false,
+            channel: 'chrome',
+            viewport: null,
+            args: [
+              '--disable-blink-features=AutomationControlled',
+              '--disable-features=ImplicitSignin'
+            ]
+          });
+        } catch (errChrome) {
+          log('Chrome oficial no disponible, iniciando con Chromium por defecto...');
+          browserBrowserContext = await chromium.launchPersistentContext(userDataDir, {
+            headless: false,
+            viewport: null,
+            args: [
+              '--disable-blink-features=AutomationControlled',
+              '--disable-features=ImplicitSignin'
+            ]
+          });
+        }
       }
 
       const pages = browserBrowserContext.pages();
