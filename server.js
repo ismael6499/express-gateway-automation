@@ -1008,23 +1008,8 @@ app.get('/sistema/screenshot', (req, res) => {
 
 // Endpoint GET /sistema/recursos - Telemetría e info de hardware
 app.get('/sistema/recursos', (req, res) => {
-  const psCommand = `powershell -Command "
-    $cpu = (Get-CimInstance Win32_Processor).LoadPercentage;
-    if ($cpu -eq $null) { $cpu = 0 };
-    $mem = Get-CimInstance Win32_OperatingSystem;
-    $totalRam = [Math]::Round($mem.TotalVisibleMemorySize / 1024 / 1024, 1);
-    $freeRam = [Math]::Round($mem.FreePhysicalMemory / 1024 / 1024, 1);
-    $usedRam = [Math]::Round($totalRam - $freeRam, 1);
-    $ramPct = [Math]::Round(($usedRam / $totalRam) * 100, 1);
-    $bat = Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue;
-    $batPct = if ($bat) { $bat.EstimatedChargeRemaining } else { $null };
-    $temp = Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue;
-    $tempVal = if ($temp) {
-        $t = ($temp | Select-Object -First 1).CurrentTemperature;
-        [Math]::Round(($t / 10) - 273.15, 1);
-    } else { $null };
-    @{cpu=$cpu; ramTotal=$totalRam; ramUsed=$usedRam; ramPct=$ramPct; battery=$batPct; temp=$tempVal} | ConvertTo-Json -Compress
-  "`;
+  const scriptPath = path.join(__dirname, 'recursos.ps1');
+  const psCommand = `powershell -ExecutionPolicy Bypass -File "${scriptPath}"`;
 
   exec(psCommand, { encoding: 'utf8', timeout: 8000 }, (error, stdout) => {
     if (error) {
@@ -1042,7 +1027,8 @@ app.get('/sistema/recursos', (req, res) => {
 
 // Endpoint GET /sistema/procesos - Listado Top 5 procesos por RAM
 app.get('/sistema/procesos', (req, res) => {
-  const psCommand = `powershell -Command "Get-Process | Sort-Object WS -Descending | Select-Object -First 5 | ForEach-Object { @{pid=$_.Id; name=$_.ProcessName; ram=[Math]::Round($_.WS / 1024 / 1024, 1)} } | ConvertTo-Json -Compress"`;
+  const scriptPath = path.join(__dirname, 'procesos.ps1');
+  const psCommand = `powershell -ExecutionPolicy Bypass -File "${scriptPath}"`;
   
   exec(psCommand, { encoding: 'utf8', timeout: 8000 }, (error, stdout) => {
     if (error) {
@@ -1051,7 +1037,6 @@ app.get('/sistema/procesos', (req, res) => {
     }
     try {
       const data = JSON.parse(stdout.trim());
-      // Si solo hay 1 proceso devuelto, ConvertTo-Json no lo envuelve en un array. Aseguramos array:
       const arrayData = Array.isArray(data) ? data : [data];
       res.json(arrayData);
     } catch (e) {
