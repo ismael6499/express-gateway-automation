@@ -126,10 +126,10 @@ app.post('/browser/browser', async (req, res) => {
       log(`Abriendo ventana de Playwright en: ${userDataDir}`);
       
       try {
-        log('Intentando iniciar con Microsoft Edge oficial...');
+        log('Intentando iniciar con Google Chrome oficial...');
         browserBrowserContext = await chromium.launchPersistentContext(userDataDir, {
           headless: false,
-          channel: 'msedge', // Microsoft Edge es nativo en Windows y comparte políticas corporativas/AD
+          channel: 'chrome', // Google Chrome es el origen del perfil corporativo copiado
           viewport: null,
           ignoreDefaultArgs: ['--no-sandbox'], // Elimina el cartel molesto de advertencia de sandbox
           args: [
@@ -138,12 +138,12 @@ app.post('/browser/browser', async (req, res) => {
             '--test-type' // Elimina la advertencia de bandera experimental no soportada
           ]
         });
-      } catch (errEdge) {
+      } catch (errChrome) {
         try {
-          log('Edge oficial no disponible, intentando con Google Chrome...');
+          log('Chrome oficial no disponible, intentando con Microsoft Edge...');
           browserBrowserContext = await chromium.launchPersistentContext(userDataDir, {
             headless: false,
-            channel: 'chrome',
+            channel: 'msedge',
             viewport: null,
             ignoreDefaultArgs: ['--no-sandbox'],
             args: [
@@ -152,8 +152,8 @@ app.post('/browser/browser', async (req, res) => {
               '--test-type'
             ]
           });
-        } catch (errChrome) {
-          log('Chrome oficial no disponible, iniciando con Chromium por defecto...');
+        } catch (errEdge) {
+          log('Edge oficial no disponible, iniciando con Chromium por defecto...');
           browserBrowserContext = await chromium.launchPersistentContext(userDataDir, {
             headless: false,
             viewport: null,
