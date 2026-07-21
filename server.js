@@ -1006,6 +1006,56 @@ app.get('/sistema/screenshot', (req, res) => {
   });
 });
 
+// Endpoint POST /sistema/tts - Text to Speech nativo en Windows
+app.post('/sistema/tts', (req, res) => {
+  const { texto } = req.body;
+  if (!texto || texto.trim() === '') {
+    return res.status(400).json({ error: 'Bad Request', message: 'Falta el texto a reproducir.' });
+  }
+
+  log(`TTS: Reproduciendo texto: "${texto}"`);
+  const escapedText = texto.replace(/'/g, "''");
+  const psCommand = `powershell -Command "Add-Type -AssemblyName System.Speech; $synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; $synth.Speak('${escapedText}')"`;
+
+  exec(psCommand, (error) => {
+    if (error) {
+      log(`Error en TTS: ${error.message}`);
+      return res.status(500).json({ error: 'Error al reproducir texto', message: error.message });
+    }
+    res.json({ status: 'ok', message: 'Texto reproducido correctamente.', msg: 'Voz reproducida' });
+  });
+});
+
+// Endpoint POST /sistema/media - Controles multimedia nativos en Windows
+app.post('/sistema/media', (req, res) => {
+  const { accion } = req.body;
+  const vks = {
+    'mute': '0xAD',
+    'vol-': '0xAE',
+    'vol+': '0xAF',
+    'prev': '0xB1',
+    'play-pausa': '0xB3',
+    'next': '0xB0'
+  };
+
+  const vk = vks[accion];
+  if (!vk) {
+    return res.status(400).json({ error: 'Bad Request', message: 'Acción multimedia no reconocida.' });
+  }
+
+  log(`Multimedia: Enviando acción '${accion}' (VK: ${vk})`);
+
+  const psCommand = `powershell -Command "$sig = '[DllImport(\\"user32.dll\\")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, uint dwExtraInfo);'; $win = Add-Type -MemberDefinition $sig -Name \\"WinAPIMedia\\" -Namespace \\"Win32\\" -PassThru; $win::keybd_event(${vk}, 0, 0, 0); $win::keybd_event(${vk}, 0, 2, 0);"`;
+
+  exec(psCommand, (error) => {
+    if (error) {
+      log(`Error en multimedia: ${error.message}`);
+      return res.status(500).json({ error: 'Error al enviar comando multimedia', message: error.message });
+    }
+    res.json({ status: 'ok', message: `Comando ${accion} enviado correctamente.`, msg: accion });
+  });
+});
+
 // Endpoint POST /sistema/terminal - Ejecuta comandos remotos en la PC
 app.post('/sistema/terminal', (req, res) => {
   const { comando, shell } = req.body;
@@ -2049,6 +2099,58 @@ const DASHBOARD_HTML = `
       </div>
     </div>
 
+    <!-- CARD 5: AUDIO, MULTIMEDIA & VOZ -->
+    <div class="card" id="cardMultimedia" style="margin-top: 10px;">
+      <div class="card-header" style="margin-bottom: 15px;">
+        <div class="card-title-group">
+          <h2>Controles Multimedia & Voz</h2>
+          <p>Audio del sistema y Lector de voz (TTS)</p>
+        </div>
+      </div>
+      
+      <!-- Controles de Audio y Pistas -->
+      <div class="card-section-title">Control de Audio y Reproducción</div>
+      <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 8px;">
+        <div style="display: flex; gap: 8px; width: 100%;">
+          <button class="btn" onclick="enviarMultimedia('vol-')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text);">
+            Vol -
+          </button>
+          <button class="btn" onclick="enviarMultimedia('mute')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68);">
+            Mute
+          </button>
+          <button class="btn" onclick="enviarMultimedia('vol+')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text);">
+            Vol +
+          </button>
+        </div>
+        
+        <div style="display: flex; gap: 8px; width: 100%;">
+          <button class="btn" onclick="enviarMultimedia('prev')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
+            Atrás
+          </button>
+          <button class="btn" onclick="enviarMultimedia('play-pausa')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: var(--primary);">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            Play/Pausa
+          </button>
+          <button class="btn" onclick="enviarMultimedia('next')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
+            Siguiente
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Lector de Voz (TTS) -->
+      <div class="card-section-title">Lector de Voz Remoto (TTS)</div>
+      <div style="display: flex; gap: 8px; margin-top: 8px;">
+        <input type="text" id="inputTTS" placeholder="Texto para reproducir con voz..." style="flex: 2; padding: 10px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 0;" onkeydown="checkTTSEnter(event)">
+        <button class="btn" onclick="enviarTTS()" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.75rem;">
+          Hablar
+        </button>
+      </div>
+    </div>
+
     <!-- Barra de info de túnel ngrok -->
     <div class="tunnel-bar" id="tunnelBar" style="display: none;">
       <span class="badge">Remoto</span>
@@ -2108,6 +2210,59 @@ const DASHBOARD_HTML = `
         outputEl.value += '[ERROR DE CONEXIÓN]: No se pudo contactar con el servidor.\n';
       }
       outputEl.scrollTop = outputEl.scrollHeight;
+    }
+
+    function checkTTSEnter(e) {
+      if (e.key === 'Enter') {
+        enviarTTS();
+      }
+    }
+
+    async function enviarTTS() {
+      const inputEl = document.getElementById('inputTTS');
+      const texto = inputEl.value;
+
+      if (!texto || texto.trim() === '') {
+        showToast('Por favor escribe algún texto para reproducir.', 'warning');
+        return;
+      }
+
+      showToast('Enviando texto a voz...', 'info');
+
+      try {
+        const response = await fetch('/sistema/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ texto })
+        });
+        const data = await response.json();
+        if (response.ok) {
+          showToast(data.message, 'success');
+          inputEl.value = '';
+        } else {
+          showToast(data.message || 'Error en la reproducción', 'error');
+        }
+      } catch (err) {
+        showToast('Error de conexión con el servidor', 'error');
+      }
+    }
+
+    async function enviarMultimedia(accion) {
+      try {
+        const response = await fetch('/sistema/media', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accion })
+        });
+        const data = await response.json();
+        if (response.ok) {
+          showToast(data.message, 'success');
+        } else {
+          showToast(data.message || 'Error al ejecutar comando multimedia', 'error');
+        }
+      } catch (err) {
+        showToast('Error de conexión con el servidor', 'error');
+      }
     }
 
     function updateBrowserSliderLabel(val) {
