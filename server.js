@@ -1006,6 +1006,39 @@ app.get('/sistema/screenshot', (req, res) => {
   });
 });
 
+// Endpoint POST /sistema/terminal - Ejecuta comandos remotos en la PC
+app.post('/sistema/terminal', (req, res) => {
+  const { comando, shell } = req.body;
+  if (!comando || comando.trim() === '') {
+    return res.status(400).json({ error: 'Bad Request', message: 'Falta el comando a ejecutar.' });
+  }
+
+  log(`Terminal remota: Ejecutando comando [${shell || 'powershell'}]: ${comando}`);
+
+  let fullCommand = '';
+  if (shell === 'cmd') {
+    fullCommand = `cmd /c "chcp 65001 > nul && ${comando}"`;
+  } else {
+    fullCommand = `powershell -NoProfile -NonInteractive -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ${comando}"`;
+  }
+
+  exec(fullCommand, { encoding: 'buffer', timeout: 15000 }, (error, stdout, stderr) => {
+    const outStr = stdout ? stdout.toString('utf8') : '';
+    const errStr = stderr ? stderr.toString('utf8') : '';
+    
+    let output = outStr + errStr;
+    if (error) {
+      output += `\n[Error al ejecutar o timeout: ${error.message}]`;
+    }
+
+    res.json({
+      status: error ? 'error' : 'ok',
+      output: output.trim(),
+      msg: error ? 'Comando fallido' : 'Comando completado'
+    });
+  });
+});
+
 // Endpoint GET /sistema/ping - Test de latencia de red
 app.get('/sistema/ping', (req, res) => {
   exec('ping -n 1 8.8.8.8', (error, stdout) => {
@@ -1993,6 +2026,29 @@ const DASHBOARD_HTML = `
       </div>
     </div>
 
+    <!-- CARD 4: TERMINAL REMOTA -->
+    <div class="card" id="cardTerminal" style="margin-top: 10px;">
+      <div class="card-header" style="margin-bottom: 10px;">
+        <div class="card-title-group">
+          <h2>Terminal Remota</h2>
+          <p>Consola interactiva CMD / PowerShell</p>
+        </div>
+      </div>
+      <div>
+        <textarea id="terminalOutput" readonly style="width: 100%; height: 180px; background: #050505; border: 1px solid var(--card-border); border-radius: 12px; color: #39ff14; font-family: 'Consolas', 'Courier New', monospace; font-size: 0.8rem; padding: 10px; resize: none; outline: none; margin-bottom: 8px; box-shadow: inset 0 2px 8px rgba(0,0,0,0.8);"></textarea>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <select id="terminalShell" style="background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); padding: 10px; font-size: 0.85rem; outline: none; cursor: pointer;">
+            <option value="powershell" selected>PS</option>
+            <option value="cmd">CMD</option>
+          </select>
+          <input type="text" id="terminalInput" placeholder="Escribe un comando y pulsa Enter..." style="flex: 1; padding: 10px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 0;" onkeydown="checkTerminalEnter(event)">
+          <button class="btn" onclick="ejecutarComandoTerminal()" style="flex: 0 0 auto; width: auto; margin-top: 0; padding: 10px 16px; font-size: 0.85rem;">
+            Ejecutar
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Barra de info de túnel ngrok -->
     <div class="tunnel-bar" id="tunnelBar" style="display: none;">
       <span class="badge">Remoto</span>
@@ -2015,6 +2071,43 @@ const DASHBOARD_HTML = `
     function logout() {
       document.cookie = "api_key=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
       window.location.reload();
+    }
+
+    function checkTerminalEnter(e) {
+      if (e.key === 'Enter') {
+        ejecutarComandoTerminal();
+      }
+    }
+
+    async function ejecutarComandoTerminal() {
+      const inputEl = document.getElementById('terminalInput');
+      const outputEl = document.getElementById('terminalOutput');
+      const shellEl = document.getElementById('terminalShell');
+      const comando = inputEl.value;
+
+      if (!comando || comando.trim() === '') return;
+
+      const promptChar = shellEl.value === 'cmd' ? '>' : 'PS >';
+      outputEl.value += '\n' + promptChar + ' ' + comando + '\n[Ejecutando...]\n';
+      outputEl.scrollTop = outputEl.scrollHeight;
+      inputEl.value = '';
+
+      try {
+        const response = await fetch('/sistema/terminal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ comando, shell: shellEl.value })
+        });
+        const data = await response.json();
+        if (response.ok) {
+          outputEl.value += data.output + '\n';
+        } else {
+          outputEl.value += '[ERROR]: ' + (data.message || 'Error desconocido') + '\n';
+        }
+      } catch (err) {
+        outputEl.value += '[ERROR DE CONEXIÓN]: No se pudo contactar con el servidor.\n';
+      }
+      outputEl.scrollTop = outputEl.scrollHeight;
     }
 
     function updateBrowserSliderLabel(val) {
