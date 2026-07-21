@@ -409,6 +409,14 @@ app.post('/browser/browser', async (req, res) => {
   // Permitir la acción "cerrar" siempre (incluso si isLaunchingBrowser está activo)
   if (accion === 'cerrar') {
     isLaunchingBrowser = false;
+  } else if (accion === 'abrir' && browserBrowserContext) {
+    isLaunchingBrowser = false;
+    log('El navegador ya se encuentra abierto.');
+    return res.status(200).json({
+      status: 'ok',
+      message: 'El navegador de Browser ya está abierto.',
+      msg: 'Navegador ya abierto'
+    });
   } else if (isLaunchingBrowser && accion === 'abrir') {
     return res.status(200).json({
       status: 'ok',
@@ -467,14 +475,6 @@ app.post('/browser/browser', async (req, res) => {
     }
 
     if (accion === 'abrir') {
-      if (browserBrowserContext) {
-        log('El navegador ya se encuentra abierto.');
-        return res.status(200).json({
-          status: 'ok',
-          message: 'El navegador de Browser ya está abierto.',
-          msg: 'Navegador ya abierto'
-        });
-      }
 
       const userDataDir = path.join(__dirname, 'browser_user_data');
       log(`Abriendo ventana de Playwright en: ${userDataDir}`);
