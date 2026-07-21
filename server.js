@@ -776,6 +776,7 @@ app.post('/browser/simular-accion', async (req, res) => {
 
   try {
     log(`Ejecutando acción de test manual: '${accion}'`);
+    lastActivityTime = new Date();
 
     if (accion === 'mover-mouse') {
       const x = Math.floor(Math.random() * 500) + 100;
