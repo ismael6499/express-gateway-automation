@@ -669,6 +669,140 @@ app.post('/browser/status', async (req, res) => {
   }
 });
 
+// Endpoint POST /sistema/teclado para enviar atajos al sistema operativo (Alt+X o Ctrl)
+app.post('/sistema/teclado', (req, res) => {
+  const { accion } = req.body;
+
+  if (accion !== 'apagar-pantalla' && accion !== 'encender-pantalla') {
+    return res.status(400).json({
+      error: 'Bad Request',
+      message: "La 'accion' de teclado debe ser 'apagar-pantalla' o 'encender-pantalla'."
+    });
+  }
+
+  try {
+    if (accion === 'apagar-pantalla') {
+      log('Haciendo clic en la barra de tareas y simulando Alt + X en Windows para apagar pantalla...');
+      const psCommand = 'powershell -Command "$sig = \'[DllImport(\\"user32.dll\\")] public static extern void mouse_event(int dwFlags, int dx, int dy, int cButtons, int dwExtraInfo); [DllImport(\\"user32.dll\\")] public static extern bool SetCursorPos(int X, int Y); [DllImport(\\"user32.dll\\")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, uint dwExtraInfo);\'; $win = Add-Type -MemberDefinition $sig -Name \\"WinAPI1\\" -Namespace \\"Win32\\" -PassThru; $win::SetCursorPos(500, 1070); $win::mouse_event(2, 0, 0, 0, 0); $win::mouse_event(4, 0, 0, 0, 0); Start-Sleep -Milliseconds 200; $win::keybd_event(0x12, 0, 0, 0); $win::keybd_event(0x58, 0, 0, 0); $win::keybd_event(0x58, 0, 2, 0); $win::keybd_event(0x12, 0, 2, 0);"';
+      exec(psCommand, (error) => {
+        if (error) {
+          log(`Error al simular Alt+X: ${error.message}`);
+        }
+      });
+      return res.status(200).json({
+        status: 'ok',
+        message: 'Comando de apagar pantalla (Alt+X con click previo) enviado.',
+        msg: 'Pantalla apagada'
+      });
+    } else {
+      log('Simulando pulsación de Control en Windows para encender pantalla...');
+      const psCommand = 'powershell -Command "$sig = \'[DllImport(\\"user32.dll\\")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, uint dwExtraInfo);\'; $win = Add-Type -MemberDefinition $sig -Name \\"WinAPI2\\" -Namespace \\"Win32\\" -PassThru; $win::keybd_event(0xA2, 0, 0, 0); $win::keybd_event(0xA2, 0, 2, 0);"';
+      exec(psCommand, (error) => {
+        if (error) {
+          log(`Error al simular Control: ${error.message}`);
+        }
+      });
+      return res.status(200).json({
+        status: 'ok',
+        message: 'Comando de encender pantalla (Control) enviado.',
+        msg: 'Pantalla encendida'
+      });
+    }
+  } catch (err) {
+    log(`Error en simulación de teclado: ${err.message}`);
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: err.message
+    });
+  }
+});
+
+// Endpoint POST /sistema/energia - Suspender y Bloquear PC
+app.post('/sistema/energia', (req, res) => {
+  const { accion } = req.body;
+
+  if (accion !== 'bloquear' && accion !== 'suspender') {
+    return res.status(400).json({ error: 'Bad Request', message: "Acción de energía debe ser 'bloquear' o 'suspender'." });
+  }
+
+  if (accion === 'bloquear') {
+    log('Comando de bloqueo de PC recibido. Bloqueando estación de trabajo...');
+    exec('rundll32.exe user32.dll,LockWorkStation', (error) => {
+      if (error) log(`Error al bloquear PC: ${error.message}`);
+    });
+    return res.json({ status: 'ok', message: 'PC Bloqueada.', msg: 'PC Bloqueada' });
+  } else {
+    log('Comando de suspensión de PC recibido. Suspendiendo sistema...');
+    exec('rundll32.exe powrprof.dll,SetSuspendState 0,1,0', (error) => {
+      if (error) log(`Error al suspender PC: ${error.message}`);
+    });
+    return res.json({ status: 'ok', message: 'PC Suspendida.', msg: 'PC Suspendida' });
+  }
+});
+
+// Endpoint GET /sistema/portapapeles - Leer portapapeles de la PC
+app.get('/sistema/portapapeles', (req, res) => {
+  exec('powershell -Command "Get-Clipboard"', (error, stdout) => {
+    if (error) {
+      return res.status(500).json({ error: 'Error al obtener portapapeles', message: error.message });
+    }
+    res.json({ text: stdout.trim() });
+  });
+});
+
+// Endpoint POST /sistema/portapapeles - Escribir portapapeles de la PC
+app.post('/sistema/portapapeles', (req, res) => {
+  const { text } = req.body;
+  if (text === undefined) {
+    return res.status(400).json({ error: 'Bad Request', message: 'Falta parámetro text.' });
+  }
+
+  const escaped = text.replace(/'/g, "''");
+  const psCommand = `powershell -Command "Set-Clipboard -Value '${escaped}'"`;
+
+  exec(psCommand, (error) => {
+    if (error) {
+      log(`Error al escribir en portapapeles: ${error.message}`);
+      return res.status(500).json({ error: 'Error al escribir portapapeles', message: error.message });
+    }
+    res.json({ status: 'ok', message: 'Texto copiado al portapapeles de la PC.', msg: 'Copiado en PC' });
+  });
+});
+
+// Endpoint GET /sistema/screenshot - Captura de pantalla de Windows
+app.get('/sistema/screenshot', (req, res) => {
+  const screenshotPath = path.join(__dirname, 'temp_screenshot.png');
+  const psCommand = `powershell -Command "[Reflection.Assembly]::LoadWithPartialName('System.Drawing'); $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds; $bmp = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height; $graphics = [System.Drawing.Graphics]::FromImage($bmp); $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size); $bmp.Save('${screenshotPath}', [System.Drawing.Imaging.ImageFormat]::Png); $graphics.Dispose(); $bmp.Dispose();"`;
+  
+  exec(psCommand, (error) => {
+    if (error) {
+      log(`Error al capturar pantalla: ${error.message}`);
+      return res.status(500).json({ error: 'Error al capturar pantalla', message: error.message });
+    }
+    if (fs.existsSync(screenshotPath)) {
+      res.sendFile(screenshotPath);
+    } else {
+      res.status(500).json({ error: 'Archivo de captura no encontrado.' });
+    }
+  });
+});
+
+// Endpoint GET /sistema/ping - Test de latencia de red
+app.get('/sistema/ping', (req, res) => {
+  exec('ping -n 1 8.8.8.8', (error, stdout) => {
+    if (error) {
+      return res.json({ status: 'error', latencyMs: null, msg: 'Error de red' });
+    }
+    const match = stdout.match(/(?:tiempo|time)[=<](\d+)ms/i);
+    const latency = match ? parseInt(match[1]) : null;
+    res.json({
+      status: 'ok',
+      latencyMs: latency,
+      msg: latency ? `${latency} ms` : 'Desconocido'
+    });
+  });
+});
+
 // Endpoint POST /sistema/ejecutar para lanzar programas locales como el Emulador
 app.post('/sistema/ejecutar', (req, res) => {
   const { programa } = req.body;
@@ -1438,6 +1572,53 @@ const DASHBOARD_HTML = `
           Cerrar
         </button>
       </div>
+      <div class="divider"></div>
+      <div class="card-section-title">Control de Pantalla (PC Físico)</div>
+      <div style="display: flex; gap: 8px; margin-top: 5px; width: 100%;">
+        <button class="btn btn-danger" style="flex: 1; margin-top: 0; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68); display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="controlarTeclado('apagar-pantalla')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+          Apagar (Alt+X)
+        </button>
+        <button class="btn btn-success" style="flex: 1; margin-top: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="controlarTeclado('encender-pantalla')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
+          Encender (Ctrl)
+        </button>
+      </div>
+
+      <div class="divider"></div>
+      <div class="card-section-title">Energía y Sesión de PC</div>
+      <div style="display: flex; gap: 8px; margin-top: 5px; width: 100%;">
+        <button class="btn btn-danger" style="flex: 1; margin-top: 0; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68); display: inline-flex; align-items: center; justify-content: center;" onclick="controlarEnergia('bloquear')">
+          Bloquear PC
+        </button>
+        <button class="btn btn-danger" style="flex: 1; margin-top: 0; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68); display: inline-flex; align-items: center; justify-content: center;" onclick="controlarEnergia('suspender')">
+          Suspender PC
+        </button>
+      </div>
+
+      <div class="divider"></div>
+      <div class="card-section-title">Portapapeles de la PC</div>
+      <div style="display: flex; gap: 8px; margin-top: 5px;">
+        <input type="text" id="inputPortapapeles" placeholder="Texto para enviar a la PC..." style="flex: 2; padding: 10px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 0;">
+        <button class="btn" onclick="enviarPortapapeles()" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.75rem;">
+          Copiar a PC
+        </button>
+        <button class="btn" onclick="obtenerPortapapeles()" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.75rem;">
+          Leer de PC
+        </button>
+      </div>
+
+      <div class="divider"></div>
+      <div class="card-section-title">Captura de Pantalla & Latencia</div>
+      <div style="display: flex; gap: 8px; margin-top: 5px;">
+        <button class="btn" onclick="tomarScreenshot()" style="flex: 1; padding: 10px 12px; font-size: 0.75rem; margin-top: 0;">
+          Capturar Pantalla
+        </button>
+        <button class="btn" onclick="probarPing()" style="flex: 1; padding: 10px 12px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px; justify-content: center; margin-top: 0;">
+          Test Ping: <span id="pingResultText" style="color: var(--success); font-weight: 700;">--</span>
+        </button>
+      </div>
+      <img id="screenshotPreview" class="screenshot-preview" alt="Captura de Pantalla" style="width: 100%; border-radius: 10px; border: 1px solid var(--card-border); margin-top: 10px; display: none; cursor: pointer;" onclick="window.open(this.src, '_blank')">
     </div>
 
     <!-- CARD 3: REINICIAR GATEWAY -->
@@ -1469,6 +1650,8 @@ const DASHBOARD_HTML = `
     document.addEventListener('DOMContentLoaded', () => {
       pollGatewayStatus();
       setInterval(pollGatewayStatus, 5000);
+      probarPing();
+      setInterval(probarPing, 20000);
     });
 
     function logout() {
@@ -1724,6 +1907,97 @@ const DASHBOARD_HTML = `
         }
       } catch (error) {
         showToast('Error al conectar con la PC', 'error');
+      }
+    }
+
+    async function controlarTeclado(accion) {
+      showToast('Enviando atajo de teclado...', 'info');
+      try {
+        const response = await fetch('/sistema/teclado', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accion })
+        });
+        const data = await response.json();
+        showToast(data.message, response.ok ? 'success' : 'error');
+      } catch (error) {
+        showToast('Error al conectar con la PC', 'error');
+      }
+    }
+
+    async function controlarEnergia(accion) {
+      showToast('Enviando comando de energía...', 'info');
+      try {
+        const response = await fetch('/sistema/energia', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accion })
+        });
+        const data = await response.json();
+        showToast(data.message, response.ok ? 'success' : 'error');
+      } catch (error) {
+        showToast('Error al conectar con la PC', 'error');
+      }
+    }
+
+    async function enviarPortapapeles() {
+      const text = document.getElementById('inputPortapapeles').value;
+      if (!text) {
+        showToast('Por favor escribe algún texto para enviar.', 'warning');
+        return;
+      }
+      showToast('Enviando al portapapeles de la PC...', 'info');
+      try {
+        const response = await fetch('/sistema/portapapeles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        const data = await response.json();
+        showToast(data.message, response.ok ? 'success' : 'error');
+      } catch (error) {
+        showToast('Error al conectar con la PC', 'error');
+      }
+    }
+
+    async function obtenerPortapapeles() {
+      showToast('Leyendo portapapeles de la PC...', 'info');
+      try {
+        const response = await fetch('/sistema/portapapeles');
+        const data = await response.json();
+        if (response.ok) {
+          document.getElementById('inputPortapapeles').value = data.text;
+          showToast('Portapapeles leído con éxito.', 'success');
+        } else {
+          showToast(data.message || 'Error al leer portapapeles', 'error');
+        }
+      } catch (error) {
+        showToast('Error al conectar con la PC', 'error');
+      }
+    }
+
+    function tomarScreenshot() {
+      showToast('Actualizando captura de pantalla...', 'info');
+      const preview = document.getElementById('screenshotPreview');
+      preview.src = '/sistema/screenshot?t=' + Date.now();
+      preview.style.display = 'block';
+      showToast('Captura cargada.', 'success');
+    }
+
+    async function probarPing() {
+      try {
+        const response = await fetch('/sistema/ping');
+        const data = await response.json();
+        const pingTxt = document.getElementById('pingResultText');
+        if (response.ok && data.latencyMs !== null) {
+          pingTxt.innerText = data.latencyMs + ' ms';
+          pingTxt.style.color = 'var(--success)';
+        } else {
+          pingTxt.innerText = 'Error';
+          pingTxt.style.color = 'var(--danger)';
+        }
+      } catch (error) {
+        console.error('Error al probar ping:', error);
       }
     }
 
