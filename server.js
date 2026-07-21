@@ -2053,8 +2053,69 @@ const DASHBOARD_HTML = `
       }
     }
 
+    function drawDayLabels() {
+      const checkboxes = document.querySelectorAll('.day-checkbox');
+      checkboxes.forEach(cb => {
+        const lbl = document.getElementById('lbl-day-' + cb.value);
+        if (lbl) {
+          if (cb.checked) {
+            lbl.style.background = 'rgba(16, 185, 129, 0.2)';
+            lbl.style.borderColor = '#10b981';
+            lbl.style.color = '#fff';
+          } else {
+            lbl.style.background = 'rgba(255,255,255,0.05)';
+            lbl.style.borderColor = 'var(--card-border)';
+            lbl.style.color = 'var(--text)';
+          }
+        }
+      });
+    }
+
+    async function updateSchedule() {
+      const startHour = document.getElementById('browserStartHour').value;
+      const endHour = document.getElementById('browserEndHour').value;
+      const browserCloseHour = document.getElementById('browserBrowserCloseHour').value;
+      const browserCloseEnabled = document.getElementById('browserBrowserCloseEnabled').checked;
+
+      const checkedDays = [];
+      const checkboxes = document.querySelectorAll('.day-checkbox');
+      checkboxes.forEach(cb => {
+        if (cb.checked) {
+          checkedDays.push(Number(cb.value));
+        }
+      });
+
+      drawDayLabels();
+
+      try {
+        const response = await fetch('/browser/programacion', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            startHour,
+            endHour,
+            days: checkedDays,
+            browserCloseHour,
+            browserCloseEnabled
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          showToast(data.message || 'Error al actualizar programación', 'error');
+        }
+      } catch (error) {
+        console.error('Error al actualizar programación:', error);
+      }
+    }
+
     async function controlBrowser(accion) {
-      showToast(accion === 'abrir' ? 'Iniciando navegador...' : 'Cerrando navegador...', 'info');
+      const msgs = {
+        'abrir': 'Iniciando navegador...',
+        'cerrar': 'Cerrando navegador...',
+        'minimizar': 'Minimizando ventana...',
+        'restaurar': 'Restaurando ventana...'
+      };
+      showToast(msgs[accion] || 'Procesando...', 'info');
 
       try {
         const response = await fetch('/browser/browser', {
