@@ -28,14 +28,11 @@ let browserBrowserContext = null;
 let browserPage = null;
 let browserIntervalId = null;
 
-let aireEstado = 'apagado'; // 'apagado' | 'encendido' | 'reiniciando'
-let aireReiniciarDelayMs = 20000; // 20 segundos por defecto
-
 // URL del túnel público ngrok
 let ngrokUrl = '';
 let ngrokListener = null;
 
-// Middleware de Autenticación para rutas de la API (interviene en /browser, /aire, /sistema, y /gateway/status)
+// Middleware de Autenticación para rutas de la API (interviene en /browser, /sistema, y /gateway/status)
 app.use((req, res, next) => {
   if (req.path === '/' || req.path === '/favicon.ico') {
     return next();
@@ -84,8 +81,6 @@ app.get('/gateway/status', (req, res) => {
     browserBrowserAbierto,
     browserPresenciaActiva,
     browserIntervalMs,
-    aireEstado,
-    aireReiniciarDelayMs,
     ngrokUrl: ngrokUrl || 'Inactivo',
     hasEmulatorPath: !!process.env.EMULATOR_BAT_PATH
   });
@@ -139,7 +134,6 @@ app.post('/browser/browser', async (req, res) => {
       });
 
     } else {
-      // Cerrar navegador
       await cleanupBrowserSession();
       return res.status(200).json({
         status: 'ok',
@@ -268,7 +262,6 @@ app.post('/browser/status', async (req, res) => {
 
   try {
     if (estado === 'activo') {
-      // 1. Abrir navegador
       if (!browserBrowserContext) {
         const userDataDir = path.join(__dirname, 'browser_user_data');
         browserBrowserContext = await chromium.launchPersistentContext(userDataDir, {
@@ -280,7 +273,6 @@ app.post('/browser/status', async (req, res) => {
         browserPage.goto('https://example.com').catch(() => {});
         browserBrowserAbierto = true;
       }
-      // 2. Iniciar simulación
       if (browserIntervalId) clearInterval(browserIntervalId);
       setupBrowserInterval();
       browserPresenciaActiva = true;
@@ -299,103 +291,6 @@ app.post('/browser/status', async (req, res) => {
   } catch (error) {
     await cleanupBrowserSession();
     return res.status(500).json({ error: 'Internal Error', message: error.message });
-  }
-});
-
-// Función asíncrona placeholder para enviar comandos al aire acondicionado
-async function controlAirConditioner(modo, velocidad, encendido) {
-  try {
-    log(`[SDK/Protocol] Comunicando con 'Agustin Air Conditioner'...`);
-    log(`[SDK/Protocol] Configuración enviada: { encendido: ${encendido}, modo: '${modo}', velocidad: '${velocidad}' }`);
-    await new Promise(resolve => setTimeout(resolve, 800));
-    log(`[SDK/Protocol] Señal recibida y procesada con éxito por el climatizador.`);
-  } catch (error) {
-    log(`[SDK/Protocol ERROR] Fallo al enviar señal al climatizador: ${error.message}`);
-    throw error;
-  }
-}
-
-// Endpoint POST /aire/encender
-app.post('/aire/encender', async (req, res) => {
-  log('Procesando solicitud de encendido de climatización...');
-  
-  try {
-    const modoSolicitado = req.body.modo || req.body.mode;
-    let modoMapeado = 'cooling';
-
-    if (modoSolicitado) {
-      const normalizado = modoSolicitado.toString().toLowerCase().trim();
-      if (normalizado === 'ventilador' || normalizado === 'fan' || normalizado === 'fan-only') {
-        modoMapeado = 'fan-only';
-      } else if (normalizado === 'seco' || normalizado === 'dry' || normalizado === 'deshumidificador') {
-        modoMapeado = 'dry';
-      }
-    }
-
-    const velocidad = 'alta';
-
-    log(`Modo mapeado final: '${modoMapeado}', Velocidad: '${velocidad}'`);
-    await controlAirConditioner(modoMapeado, velocidad, true);
-
-    aireEstado = 'encendido';
-
-    return res.status(200).json({
-      status: 'ok',
-      message: "Señal de encendido enviada a 'Agustin Air Conditioner'.",
-      config: {
-        dispositivo: 'Agustin Air Conditioner',
-        estado: 'encendido',
-        modo: modoMapeado,
-        velocidad: velocidad
-      }
-    });
-
-  } catch (error) {
-    log(`Error en /aire/encender: ${error.message}`);
-    return res.status(500).json({
-      error: 'Internal Server Error',
-      message: `No se pudo encender el aire acondicionado: ${error.message}`
-    });
-  }
-});
-
-// Endpoint POST /aire/reiniciar
-app.post('/aire/reiniciar', async (req, res) => {
-  const { delayMs } = req.body;
-
-  if (delayMs && typeof delayMs === 'number' && delayMs > 0) {
-    aireReiniciarDelayMs = delayMs;
-  }
-
-  log(`Iniciando ciclo crítico de reinicio para Agustin Air Conditioner con duración de: ${aireReiniciarDelayMs} ms`);
-
-  try {
-    aireEstado = 'reiniciando';
-
-    log('Paso 1: Enviando señal de encendido inmediata...');
-    await controlAirConditioner('cooling', 'alta', true);
-
-    log(`Paso 2: Suspendiendo el hilo de la petición durante ${aireReiniciarDelayMs / 1000} segundos...`);
-    await new Promise(resolve => setTimeout(resolve, aireReiniciarDelayMs));
-
-    log('Paso 3: Enviando señal de apagado final...');
-    await controlAirConditioner('cooling', 'alta', false);
-
-    aireEstado = 'apagado';
-    log('Ciclo de reinicio completado con éxito.');
-
-    return res.status(200).json({
-      status: 'ok',
-      message: `Ciclo de reinicio ejecutado correctamente (Espera: ${aireReiniciarDelayMs / 1000}s).`
-    });
-
-  } catch (error) {
-    aireEstado = 'apagado';
-    log(`Error en ciclo de reinicio: ${error.message}`);
-    return res.status(500).json({
-      error: 'Internal Server Error',
-      message: `El ciclo de reinicio falló o se interrumpió: ${error.message}`
-    });
   }
 });
 
@@ -422,7 +317,6 @@ app.post('/sistema/ejecutar', (req, res) => {
 
   log(`Iniciando comando del emulador en background: ${batPath}`);
   
-  // Ejecutar el archivo .bat en background sin bloquear
   exec(`cmd.exe /c "${batPath}"`, (error, stdout, stderr) => {
     if (error) {
       log(`Error al ejecutar el script de emulador: ${error.message}`);
@@ -464,7 +358,6 @@ app.get('/', (req, res) => {
       --danger: #ef4444;
       --danger-glow: rgba(239, 68, 68, 0.4);
       --warning: #f59e0b;
-      --warning-glow: rgba(245, 158, 11, 0.4);
       --text: #f3f4f6;
       --text-muted: #9ca3af;
     }
@@ -623,17 +516,6 @@ app.get('/', (req, res) => {
       animation: pulse 1.5s infinite alternate;
     }
 
-    .status-badge.warning {
-      color: var(--warning);
-      border-color: rgba(245, 158, 11, 0.2);
-      background: rgba(245, 158, 11, 0.1);
-    }
-
-    .status-badge.warning .dot {
-      background: var(--warning);
-      box-shadow: 0 0 8px var(--warning);
-    }
-
     .form-group {
       margin-bottom: 18px;
     }
@@ -734,23 +616,6 @@ app.get('/', (req, res) => {
       opacity: 0.4;
       cursor: not-allowed !important;
       pointer-events: none;
-    }
-
-    .select-dropdown {
-      width: 100%;
-      padding: 12px 16px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--card-border);
-      border-radius: 12px;
-      color: var(--text);
-      font-size: 0.9rem;
-      outline: none;
-      cursor: pointer;
-    }
-
-    .select-dropdown option {
-      background: #151824;
-      color: var(--text);
     }
 
     /* Modal de Configuración */
@@ -910,7 +775,6 @@ app.get('/', (req, res) => {
 
     .toast.success { border-left-color: var(--success); }
     .toast.error { border-left-color: var(--danger); }
-    .toast.warning { border-left-color: var(--warning); }
 
     @keyframes pulse {
       from { box-shadow: 0 0 4px rgba(16, 185, 129, 0.3); }
@@ -925,70 +789,6 @@ app.get('/', (req, res) => {
     @keyframes slideInDown {
       from { transform: translateY(-20px); opacity: 0; }
       to { transform: translateY(0); opacity: 1; }
-    }
-
-    /* Cuenta regresiva */
-    .countdown-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(15, 16, 22, 0.9);
-      backdrop-filter: blur(6px);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      z-index: 5;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.3s ease;
-    }
-
-    .countdown-overlay.show {
-      opacity: 1;
-      pointer-events: auto;
-    }
-
-    .countdown-circle {
-      position: relative;
-      width: 80px;
-      height: 80px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 10px;
-    }
-
-    .countdown-circle svg {
-      width: 80px;
-      height: 80px;
-      transform: rotate(-90deg);
-    }
-
-    .countdown-circle circle {
-      fill: none;
-      stroke-width: 6;
-    }
-
-    .countdown-circle circle.bg {
-      stroke: rgba(255, 255, 255, 0.1);
-    }
-
-    .countdown-circle circle.progress {
-      stroke: var(--warning);
-      stroke-linecap: round;
-      stroke-dasharray: 226;
-      stroke-dashoffset: 0;
-      transition: stroke-dashoffset 0.1s linear;
-    }
-
-    .countdown-number {
-      position: absolute;
-      font-size: 1.5rem;
-      font-weight: 700;
-      color: var(--warning);
     }
 
     .divider {
@@ -1106,62 +906,6 @@ app.get('/', (req, res) => {
       </button>
     </div>
 
-    <!-- CARD 3: AGUSTIN AIR CONDITIONER -->
-    <div class="card" id="cardAire">
-      <div class="countdown-overlay" id="countdownOverlay">
-        <div class="countdown-circle">
-          <svg>
-            <circle class="bg" cx="40" cy="40" r="36"></circle>
-            <circle class="progress" id="countdownProgress" cx="40" cy="40" r="36"></circle>
-          </svg>
-          <div class="countdown-number" id="countdownSecs">20</div>
-        </div>
-        <h3 style="font-weight: 600; color: var(--warning); margin-bottom: 5px;">Reiniciando Climatizador</h3>
-        <p style="font-size: 0.8rem; color: var(--text-muted);">Enviando señal de apagado al finalizar...</p>
-      </div>
-
-      <div class="card-header">
-        <div class="card-title-group">
-          <h2>Agustin Air Conditioner</h2>
-          <p>Control e inicio de ciclo crítico</p>
-        </div>
-        <div class="status-badge" id="aireBadge">
-          <div class="dot"></div>
-          <span id="aireBadgeText">Apagado</span>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <div class="form-label-row">
-          <span>Modo de Operación</span>
-        </div>
-        <select class="select-dropdown" id="aireModo">
-          <option value="cooling">Refrigeración (Cooling)</option>
-          <option value="ventilador">Ventilador (Fan-only)</option>
-          <option value="dry">Deshumidificador (Dry)</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <div class="form-label-row">
-          <span>Tiempo de Ciclo Crítico (Reinicio)</span>
-          <span id="aireDelayVal">20 segundos</span>
-        </div>
-        <input type="range" class="slider" id="aireDelaySlider" min="5" max="60" step="5" value="20" oninput="updateAireSliderLabel(this.value)">
-      </div>
-
-      <div class="btn-row">
-        <button class="btn btn-primary" onclick="encenderAire()">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
-          Encender
-        </button>
-        <button class="btn btn-danger" onclick="reiniciarAire()">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
-          Reiniciar Ciclo
-        </button>
-      </div>
-    </div>
-
     <!-- Barra de info de túnel ngrok -->
     <div class="tunnel-bar" id="tunnelBar" style="display: none;">
       <span class="badge">Remoto</span>
@@ -1194,8 +938,6 @@ app.get('/', (req, res) => {
 
   <script>
     let currentBrowserInterval = 4.0;
-    let currentAireDelay = 20;
-    let isRebooting = false;
 
     document.addEventListener('DOMContentLoaded', () => {
       const savedKey = localStorage.getItem('X-API-KEY');
@@ -1236,10 +978,6 @@ app.get('/', (req, res) => {
 
     function updateBrowserSliderLabel(val) {
       document.getElementById('browserIntervalVal').innerText = parseFloat(val).toFixed(1) + ' minutos';
-    }
-
-    function updateAireSliderLabel(val) {
-      document.getElementById('aireDelayVal').innerText = val + ' segundos';
     }
 
     function showToast(message, type = 'info') {
@@ -1350,35 +1088,6 @@ app.get('/', (req, res) => {
           btnEmulador.title = '';
         }
 
-        // Sincronizar UI del Aire
-        const aireBadge = document.getElementById('aireBadge');
-        const aireBadgeText = document.getElementById('aireBadgeText');
-        const cardAire = document.getElementById('cardAire');
-        
-        if (data.aireEstado === 'encendido') {
-          aireBadge.className = 'status-badge active';
-          aireBadgeText.innerText = 'Encendido';
-          cardAire.classList.add('active-state');
-        } else if (data.aireEstado === 'reiniciando') {
-          aireBadge.className = 'status-badge warning';
-          aireBadgeText.innerText = 'Reiniciando';
-          cardAire.classList.add('active-state');
-          if (!isRebooting) {
-            triggerVisualReboot(data.aireReiniciarDelayMs / 1000);
-          }
-        } else {
-          aireBadge.className = 'status-badge';
-          aireBadgeText.innerText = 'Apagado';
-          cardAire.classList.remove('active-state');
-        }
-
-        // Sincronizar Slider del Aire
-        if (document.activeElement !== document.getElementById('aireDelaySlider')) {
-          const secs = data.aireReiniciarDelayMs / 1000;
-          document.getElementById('aireDelaySlider').value = secs;
-          updateAireSliderLabel(secs);
-        }
-
         // Configuración de Ngrok Link
         const tunnelBar = document.getElementById('tunnelBar');
         if (data.ngrokUrl && data.ngrokUrl !== 'Inactivo') {
@@ -1482,99 +1191,6 @@ app.get('/', (req, res) => {
       } catch (error) {
         showToast('Error al conectar con la PC', 'error');
       }
-    }
-
-    // Enviar encendido de aire
-    async function encenderAire() {
-      const key = getApiKey();
-      if (!key) { openSettings(); return; }
-
-      const modo = document.getElementById('aireModo').value;
-      showToast('Encendiendo climatizador...', 'info');
-
-      try {
-        const response = await fetch('/aire/encender', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-API-KEY': key
-          },
-          body: JSON.stringify({ modo })
-        });
-
-        const data = await response.json();
-        if (response.ok) {
-          showToast(data.message, 'success');
-          pollGatewayStatus();
-        } else {
-          showToast(data.message || 'Error al encender', 'error');
-        }
-      } catch (error) {
-        showToast('Error al comunicar con el servidor', 'error');
-      }
-    }
-
-    // Iniciar reinicio de aire
-    async function reiniciarAire() {
-      const key = getApiKey();
-      if (!key) { openSettings(); return; }
-
-      const secs = parseInt(document.getElementById('aireDelaySlider').value);
-      const ms = secs * 1000;
-
-      showToast('Iniciando ciclo crítico...', 'info');
-      triggerVisualReboot(secs);
-
-      try {
-        const response = await fetch('/aire/reiniciar', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-API-KEY': key
-          },
-          body: JSON.stringify({ delayMs: ms })
-        });
-
-        const data = await response.json();
-        if (response.ok) {
-          showToast(data.message, 'success');
-        } else {
-          showToast(data.message || 'Error en reinicio', 'error');
-        }
-      } catch (error) {
-        showToast('Error al enviar ciclo crítico', 'error');
-      } finally {
-        isRebooting = false;
-        document.getElementById('countdownOverlay').classList.remove('show');
-        pollGatewayStatus();
-      }
-    }
-
-    function triggerVisualReboot(durationSecs) {
-      isRebooting = true;
-      const overlay = document.getElementById('countdownOverlay');
-      const numLabel = document.getElementById('countdownSecs');
-      const progress = document.getElementById('countdownProgress');
-      
-      overlay.classList.add('show');
-      
-      let secondsLeft = durationSecs;
-      numLabel.innerText = secondsLeft;
-      progress.style.strokeDashoffset = '0';
-
-      const interval = setInterval(() => {
-        secondsLeft--;
-        if (secondsLeft <= 0) {
-          clearInterval(interval);
-          overlay.classList.remove('show');
-          isRebooting = false;
-        } else {
-          numLabel.innerText = secondsLeft;
-          const percentage = secondsLeft / durationSecs;
-          const offset = 226 - (percentage * 226);
-          progress.style.strokeDashoffset = offset;
-        }
-      }, 1000);
     }
   </script>
 </body>
