@@ -341,6 +341,11 @@ app.get('/gateway/status', (req, res) => {
     browserBrowserAbierto,
     browserPresenciaActiva,
     browserIntervalMs,
+    browserSimulacionStartHour,
+    browserSimulacionEndHour,
+    browserSimulacionDays,
+    browserBrowserCloseHour,
+    browserBrowserCloseEnabled,
     ngrokUrl: ngrokUrl || 'Inactivo',
     hasEmulatorPath: !!process.env.EMULATOR_BAT_PATH
   });
