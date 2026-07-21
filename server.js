@@ -265,14 +265,58 @@ app.get('/gateway/status', (req, res) => {
 app.post('/browser/browser', async (req, res) => {
   const { accion } = req.body;
 
-  if (accion !== 'abrir' && accion !== 'cerrar') {
+  if (accion !== 'abrir' && accion !== 'cerrar' && accion !== 'minimizar' && accion !== 'restaurar') {
     return res.status(400).json({
       error: 'Bad Request',
-      message: "La 'accion' debe ser 'abrir' o 'cerrar'."
+      message: "La 'accion' debe ser 'abrir', 'cerrar', 'minimizar' o 'restaurar'."
     });
   }
 
   try {
+    if (accion === 'minimizar') {
+      if (!browserBrowserContext || !browserPage || browserPage.isClosed()) {
+        return res.status(400).json({
+          error: 'Precondition Failed',
+          message: 'El navegador no está abierto.',
+          msg: 'Navegador cerrado'
+        });
+      }
+      log('Minimizando la ventana del navegador manualmente...');
+      const session = await browserPage.context().newCDPSession(browserPage);
+      const { windowId } = await session.send('Browser.getWindowForTarget');
+      await session.send('Browser.setWindowBounds', {
+        windowId,
+        bounds: { windowState: 'minimized' }
+      });
+      return res.status(200).json({
+        status: 'ok',
+        message: 'Ventana del navegador minimizada.',
+        msg: 'Ventana minimizada'
+      });
+    }
+
+    if (accion === 'restaurar') {
+      if (!browserBrowserContext || !browserPage || browserPage.isClosed()) {
+        return res.status(400).json({
+          error: 'Precondition Failed',
+          message: 'El navegador no está abierto.',
+          msg: 'Navegador cerrado'
+        });
+      }
+      log('Restaurando la ventana del navegador...');
+      const session = await browserPage.context().newCDPSession(browserPage);
+      const { windowId } = await session.send('Browser.getWindowForTarget');
+      await session.send('Browser.setWindowBounds', {
+        windowId,
+        bounds: { windowState: 'normal' }
+      });
+      return res.status(200).json({
+        status: 'ok',
+        message: 'Ventana del navegador restaurada.',
+        msg: 'Ventana restaurada'
+      });
+    }
+
     if (accion === 'abrir') {
       if (browserBrowserContext) {
         log('El navegador ya se encuentra abierto.');
