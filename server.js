@@ -1746,21 +1746,18 @@ const DASHBOARD_HTML = `
         <input type="range" class="slider" id="browserIntervalSlider" min="1" max="15" step="0.5" value="4" oninput="updateBrowserSliderLabel(this.value)">
       </div>
 
-      <div class="btn-row">
-        <button class="btn btn-success" id="btnPresenciaPlay" onclick="controlPresencia('iniciar')">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-          Iniciar Simulación
-        </button>
-        <button class="btn" id="btnPresenciaPause" onclick="controlPresencia('pausar')">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
-          Pausar
-        </button>
+      <div class="switch-container" style="margin-top: 15px; margin-bottom: 5px;">
+        <span style="font-size: 0.95rem; font-weight: 500; font-family: 'Outfit', sans-serif;">Simulación Activa</span>
+        <label class="switch">
+          <input type="checkbox" id="browserPresenciaToggle" onchange="togglePresencia(this.checked)">
+          <span class="slider-toggle"></span>
+        </label>
       </div>
 
       <div class="divider"></div>
 
       <!-- SECCIÓN 1.C: PLANIFICACIÓN Y CONTROL HORARIO -->
-      <div class="card-section-title">Planificación y Control Horario</div>
+      <div class="card-section-title">Programación de la Simulación</div>
       <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 5px;">
         <div style="display: flex; gap: 10px; width: 100%;">
           <div style="flex: 1;">
@@ -1770,19 +1767,6 @@ const DASHBOARD_HTML = `
           <div style="flex: 1;">
             <label style="font-size: 0.75rem; color: var(--text-muted);">Fin Simulación</label>
             <input type="time" id="browserEndHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
-          </div>
-        </div>
-
-        <div style="display: flex; gap: 10px; width: 100%;">
-          <div style="flex: 1.2;">
-            <label style="font-size: 0.75rem; color: var(--text-muted);">Cierre Navegador</label>
-            <input type="time" id="browserBrowserCloseHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
-          </div>
-          <div style="flex: 0.8; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; margin-top: 14px;">
-            <label style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 6px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
-              <input type="checkbox" id="browserBrowserCloseEnabled" onchange="updateSchedule()">
-              Auto-Cierre
-            </label>
           </div>
         </div>
 
@@ -1809,6 +1793,25 @@ const DASHBOARD_HTML = `
             </label>
             <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-0">
               <input type="checkbox" class="day-checkbox" value="0" style="display:none;" onchange="updateSchedule()">D
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div style="border-top: 1px dashed rgba(255,255,255,0.15); margin: 20px 0 15px 0;"></div>
+
+      <div class="card-section-title">Auto-Cierre del Navegador</div>
+      <div style="display: flex; gap: 10px; width: 100%; align-items: center;">
+        <div style="flex: 1.2;">
+          <label style="font-size: 0.75rem; color: var(--text-muted);">Hora de Cierre</label>
+          <input type="time" id="browserBrowserCloseHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
+        </div>
+        <div style="flex: 0.8; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; margin-top: 14px;">
+          <div class="switch-container" style="margin-top: 0; justify-content: flex-end; gap: 10px;">
+            <span style="font-size: 0.85rem; color: var(--text-muted);">Auto-Cierre</span>
+            <label class="switch">
+              <input type="checkbox" id="browserBrowserCloseEnabled" onchange="updateSchedule()">
+              <span class="slider-toggle"></span>
             </label>
           </div>
         </div>
