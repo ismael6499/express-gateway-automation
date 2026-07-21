@@ -1,0 +1,15 @@
+{
+  "browserPresenciaActiva": true,
+  "browserIntervalMs": 240000,
+  "browserSimulacionStartHour": "09:00",
+  "browserSimulacionEndHour": "18:05",
+  "browserSimulacionDays": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "browserBrowserCloseHour": "18:04",
+  "browserBrowserCloseEnabled": true
+}

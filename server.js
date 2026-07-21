@@ -49,6 +49,8 @@ let browserBrowserContext = null;
 let browserPage = null;
 let browserIntervalId = null;
 let lastAutoCierreMinute = null; // evita re-disparar auto-cierre en el mismo minuto
+let isLaunchingBrowser = false;  // guard anti-concurrencia al abrir/cerrar navegador
+let lastActivityTime = null;     // timestamp de la ultima simulacion de actividad
 let browserSimulacionStartHour = '09:00';
 let browserSimulacionEndHour = '18:00';
 let browserSimulacionDays = [1, 2, 3, 4, 5]; // Lunes a Viernes por defecto
@@ -361,6 +363,15 @@ app.post('/browser/browser', async (req, res) => {
     });
   }
 
+  if (isLaunchingBrowser && (accion === 'abrir' || accion === 'cerrar')) {
+    return res.status(409).json({
+      error: 'Conflict',
+      message: 'Ya hay una operaci\u00f3n de navegador en curso. Por favor espera.',
+      msg: 'Operaci\u00f3n en curso'
+    });
+  }
+  isLaunchingBrowser = (accion === 'abrir' || accion === 'cerrar');
+
   try {
     if (accion === 'minimizar') {
       if (!browserBrowserContext || !browserPage || browserPage.isClosed()) {
@@ -411,7 +422,8 @@ app.post('/browser/browser', async (req, res) => {
         log('El navegador ya se encuentra abierto.');
         return res.status(200).json({
           status: 'ok',
-          message: 'El navegador de Browser ya está abierto.'
+          message: 'El navegador de Browser ya está abierto.',
+          msg: 'Navegador ya abierto'
         });
       }
 
@@ -552,20 +564,25 @@ app.post('/browser/browser', async (req, res) => {
         }, 20000);
       }
 
+      isLaunchingBrowser = false;
       return res.status(200).json({
         status: 'ok',
-        message: 'Navegador de Browser abierto con éxito y cargando página.'
+        message: 'Navegador de Browser abierto con éxito y cargando página.',
+        msg: 'Navegador abierto'
       });
 
     } else {
       await cleanupBrowserSession();
+      isLaunchingBrowser = false;
       return res.status(200).json({
         status: 'ok',
-        message: 'Navegador de Browser cerrado y simulación desactivada.'
+        message: 'Navegador de Browser cerrado y simulación desactivada.',
+        msg: 'Navegador cerrado'
       });
     }
   } catch (error) {
     log(`Error al controlar el navegador de Browser: ${error.message}`);
+    isLaunchingBrowser = false;
     await cleanupBrowserSession();
     return res.status(500).json({
       error: 'Internal Server Error',
@@ -700,6 +717,7 @@ async function runBrowserActivityLoop() {
       // Ignorar
     }
     
+    lastActivityTime = new Date();
     log('Actividad simulada con éxito.');
   } catch (err) {
     log(`Error al ejecutar simulación de actividad de Browser: ${err.message}`);
@@ -735,7 +753,8 @@ app.post('/browser/simular-accion', async (req, res) => {
       log('Movimiento manual de cursor completado.');
       return res.status(200).json({
         status: 'ok',
-        message: `Mouse desplazado con éxito a (${x}, ${y}).`
+        message: `Mouse desplazado con éxito a (${x}, ${y}).`,
+        msg: 'Mouse movido'
       });
     } else if (accion === 'tipear-buscador') {
       try {
@@ -767,7 +786,8 @@ app.post('/browser/simular-accion', async (req, res) => {
         log('Simulación de tipeo y borrado de prueba completado usando atajos.');
         return res.status(200).json({
           status: 'ok',
-          message: `Tipeado de texto "Activo" completado usando atajo (${usarFiltroLateral ? 'Ctrl+Shift+F' : 'Ctrl+E'}) y borrado.`
+          message: `Tipeado de texto "Activo" completado usando atajo (${usarFiltroLateral ? 'Ctrl+Shift+F' : 'Ctrl+E'}) y borrado.`,
+          msg: 'Buscador tipeado'
         });
       } catch (err) {
         log(`Error al usar atajos, intentando clic físico de respaldo: ${err.message}`);
@@ -784,7 +804,8 @@ app.post('/browser/simular-accion', async (req, res) => {
           await browserPage.keyboard.press('Escape');
           return res.status(200).json({
             status: 'ok',
-            message: 'Tipeado de texto "Activo" y borrado completado usando clic físico de respaldo.'
+            message: 'Tipeado de texto "Activo" y borrado completado usando clic físico de respaldo.',
+            msg: 'Buscador tipeado'
           });
         } catch (fallbackErr) {
           log(`Error en el selector físico de respaldo: ${fallbackErr.message}`);
@@ -799,7 +820,8 @@ app.post('/browser/simular-accion', async (req, res) => {
       log('Pulsación manual de Shift completada.');
       return res.status(200).json({
         status: 'ok',
-        message: 'Pulsación de tecla Shift simulada correctamente.'
+        message: 'Pulsación de tecla Shift simulada correctamente.',
+        msg: 'Shift presionado'
       });
     } else {
       return res.status(400).json({
@@ -968,26 +990,8 @@ app.get('/sistema/screenshot', (req, res) => {
   const screenshotPath = path.join(__dirname, 'temp_screenshot.png');
   const escapedPath = screenshotPath.replace(/\\/g, '\\\\');
   // SetProcessDPIAware para obtener dimensiones físicas reales (incluye barra de tareas)
-  const psCommand = `powershell -Command "
-    Add-Type -TypeDefinition @'
-      using System;
-      using System.Runtime.InteropServices;
-      public class Screen {
-        [DllImport(\"user32.dll\")] public static extern bool SetProcessDPIAware();
-        [DllImport(\"user32.dll\")] public static extern int GetSystemMetrics(int n);
-      }
-'@;
-    [Screen]::SetProcessDPIAware() | Out-Null;
-    [Reflection.Assembly]::LoadWithPartialName('System.Drawing') | Out-Null;
-    $w = [Screen]::GetSystemMetrics(0);
-    $h = [Screen]::GetSystemMetrics(1);
-    $bmp = New-Object System.Drawing.Bitmap $w, $h;
-    $g = [System.Drawing.Graphics]::FromImage($bmp);
-    $g.CopyFromScreen(0, 0, 0, 0, (New-Object System.Drawing.Size($w, $h)));
-    $bmp.Save('${escapedPath}', [System.Drawing.Imaging.ImageFormat]::Png);
-    $g.Dispose();
-    $bmp.Dispose();
-  "`;
+  const scriptPath = path.join(__dirname, 'screenshot.ps1');
+  const psCommand = `powershell -ExecutionPolicy Bypass -File "${scriptPath}" "${screenshotPath}"`;
   
   exec(psCommand, (error) => {
     if (error) {
@@ -1015,6 +1019,24 @@ app.get('/sistema/ping', (req, res) => {
       latencyMs: latency,
       msg: latency ? `${latency} ms` : 'Desconocido'
     });
+  });
+});
+
+// Endpoint GET /browser/ultima-actividad - Tiempo desde el ultimo movimiento simulado
+app.get('/browser/ultima-actividad', (req, res) => {
+  if (!lastActivityTime) {
+    return res.json({ lastActivityTime: null, formatted: 'Sin actividad registrada', secondsAgo: null, msg: 'Sin actividad' });
+  }
+  const now = new Date();
+  const secondsAgo = Math.floor((now - lastActivityTime) / 1000);
+  const pad = (n) => String(n).padStart(2, '0');
+  const d = lastActivityTime;
+  const formatted = `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  return res.json({
+    lastActivityTime: lastActivityTime.toISOString(),
+    formatted,
+    secondsAgo,
+    msg: `Hace ${secondsAgo}s`
   });
 });
 
@@ -1054,7 +1076,8 @@ app.post('/sistema/ejecutar', (req, res) => {
 
   return res.status(200).json({
     status: 'ok',
-    message: 'Script de inicio del emulador ejecutado con éxito en background.'
+    message: 'Script de inicio del emulador ejecutado con éxito en background.',
+    msg: 'Emulador iniciado'
   });
 });
 
@@ -1081,7 +1104,8 @@ app.post('/sistema/cerrar', (req, res) => {
 
   return res.status(200).json({
     status: 'ok',
-    message: 'Comando de cierre de emulador enviado con éxito.'
+    message: 'Comando de cierre de emulador enviado con éxito.',
+    msg: 'Emulador cerrado'
   });
 });
 
@@ -1090,7 +1114,8 @@ app.post('/gateway/restart', (req, res) => {
   log('Solicitud de reinicio remoto del servidor recibida.');
   res.json({
     status: 'ok',
-    message: 'Reiniciando el Gateway Server en la PC. Por favor espera unos segundos...'
+    message: 'Reiniciando el Gateway Server en la PC. Por favor espera unos segundos...',
+    msg: 'Servidor reiniciando'
   });
 
   const { spawn } = require('child_process');

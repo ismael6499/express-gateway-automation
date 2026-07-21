@@ -1,0 +1,6 @@
+@echo off
+cd /d "C:\Users\agust\Documents\IDEA Projects\express-gateway-automation"
+echo [Remote Restart] Esperando a que el proceso padre libere el puerto 3000...
+ping 127.0.0.1 -n 3 > nul
+echo [Remote Restart] Iniciando servidor en segundo plano...
+wscript.exe run_silent.vbs
