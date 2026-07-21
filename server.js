@@ -2197,6 +2197,7 @@ process.on('SIGTERM', gracefulShutdown);
 
 // Inicializar el servidor Express
 app.listen(PORT, async () => {
+  loadSimulationState();
   log(`Servidor unificado (API Gateway Local) escuchando en http://localhost:${PORT}`);
   
   // Inicialización del túnel ngrok con reintentos para evitar el error ERR_NGROK_3200
