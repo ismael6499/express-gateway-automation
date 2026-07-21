@@ -135,56 +135,84 @@ async function autoLoginTargetSession(page) {
 
       // Si estamos en la página de login de Microsoft
       if (url.includes('login.microsoftonline.com')) {
-        // 1. Intentar hacer clic en la fila de la cuenta con múltiples selectores de contingencia
-        const accountSelectors = [
-          'div[data-username*="user@example.com"]',
-          '[data-username*="user@example.com"]',
-          'div[role="button"]:has-text("user@example.com")',
-          '.tile:has-text("user@example.com")',
-          'text="user@example.com"',
-          'div:has-text("user@example.com")'
-        ];
+        // Verificar si estamos en la pantalla de ingresar contraseña
+        const passwordInput = page.locator('input[type="password"], input[name="passwd"]');
+        const isPasswordPage = await passwordInput.first().isVisible().catch(() => false);
 
-        let clickedAccount = false;
-        for (let sel of accountSelectors) {
-          const loc = page.locator(sel).first();
-          if (await loc.isVisible().catch(() => false)) {
-            log(`Auto-Login: Fila de cuenta detectada. Clickeando selector: ${sel}`);
-            await loc.click({ force: true });
-            clickedAccount = true;
-            break;
+        if (isPasswordPage) {
+          // Intentar presionar el botón de inicio o confirmación (Sign in)
+          const btnSelectors = [
+            '#idSIButton9',
+            'input[type="submit"]',
+            'button[type="submit"]',
+            'input[value="Sign in"]',
+            'input[value="Iniciar sesión"]'
+          ];
+
+          let clickedButton = false;
+          for (let sel of btnSelectors) {
+            const loc = page.locator(sel).first();
+            if (await loc.isVisible().catch(() => false)) {
+              const val = await loc.getAttribute('value') || await loc.innerText() || 'Submit';
+              log(`Auto-Login: Botón de firma detectado (${val}). Presionando selector: ${sel}`);
+              await loc.click({ force: true });
+              clickedButton = true;
+              break;
+            }
           }
-        }
-        if (clickedAccount) {
-          await new Promise(r => setTimeout(r, 1000));
-          continue;
-        }
-
-        // 2. Intentar presionar el botón de inicio o confirmación (Next / Sign in / Yes)
-        const btnSelectors = [
-          '#idSIButton9',
-          'input[type="submit"]',
-          'button[type="submit"]',
-          'input[value="Sign in"]',
-          'input[value="Yes"]',
-          'input[value="Sí"]',
-          'input[value="Iniciar sesión"]'
-        ];
-
-        let clickedButton = false;
-        for (let sel of btnSelectors) {
-          const loc = page.locator(sel).first();
-          if (await loc.isVisible().catch(() => false)) {
-            const val = await loc.getAttribute('value') || await loc.innerText() || 'Submit';
-            log(`Auto-Login: Botón de acción detectado (${val}). Presionando selector: ${sel}`);
-            await loc.click({ force: true });
-            clickedButton = true;
-            break;
+          if (clickedButton) {
+            await new Promise(r => setTimeout(r, 1000));
+            continue;
           }
-        }
-        if (clickedButton) {
-          await new Promise(r => setTimeout(r, 1000));
-          continue;
+        } else {
+          // No es la página de contraseña -> Puede ser "Pick an account" o "Stay signed in?"
+          
+          // 1. Intentar hacer clic en la fila de la cuenta ("Pick an account")
+          // Excluimos selectores de texto simple que puedan confundirse con etiquetas
+          const accountSelectors = [
+            'div[data-username*="user@example.com"]',
+            '[data-username*="user@example.com"]',
+            'div[role="button"]:has-text("user@example.com")',
+            '.tile:has-text("user@example.com")'
+          ];
+
+          let clickedAccount = false;
+          for (let sel of accountSelectors) {
+            const loc = page.locator(sel).first();
+            if (await loc.isVisible().catch(() => false)) {
+              log(`Auto-Login: Fila de cuenta detectada. Clickeando selector: ${sel}`);
+              await loc.click({ force: true });
+              clickedAccount = true;
+              break;
+            }
+          }
+          if (clickedAccount) {
+            await new Promise(r => setTimeout(r, 1000));
+            continue;
+          }
+
+          // 2. Si no es selección de cuenta, puede ser la pantalla "Stay signed in?" (¿Quiere mantener la sesión?)
+          const staySignedSelectors = [
+            '#idSIButton9',
+            'input[type="submit"]',
+            'input[value="Yes"]',
+            'input[value="Sí"]'
+          ];
+          let clickedStay = false;
+          for (let sel of staySignedSelectors) {
+            const loc = page.locator(sel).first();
+            if (await loc.isVisible().catch(() => false)) {
+              const val = await loc.getAttribute('value') || await loc.innerText() || 'Yes';
+              log(`Auto-Login: Botón "Stay signed in" detectado (${val}). Presionando selector: ${sel}`);
+              await loc.click({ force: true });
+              clickedStay = true;
+              break;
+            }
+          }
+          if (clickedStay) {
+            await new Promise(r => setTimeout(r, 1000));
+            continue;
+          }
         }
       }
     } catch (err) {
