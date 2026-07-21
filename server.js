@@ -934,12 +934,12 @@ app.post('/sistema/energia', (req, res) => {
 
 // Endpoint GET /sistema/portapapeles - Leer portapapeles de la PC
 app.get('/sistema/portapapeles', (req, res) => {
-  const psCommand = 'powershell -OutputEncoding UTF8 -Command "Get-Clipboard"';
-  exec(psCommand, { encoding: 'utf8' }, (error, stdout) => {
+  exec('cmd /c "chcp 65001 > nul && powershell.exe -Command Get-Clipboard"', { encoding: 'buffer' }, (error, stdout) => {
     if (error) {
       return res.status(500).json({ error: 'Error al obtener portapapeles', message: error.message });
     }
-    res.json({ text: stdout.trim() });
+    const text = stdout.toString('utf8').trim();
+    res.json({ text });
   });
 });
 
