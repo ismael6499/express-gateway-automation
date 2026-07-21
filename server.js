@@ -48,6 +48,40 @@ let browserIntervalMs = 240000; // 4 minutos por defecto
 let browserBrowserContext = null;
 let browserPage = null;
 let browserIntervalId = null;
+let browserSimulacionStartHour = '09:00';
+let browserSimulacionEndHour = '18:00';
+let browserSimulacionDays = [1, 2, 3, 4, 5]; // Lunes a Viernes por defecto
+let browserBrowserCloseHour = '18:03';
+let browserBrowserCloseEnabled = true;
+
+function isSimulationInSchedule() {
+  const now = new Date();
+  const day = now.getDay(); // 0 = Domingo, 1 = Lunes, etc.
+
+  // 1. Verificar si el día de hoy está habilitado
+  if (!browserSimulacionDays.includes(day)) {
+    return false;
+  }
+
+  // 2. Verificar si la hora actual está dentro del rango
+  const currentHour = now.getHours();
+  const currentMinute = now.getMinutes();
+  const currentMinutesSinceMidnight = currentHour * 60 + currentMinute;
+
+  const [startHour, startMin] = browserSimulacionStartHour.split(':').map(Number);
+  const startMinutes = startHour * 60 + startMin;
+
+  const [endHour, endMin] = browserSimulacionEndHour.split(':').map(Number);
+  const endMinutes = endHour * 60 + endMin;
+
+  if (startMinutes <= endMinutes) {
+    // Rango normal (ej. 09:00 a 18:00)
+    return currentMinutesSinceMidnight >= startMinutes && currentMinutesSinceMidnight <= endMinutes;
+  } else {
+    // Rango nocturno cruzando la medianoche (ej. 22:00 a 06:00)
+    return currentMinutesSinceMidnight >= startMinutes || currentMinutesSinceMidnight <= endMinutes;
+  }
+}
 
 // URL del túnel público ngrok
 let ngrokUrl = '';
