@@ -125,9 +125,24 @@ app.post('/browser/browser', async (req, res) => {
       const userDataDir = path.join(__dirname, 'browser_user_data');
       log(`Abriendo ventana de Playwright en: ${userDataDir}`);
       
-      browserBrowserContext = await chromium.launchPersistentContext(userDataDir, {
-        headless: false,
-        viewport: null
+      try {
+        browserBrowserContext = await chromium.launchPersistentContext(userDataDir, {
+          headless: false,
+          channel: 'chrome', // Usar Chrome oficial para mayor compatibilidad con Microsoft
+          viewport: null
+        });
+      } catch (err) {
+        log('Chrome oficial no detectado, iniciando con Chromium por defecto...');
+        browserBrowserContext = await chromium.launchPersistentContext(userDataDir, {
+          headless: false,
+          viewport: null
+        });
+      }
+
+      // Detectar si el usuario cierra la ventana del navegador manualmente
+      browserBrowserContext.on('close', async () => {
+        log('Aviso: El navegador de Browser fue cerrado manualmente por el usuario.');
+        await cleanupBrowserSession();
       });
 
       const pages = browserBrowserContext.pages();
