@@ -487,12 +487,16 @@ async function runBrowserActivityLoop() {
     // 2. Pulsación de Shift
     await browserPage.keyboard.press('Shift');
 
-    // 3. Intento de click en caja de búsqueda
+    // 3. Simular enfoque en buscador usando atajos de teclado (Ctrl+E o Ctrl+Shift+F)
     try {
-      const searchSelector = 'input[placeholder*="Search"], input[placeholder*="Buscar"], input[placeholder*="go right to a chat"], input[placeholder*="Ctrl+Alt+G"], input#ngx-search-box-input, input[data-testid="search-box-input"], .ms-searchux-input, input[class*="ms-searchux-input"]';
-      await browserPage.click(searchSelector, { timeout: 1000, force: true }).catch(async () => {
-        await browserPage.focus(searchSelector).catch(() => {});
-      });
+      const usarFiltroLateral = Math.random() > 0.5;
+      if (usarFiltroLateral) {
+        await browserPage.keyboard.press('Control+Shift+F');
+      } else {
+        await browserPage.keyboard.press('Control+E');
+      }
+      await new Promise(r => setTimeout(r, 300));
+      await browserPage.keyboard.press('Escape'); // Presionar Escape para cerrar el menú desplegable y limpiar el foco
     } catch (e) {
       // Ignorar
     }
@@ -535,27 +539,61 @@ app.post('/browser/simular-accion', async (req, res) => {
         message: `Mouse desplazado con éxito a (${x}, ${y}).`
       });
     } else if (accion === 'tipear-buscador') {
-      const selector = 'input[placeholder*="Search"], input[placeholder*="Buscar"], input[placeholder*="go right to a chat"], input[placeholder*="Ctrl+Alt+G"], input#ngx-search-box-input, input[data-testid="search-box-input"], .ms-searchux-input, input[class*="ms-searchux-input"]';
       try {
-        await browserPage.click(selector, { timeout: 2000, force: true }).catch(async () => {
-          log('Advertencia de click interceptado en buscador, usando foco nativo...');
-          await browserPage.focus(selector);
-        });
+        log('Simulando enfoque de buscador por atajo de teclado...');
+        // Alternamos al azar entre Ctrl+E (Buscador Global) y Ctrl+Shift+F (Filtro Lateral de chats)
+        const usarFiltroLateral = Math.random() > 0.5;
+        
+        if (usarFiltroLateral) {
+          log('Usando atajo Ctrl+Shift+F (Filtro de chats)...');
+          await browserPage.keyboard.press('Control+Shift+F');
+        } else {
+          log('Usando atajo Control+E (Buscador global)...');
+          await browserPage.keyboard.press('Control+E');
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Intentar escribir el texto
         await browserPage.keyboard.type('Activo', { delay: 80 });
         await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Seleccionar todo y borrar
         await browserPage.keyboard.press('Control+A');
         await browserPage.keyboard.press('Backspace');
-        log('Simulación de tipeo y borrado de prueba completado.');
+        
+        // Cerrar el menú desplegable presionando Escape
+        await browserPage.keyboard.press('Escape');
+        
+        log('Simulación de tipeo y borrado de prueba completado usando atajos.');
         return res.status(200).json({
           status: 'ok',
-          message: 'Tipeado de texto "Activo" y borrado completado.'
+          message: `Tipeado de texto "Activo" completado usando atajo (${usarFiltroLateral ? 'Ctrl+Shift+F' : 'Ctrl+E'}) y borrado.`
         });
       } catch (err) {
-        log(`Error al interactuar con el buscador: ${err.message}`);
-        return res.status(400).json({
-          error: 'Element Not Found',
-          message: 'No se pudo hacer clic en el buscador de Browser. Asegúrate de que Browser haya cargado completamente.'
-        });
+        log(`Error al usar atajos, intentando clic físico de respaldo: ${err.message}`);
+        // Fallback al selector físico por si los atajos no respondieron
+        const selector = 'input[placeholder*="Search"], input[placeholder*="Buscar"], input[placeholder*="go right to a chat"], input[placeholder*="Ctrl+Alt+G"], input#ngx-search-box-input, input[data-testid="search-box-input"], .ms-searchux-input, input[class*="ms-searchux-input"]';
+        try {
+          await browserPage.click(selector, { timeout: 2000, force: true }).catch(async () => {
+            await browserPage.focus(selector);
+          });
+          await browserPage.keyboard.type('Activo', { delay: 80 });
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          await browserPage.keyboard.press('Control+A');
+          await browserPage.keyboard.press('Backspace');
+          await browserPage.keyboard.press('Escape');
+          return res.status(200).json({
+            status: 'ok',
+            message: 'Tipeado de texto "Activo" y borrado completado usando clic físico de respaldo.'
+          });
+        } catch (fallbackErr) {
+          log(`Error en el selector físico de respaldo: ${fallbackErr.message}`);
+          return res.status(400).json({
+            error: 'Element Not Found',
+            message: 'No se pudo interactuar con el buscador de Browser ni usando atajos ni selectores.'
+          });
+        }
       }
     } else if (accion === 'pulsar-shift') {
       await browserPage.keyboard.press('Shift');
