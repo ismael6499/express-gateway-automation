@@ -51,6 +51,7 @@ let browserIntervalId = null;
 let lastAutoCierreMinute = null; // evita re-disparar auto-cierre en el mismo minuto
 let isLaunchingBrowser = false;  // guard anti-concurrencia al abrir/cerrar navegador
 let lastActivityTime = null;     // timestamp de la ultima simulacion de actividad
+let browserPresenciaActiveSince = null; // timestamp de cuando se inicio la simulacion activa
 let browserSimulacionStartHour = '09:00';
 let browserSimulacionEndHour = '18:00';
 let browserSimulacionDays = [1, 2, 3, 4, 5]; // Lunes a Viernes por defecto
@@ -691,6 +692,16 @@ app.post('/browser/presencia', (req, res) => {
   }
 
   if (accion === 'iniciar') {
+    let yaEstabaActiva = false;
+    let tiempoActivaFormatted = '';
+
+    if (browserIntervalId || browserPresenciaActiva) {
+      yaEstabaActiva = true;
+      if (browserPresenciaActiveSince) {
+        const seconds = Math.floor((new Date() - browserPresenciaActiveSince) / 1000);
+        tiempoActivaFormatted = formatSecondsAgo(seconds);
+      }
+    }
 
     if (browserIntervalId) {
       log('La simulación de presencia ya está activa. Reconfigurando intervalo.');
@@ -699,6 +710,9 @@ app.post('/browser/presencia', (req, res) => {
 
     setupBrowserInterval();
     browserPresenciaActiva = true;
+    if (!browserPresenciaActiveSince) {
+      browserPresenciaActiveSince = new Date();
+    }
     saveSimulationState();
     log('Simulación de presencia activada.');
     
@@ -707,6 +721,19 @@ app.post('/browser/presencia', (req, res) => {
       log(`Error en simulación inicial inmediata: ${err.message}`);
     });
     
+    if (yaEstabaActiva) {
+      return res.status(200).json({
+        status: 'ok',
+        message: tiempoActivaFormatted 
+          ? `La simulación de presencia ya estaba activa (desde hace ${tiempoActivaFormatted}).`
+          : 'La simulación de presencia ya estaba activa.',
+        msg: tiempoActivaFormatted 
+          ? `Ya activa hace ${tiempoActivaFormatted}`
+          : 'Ya estaba activa',
+        config: { browserIntervalMs }
+      });
+    }
+
     return res.status(200).json({
       status: 'ok',
       message: 'Simulación de presencia activada e iniciada inmediatamente.',
@@ -714,13 +741,25 @@ app.post('/browser/presencia', (req, res) => {
       config: { browserIntervalMs }
     });
   } else {
+    const yaEstabaPausada = !browserPresenciaActiva && !browserIntervalId;
+
     if (browserIntervalId) {
       clearInterval(browserIntervalId);
       browserIntervalId = null;
       log('Simulación de presencia pausada.');
     }
     browserPresenciaActiva = false;
+    browserPresenciaActiveSince = null;
     saveSimulationState();
+
+    if (yaEstabaPausada) {
+      return res.status(200).json({
+        status: 'ok',
+        message: 'La simulación de presencia ya estaba pausada.',
+        msg: 'Ya estaba pausada'
+      });
+    }
+
     return res.status(200).json({
       status: 'ok',
       message: 'Simulación de presencia pausada.',
