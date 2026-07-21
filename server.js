@@ -1947,6 +1947,9 @@ const DASHBOARD_HTML = `
           btnBrowserOpen.className = 'btn btn-primary btn-disabled';
           btnBrowserClose.className = 'btn btn-danger';
           
+          document.getElementById('btnBrowserMinimize').classList.remove('btn-disabled');
+          document.getElementById('btnBrowserRestore').classList.remove('btn-disabled');
+          
           document.getElementById('btnPresenciaPlay').classList.remove('btn-disabled');
           document.getElementById('btnPresenciaPause').classList.remove('btn-disabled');
           document.getElementById('browserIntervalSlider').classList.remove('btn-disabled');
@@ -1959,6 +1962,9 @@ const DASHBOARD_HTML = `
           browserBadgeText.innerText = 'Navegador: Cerrado';
           btnBrowserOpen.className = 'btn btn-primary';
           btnBrowserClose.className = 'btn btn-disabled';
+
+          document.getElementById('btnBrowserMinimize').classList.add('btn-disabled');
+          document.getElementById('btnBrowserRestore').classList.add('btn-disabled');
 
           document.getElementById('btnPresenciaPlay').classList.add('btn-disabled');
           document.getElementById('btnPresenciaPause').classList.add('btn-disabled');
@@ -1996,6 +2002,31 @@ const DASHBOARD_HTML = `
           const mins = data.browserIntervalMs / 60000;
           document.getElementById('browserIntervalSlider').value = mins;
           updateBrowserSliderLabel(mins);
+        }
+
+        // Sincronizar campos de planificación si no están en foco
+        if (document.activeElement !== document.getElementById('browserStartHour')) {
+          document.getElementById('browserStartHour').value = data.browserSimulacionStartHour || '09:00';
+        }
+        if (document.activeElement !== document.getElementById('browserEndHour')) {
+          document.getElementById('browserEndHour').value = data.browserSimulacionEndHour || '18:00';
+        }
+        if (document.activeElement !== document.getElementById('browserBrowserCloseHour')) {
+          document.getElementById('browserBrowserCloseHour').value = data.browserBrowserCloseHour || '18:03';
+        }
+        if (document.activeElement !== document.getElementById('browserBrowserCloseEnabled')) {
+          document.getElementById('browserBrowserCloseEnabled').checked = !!data.browserBrowserCloseEnabled;
+        }
+
+        // Sincronizar días permitidos
+        if (data.browserSimulacionDays) {
+          const checkboxes = document.querySelectorAll('.day-checkbox');
+          checkboxes.forEach(cb => {
+            if (document.activeElement !== cb) {
+              cb.checked = data.browserSimulacionDays.includes(Number(cb.value));
+            }
+          });
+          drawDayLabels();
         }
 
         const btnEmulador = document.getElementById('btnEmulador');
