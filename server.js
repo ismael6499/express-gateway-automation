@@ -1626,14 +1626,20 @@ const DASHBOARD_HTML = `
 
       <!-- SECCIÓN 1.A: NAVEGADOR -->
       <div class="card-section-title">Ventana del Navegador</div>
-      <div class="btn-row" style="margin-bottom: 20px;">
-        <button class="btn btn-primary" id="btnBrowserOpen" onclick="controlBrowser('abrir')">
+      <div class="btn-row" style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 8px;">
+        <button class="btn btn-primary" id="btnBrowserOpen" onclick="controlBrowser('abrir')" style="flex: 1 1 calc(50% - 4px); min-width: 120px; margin-top: 0;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
           Abrir Ventana
         </button>
-        <button class="btn btn-danger" id="btnBrowserClose" onclick="controlBrowser('cerrar')">
+        <button class="btn btn-danger" id="btnBrowserClose" onclick="controlBrowser('cerrar')" style="flex: 1 1 calc(50% - 4px); min-width: 120px; margin-top: 0;">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="15"></line><line x1="15" y1="9" x2="9" y2="15"></line></svg>
           Cerrar Ventana
+        </button>
+        <button class="btn" id="btnBrowserMinimize" onclick="controlBrowser('minimizar')" style="flex: 1 1 calc(50% - 4px); min-width: 120px; margin-top: 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text);">
+          Minimizar
+        </button>
+        <button class="btn" id="btnBrowserRestore" onclick="controlBrowser('restaurar')" style="flex: 1 1 calc(50% - 4px); min-width: 120px; margin-top: 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text);">
+          Restaurar/Ver
         </button>
       </div>
 
