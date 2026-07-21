@@ -1801,13 +1801,6 @@ const DASHBOARD_HTML = `
         </button>
       </div>
 
-      <div class="switch-container" style="margin-top: 15px; margin-bottom: 5px;">
-        <span style="font-size: 0.85rem; color: var(--text-muted);">Auto-simular al abrir navegador</span>
-        <label class="switch">
-          <input type="checkbox" id="browserPresenciaToggle" onchange="togglePresencia(this.checked)">
-          <span class="slider-toggle"></span>
-        </label>
-      </div>
 
       <div class="divider"></div>
 
@@ -2103,8 +2096,15 @@ const DASHBOARD_HTML = `
           }
         }
 
-        if (document.activeElement !== document.getElementById('browserPresenciaToggle')) {
-          document.getElementById('browserPresenciaToggle').checked = !!data.browserPresenciaActiva;
+        // Sincronizar estado de botones Iniciar/Pausar segun browserPresenciaActiva
+        const btnPlay = document.getElementById('btnPresenciaPlay');
+        const btnPause = document.getElementById('btnPresenciaPause');
+        if (data.browserPresenciaActiva) {
+          btnPlay.classList.add('btn-disabled');
+          btnPause.classList.remove('btn-disabled');
+        } else {
+          btnPlay.classList.remove('btn-disabled');
+          btnPause.classList.add('btn-disabled');
         }
 
         if (document.activeElement !== document.getElementById('browserIntervalSlider')) {
@@ -2245,31 +2245,25 @@ const DASHBOARD_HTML = `
       }
     }
 
-    async function togglePresencia(checked) {
-      const accion = checked ? 'iniciar' : 'pausar';
+    async function controlPresencia(accion) {
       const mins = parseFloat(document.getElementById('browserIntervalSlider').value);
       const ms = mins * 60000;
-
-      showToast(checked ? 'Activando simulación...' : 'Pausando simulación...', 'info');
-
+      showToast(accion === 'iniciar' ? 'Activando simulación...' : 'Pausando simulación...', 'info');
       try {
         const response = await fetch('/browser/presencia', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ accion, intervaloMs: ms })
         });
-
         const data = await response.json();
         if (response.ok) {
           showToast(data.message, 'success');
           pollGatewayStatus();
         } else {
           showToast(data.message || 'Error en la petición', 'error');
-          document.getElementById('browserPresenciaToggle').checked = !checked;
         }
       } catch (error) {
         showToast('Error de conexión con el servidor', 'error');
-        document.getElementById('browserPresenciaToggle').checked = !checked;
       }
     }
 
