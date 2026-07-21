@@ -2295,6 +2295,40 @@ async function gracefulShutdown() {
 process.on('SIGINT', gracefulShutdown);
 process.on('SIGTERM', gracefulShutdown);
 
+// Hilo de control de horario en background (corre cada 30 segundos)
+setInterval(async () => {
+  const now = new Date();
+  const HH = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const currentTimeString = `${HH}:${mm}`;
+
+  // 1. Auto-cierre por hora programada fija
+  if (browserBrowserCloseEnabled && currentTimeString === browserBrowserCloseHour) {
+    if (browserBrowserContext || browserBrowserAbierto) {
+      log(`Cron Horario: Auto-cierre del navegador programado a las ${browserBrowserCloseHour}.`);
+      await cleanupBrowserSession();
+    }
+    // Cerrar el emulador de Android
+    exec('taskkill /f /im emulator.exe & taskkill /f /im qemu-system-x86_64.exe', (error) => {});
+  }
+
+  // 2. Auto-cierre/pausa por estar fuera del horario general de la simulación
+  if (browserPresenciaActiva) {
+    if (!isSimulationInSchedule()) {
+      // Si estamos fuera de horario, asegurar que el navegador y el emulador estén cerrados
+      if (browserBrowserContext || browserBrowserAbierto) {
+        log('Cron Horario: Cerrando navegador de Browser por estar fuera de horario de simulación.');
+        await cleanupBrowserSession();
+      }
+      
+      // Intentar matar los procesos del emulador silenciosamente
+      exec('taskkill /f /im emulator.exe & taskkill /f /im qemu-system-x86_64.exe', (error) => {
+        // Ignorar
+      });
+    }
+  }
+}, 30000);
+
 // Inicializar el servidor Express
 app.listen(PORT, async () => {
   loadSimulationState();
