@@ -193,6 +193,19 @@ async function autoLoginTargetSession(page) {
   log('Monitoreo de auto-login finalizado.');
 }
 
+// Helper para limpiar las variables cuando el usuario cierra manualmente la ventana sin matar el proceso a la fuerza
+function handleManualCloseCleanup() {
+  if (browserIntervalId) {
+    clearInterval(browserIntervalId);
+    browserIntervalId = null;
+    log('Intervalo de simulación destruido tras cierre manual del navegador.');
+  }
+  browserPresenciaActiva = false;
+  browserBrowserContext = null;
+  browserPage = null;
+  browserBrowserAbierto = false;
+}
+
 // Endpoint GET /gateway/status
 app.get('/gateway/status', (req, res) => {
   res.json({
@@ -280,13 +293,13 @@ app.post('/browser/browser', async (req, res) => {
       // Detectar si el usuario cierra la página de Browser directamente
       browserPage.on('close', async () => {
         log('Aviso: La página de Browser fue cerrada manualmente por el usuario.');
-        await cleanupBrowserSession();
+        handleManualCloseCleanup();
       });
 
       // Detectar si el contexto entero se cierra
       browserBrowserContext.on('close', async () => {
         log('Aviso: El navegador de Browser fue cerrado manualmente por el usuario.');
-        await cleanupBrowserSession();
+        handleManualCloseCleanup();
       });
 
       log('Navegando asíncronamente a https://example.com...');
@@ -586,7 +599,7 @@ app.post('/gateway/restart', (req, res) => {
   });
 
   const { spawn } = require('child_process');
-  const batPath = path.join(__dirname, 'restart_server.bat');
+  const batPath = path.join(__dirname, 'remote_restart.bat');
 
   // Ejecutar el restart en un hilo independiente detached
   const child = spawn('cmd.exe', ['/c', batPath], {
