@@ -1227,10 +1227,18 @@ app.listen(PORT, async () => {
   if (token && token.trim() !== '') {
     try {
       log('Iniciando túnel seguro ngrok...');
-      ngrokListener = await ngrok.forward({
+      const forwardOpts = {
         addr: PORT,
         authtoken: token
-      });
+      };
+      
+      const domain = process.env.NGROK_DOMAIN;
+      if (domain && domain.trim() !== '') {
+        forwardOpts.domain = domain;
+        log(`Usando dominio estático configurado: ${domain}`);
+      }
+
+      ngrokListener = await ngrok.forward(forwardOpts);
       ngrokUrl = ngrokListener.url();
       log(`¡Túnel ngrok establecido! URL Pública: ${ngrokUrl}`);
     } catch (error) {
