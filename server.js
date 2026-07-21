@@ -487,13 +487,13 @@ async function runBrowserActivityLoop() {
     // 2. Pulsación de Shift
     await browserPage.keyboard.press('Shift');
 
-    // 3. Simular enfoque en buscador usando atajos de teclado (Ctrl+E o Ctrl+Shift+F)
+    // 3. Simular enfoque en buscador usando atajos de teclado (Ctrl+Alt+E o Ctrl+Shift+F)
     try {
       const usarFiltroLateral = Math.random() > 0.5;
       if (usarFiltroLateral) {
         await browserPage.keyboard.press('Control+Shift+F');
       } else {
-        await browserPage.keyboard.press('Control+E');
+        await browserPage.keyboard.press('Control+Alt+E');
       }
       await new Promise(r => setTimeout(r, 300));
       await browserPage.keyboard.press('Escape'); // Presionar Escape para cerrar el menú desplegable y limpiar el foco
@@ -548,8 +548,8 @@ app.post('/browser/simular-accion', async (req, res) => {
           log('Usando atajo Ctrl+Shift+F (Filtro de chats)...');
           await browserPage.keyboard.press('Control+Shift+F');
         } else {
-          log('Usando atajo Control+E (Buscador global)...');
-          await browserPage.keyboard.press('Control+E');
+          log('Usando atajo Control+Alt+E (Buscador global)...');
+          await browserPage.keyboard.press('Control+Alt+E');
         }
         
         await new Promise(resolve => setTimeout(resolve, 500));
