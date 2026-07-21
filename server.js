@@ -629,10 +629,10 @@ app.post('/gateway/restart', (req, res) => {
   });
 
   const { spawn } = require('child_process');
-  const batPath = path.join(__dirname, 'remote_restart.bat');
+  const vbsPath = path.join(__dirname, 'remote_restart.vbs');
 
-  // Ejecutar el restart en un hilo independiente detached
-  const child = spawn('cmd.exe', ['/c', batPath], {
+  // Lanzar wscript.exe directamente de forma detached para evitar la muerte por árbol de procesos
+  const child = spawn('wscript.exe', [vbsPath], {
     detached: true,
     stdio: 'ignore'
   });
