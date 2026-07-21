@@ -465,7 +465,9 @@ async function runBrowserActivityLoop() {
     // 3. Intento de click en caja de búsqueda
     try {
       const searchSelector = 'input[placeholder*="Search"], input[placeholder*="Buscar"], input[placeholder*="go right to a chat"], input[placeholder*="Ctrl+Alt+G"], input#ngx-search-box-input, input[data-testid="search-box-input"], .ms-searchux-input, input[class*="ms-searchux-input"]';
-      await browserPage.click(searchSelector, { timeout: 1000 });
+      await browserPage.click(searchSelector, { timeout: 1000, force: true }).catch(async () => {
+        await browserPage.focus(searchSelector).catch(() => {});
+      });
     } catch (e) {
       // Ignorar
     }
@@ -510,7 +512,10 @@ app.post('/browser/simular-accion', async (req, res) => {
     } else if (accion === 'tipear-buscador') {
       const selector = 'input[placeholder*="Search"], input[placeholder*="Buscar"], input[placeholder*="go right to a chat"], input[placeholder*="Ctrl+Alt+G"], input#ngx-search-box-input, input[data-testid="search-box-input"], .ms-searchux-input, input[class*="ms-searchux-input"]';
       try {
-        await browserPage.click(selector, { timeout: 2000 });
+        await browserPage.click(selector, { timeout: 2000, force: true }).catch(async () => {
+          log('Advertencia de click interceptado en buscador, usando foco nativo...');
+          await browserPage.focus(selector);
+        });
         await browserPage.keyboard.type('Activo', { delay: 80 });
         await new Promise(resolve => setTimeout(resolve, 1000));
         await browserPage.keyboard.press('Control+A');
