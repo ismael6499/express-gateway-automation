@@ -338,17 +338,29 @@ function handleManualCloseCleanup() {
 
 // Endpoint GET /gateway/status
 app.get('/gateway/status', (req, res) => {
-  res.json({
-    browserBrowserAbierto,
-    browserPresenciaActiva,
-    browserIntervalMs,
-    browserSimulacionStartHour,
-    browserSimulacionEndHour,
-    browserSimulacionDays,
-    browserBrowserCloseHour,
-    browserBrowserCloseEnabled,
-    ngrokUrl: ngrokUrl || 'Inactivo',
-    hasEmulatorPath: !!process.env.EMULATOR_BAT_PATH
+  const helperPath = path.join(__dirname, 'AudioHelper.exe');
+  exec(`"${helperPath}"`, { timeout: 1500 }, (error, stdout) => {
+    let audioData = { volume: null, muted: null, playing: null };
+    if (!error && stdout) {
+      try {
+        audioData = JSON.parse(stdout.trim());
+      } catch (e) {}
+    }
+    res.json({
+      browserBrowserAbierto,
+      browserPresenciaActiva,
+      browserIntervalMs,
+      browserSimulacionStartHour,
+      browserSimulacionEndHour,
+      browserSimulacionDays,
+      browserBrowserCloseHour,
+      browserBrowserCloseEnabled,
+      ngrokUrl: ngrokUrl || 'Inactivo',
+      hasEmulatorPath: !!process.env.EMULATOR_BAT_PATH,
+      audioVolume: audioData.volume,
+      audioMuted: audioData.muted,
+      audioPlaying: audioData.playing
+    });
   });
 });
 
@@ -2059,7 +2071,10 @@ const DASHBOARD_HTML = `
       </div>
       
       <!-- Controles de Audio y Pistas -->
-      <div class="card-section-title">Control de Audio y Reproducción</div>
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="card-section-title" style="margin-bottom: 0;">Control de Audio y Reproducción</div>
+        <div id="audioStatusText" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500; letter-spacing: 0.3px;">Volumen: --% | --</div>
+      </div>
       <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 8px;">
         <div style="display: flex; gap: 8px; width: 100%;">
           <button class="btn" onclick="enviarMultimedia('vol-')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text);">
@@ -2215,17 +2230,20 @@ const DASHBOARD_HTML = `
         startX = e.touches[0].clientX;
         toast.style.transition = 'none';
         isSwiping = true;
-      }, { passive: true });
+      }, { passive: false });
 
       toast.addEventListener('touchmove', (e) => {
         if (!isSwiping) return;
         currentX = e.touches[0].clientX;
         const diffX = currentX - startX;
         if (diffX > 0) {
+          // Prevenir el scroll y overscroll del navegador para que no mueva la página
+          if (e.cancelable) e.preventDefault();
+          e.stopPropagation();
           toast.style.transform = 'translateX(' + diffX + 'px)';
           toast.style.opacity = 1 - (diffX / 300);
         }
-      }, { passive: true });
+      }, { passive: false });
 
       toast.addEventListener('touchend', () => {
         if (!isSwiping) return;
@@ -2240,7 +2258,7 @@ const DASHBOARD_HTML = `
           toast.style.transform = 'translateX(0)';
           toast.style.opacity = '1';
         }
-      }, { passive: true });
+      }, { passive: false });
 
       container.appendChild(toast);
       
@@ -2379,6 +2397,20 @@ const DASHBOARD_HTML = `
           link.innerText = data.ngrokUrl;
         } else {
           tunnelBar.style.display = 'none';
+        }
+
+        // Actualizar estado de Audio y Reproducción
+        const audioTextEl = document.getElementById('audioStatusText');
+        if (audioTextEl && data.audioVolume !== undefined && data.audioVolume !== null) {
+          const vol = data.audioVolume;
+          const muted = data.audioMuted;
+          const playing = data.audioPlaying;
+          let statusStr = 'Volumen: ' + vol + '%';
+          if (muted) {
+            statusStr += ' (Silenciado)';
+          }
+          statusStr += ' | ' + (playing ? '▶ Reproduciendo' : '⏸ Pausado');
+          audioTextEl.innerText = statusStr;
         }
 
       } catch (err) {
