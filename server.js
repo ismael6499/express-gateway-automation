@@ -48,6 +48,7 @@ let browserIntervalMs = 240000; // 4 minutos por defecto
 let browserBrowserContext = null;
 let browserPage = null;
 let browserIntervalId = null;
+let lastAutoCierreMinute = null; // evita re-disparar auto-cierre en el mismo minuto
 let browserSimulacionStartHour = '09:00';
 let browserSimulacionEndHour = '18:00';
 let browserSimulacionDays = [1, 2, 3, 4, 5]; // Lunes a Viernes por defecto
@@ -2518,7 +2519,7 @@ async function gracefulShutdown() {
 process.on('SIGINT', gracefulShutdown);
 process.on('SIGTERM', gracefulShutdown);
 
-// Hilo de control de horario en background (corre cada 30 segundos)
+// Hilo de control de horario en background (corre cada 15 segundos para mayor precision)
 setInterval(async () => {
   const now = new Date();
   const HH = String(now.getHours()).padStart(2, '0');
@@ -2526,21 +2527,35 @@ setInterval(async () => {
   const currentTimeString = `${HH}:${mm}`;
 
   // 1. Auto-cierre por hora programada fija
-  if (browserBrowserCloseEnabled && currentTimeString === browserBrowserCloseHour) {
-    if (browserBrowserContext || browserBrowserAbierto) {
-      log(`Cron Horario: Auto-cierre del navegador programado a las ${browserBrowserCloseHour}.`);
-      await cleanupBrowserSession();
+  // Usamos >= y guardamos el minuto en que ya se ejecuto para no re-disparar
+  if (browserBrowserCloseEnabled && browserBrowserCloseHour) {
+    const [closeHH, closeMM] = browserBrowserCloseHour.split(':').map(Number);
+    const nowTotalMins = now.getHours() * 60 + now.getMinutes();
+    const closeTotalMins = closeHH * 60 + closeMM;
+    const minuteKey = `${HH}:${mm}`;
+
+    if (nowTotalMins >= closeTotalMins && lastAutoCierreMinute !== minuteKey) {
+      // Solo actuar si estamos dentro del mismo minuto o lo pasamos (y no se actuo hoy ya)
+      const diffMins = nowTotalMins - closeTotalMins;
+      if (diffMins <= 1) { // hasta 1 minuto de gracia
+        lastAutoCierreMinute = minuteKey;
+        if (browserBrowserContext || browserBrowserAbierto) {
+          log(`Cron Horario: Auto-cierre del navegador programado a las ${browserBrowserCloseHour} (ahora ${currentTimeString}).`);
+          await cleanupBrowserSession();
+        }
+        exec('taskkill /f /im emulator.exe & taskkill /f /im qemu-system-x86_64.exe', (error) => {});
+      }
+    } else if (nowTotalMins < closeTotalMins) {
+      lastAutoCierreMinute = null; // resetear para el proximo dia
     }
-    // Cerrar el emulador de Android
-    exec('taskkill /f /im emulator.exe & taskkill /f /im qemu-system-x86_64.exe', (error) => {});
   }
 
-  // 2. Auto-cierre/pausa por estar fuera del horario general de la simulación
+  // 2. Auto-cierre/pausa por estar fuera del horario general de la simulacion
   if (browserPresenciaActiva) {
     if (!isSimulationInSchedule()) {
-      // Si estamos fuera de horario, asegurar que el navegador y el emulador estén cerrados
+      // Si estamos fuera de horario, asegurar que el navegador y el emulador esten cerrados
       if (browserBrowserContext || browserBrowserAbierto) {
-        log('Cron Horario: Cerrando navegador de Browser por estar fuera de horario de simulación.');
+        log('Cron Horario: Cerrando navegador de Browser por estar fuera de horario de simulacion.');
         await cleanupBrowserSession();
       }
       
@@ -2550,7 +2565,7 @@ setInterval(async () => {
       });
     }
   }
-}, 30000);
+}, 15000);
 
 // Inicializar el servidor Express
 app.listen(PORT, async () => {
