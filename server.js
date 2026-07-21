@@ -165,6 +165,7 @@ async function cleanupBrowserSession() {
     log('Intervalo de simulación de presencia destruido.');
   }
   browserPresenciaActiva = false;
+  saveSimulationState();
 
   if (browserBrowserContext) {
     try {
