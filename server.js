@@ -1919,7 +1919,7 @@ const DASHBOARD_HTML = `
           <span>Intervalo de Simulación</span>
           <span id="browserIntervalVal">4.0 minutos</span>
         </div>
-        <input type="range" class="slider" id="browserIntervalSlider" min="1" max="15" step="0.5" value="4" oninput="updateBrowserSliderLabel(this.value)">
+        <input type="range" class="slider" id="browserIntervalSlider" min="1" max="15" step="0.5" value="4" oninput="updateBrowserSliderLabel(this.value)" onchange="cambiarIntervaloEnCaliente(this.value)">
       </div>
 
       <div class="btn-row">
@@ -2568,6 +2568,34 @@ const DASHBOARD_HTML = `
           pollGatewayStatus();
         } else {
           showToast(data.message || 'Error en la petición', 'error');
+        }
+      } catch (error) {
+        showToast('Error de conexión con el servidor', 'error');
+      }
+    }
+
+    async function cambiarIntervaloEnCaliente(val) {
+      const mins = parseFloat(val);
+      const ms = mins * 60000;
+      
+      const btnPause = document.getElementById('btnPresenciaPause');
+      const estaActiva = !btnPause.classList.contains('btn-disabled');
+
+      try {
+        const response = await fetch('/browser/presencia', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            accion: estaActiva ? 'iniciar' : 'pausar', 
+            intervaloMs: ms 
+          })
+        });
+        const data = await response.json();
+        if (response.ok) {
+          showToast(estaActiva ? 'Intervalo reconfigurado en caliente a ' + val + ' minutos.' : 'Intervalo guardado: ' + val + ' minutos.', 'success');
+          pollGatewayStatus();
+        } else {
+          showToast(data.message || 'Error al guardar intervalo', 'error');
         }
       } catch (error) {
         showToast('Error de conexión con el servidor', 'error');
