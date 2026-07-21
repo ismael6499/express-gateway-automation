@@ -410,8 +410,8 @@ app.post('/browser/browser', async (req, res) => {
   if (accion === 'cerrar') {
     isLaunchingBrowser = false;
   } else if (isLaunchingBrowser && accion === 'abrir') {
-    return res.status(409).json({
-      error: 'Conflict',
+    return res.status(200).json({
+      status: 'ok',
       message: 'Ya hay una operación de navegador en curso. Por favor espera.',
       msg: 'Operación en curso'
     });
