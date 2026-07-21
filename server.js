@@ -129,13 +129,19 @@ app.post('/browser/browser', async (req, res) => {
         browserBrowserContext = await chromium.launchPersistentContext(userDataDir, {
           headless: false,
           channel: 'chrome', // Usar Chrome oficial para mayor compatibilidad con Microsoft
-          viewport: null
+          viewport: null,
+          args: [
+            '--disable-blink-features=AutomationControlled'
+          ]
         });
       } catch (err) {
         log('Chrome oficial no detectado, iniciando con Chromium por defecto...');
         browserBrowserContext = await chromium.launchPersistentContext(userDataDir, {
           headless: false,
-          viewport: null
+          viewport: null,
+          args: [
+            '--disable-blink-features=AutomationControlled'
+          ]
         });
       }
 
