@@ -2097,16 +2097,16 @@ const DASHBOARD_HTML = `
           setTimeout(() => {
             showToast('Reconectando...', 'info');
             window.location.reload();
-          }, 4000);
+          }, 12000);
         } else {
           showToast(data.message || 'Error al reiniciar', 'error');
         }
       } catch (error) {
         // En caso de corte de red rápido por apagado de Node, lo tratamos como éxito
-        showToast('Reiniciando servidor. Reconectando en 5 segundos...', 'success');
+        showToast('Reiniciando servidor. Reconectando en 12 segundos...', 'success');
         setTimeout(() => {
           window.location.reload();
-        }, 5000);
+        }, 12000);
       }
     }
   </script>
