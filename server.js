@@ -13,11 +13,16 @@ const API_KEY = process.env.API_KEY;
 app.use(express.json());
 
 // Helper para logs formateados con timestamp [HH:MM:SS]
+const logFile = path.join(__dirname, 'gateway_server.log');
 function log(message) {
   const now = new Date();
   const pad = (n) => String(n).padStart(2, '0');
   const timestamp = `[${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}]`;
-  console.log(`${timestamp} ${message}`);
+  const formatted = `${timestamp} ${message}`;
+  console.log(formatted);
+  try {
+    fs.appendFileSync(logFile, formatted + '\n');
+  } catch (e) {}
 }
 
 // Helper para leer cookies de forma manual (evita dependencias adicionales)
@@ -129,20 +134,55 @@ async function autoLoginTargetSession(page) {
 
       // Si estamos en la página de login de Microsoft
       if (url.includes('login.microsoftonline.com')) {
-        // 1. Pantalla "Pick an account" (Seleccionar cuenta)
-        const accountRow = page.locator('div[role="button"]:has-text("user@example.com"), text=user@example.com');
-        if (await accountRow.first().isVisible().catch(() => false)) {
-          log('Auto-Login: Detectado panel de selección de cuentas. Seleccionando user@example.com...');
-          await accountRow.first().click();
+        // 1. Intentar hacer clic en la fila de la cuenta con múltiples selectores de contingencia
+        const accountSelectors = [
+          'div[data-username*="user@example.com"]',
+          '[data-username*="user@example.com"]',
+          'div[role="button"]:has-text("user@example.com")',
+          '.tile:has-text("user@example.com")',
+          'text="user@example.com"',
+          'div:has-text("user@example.com")'
+        ];
+
+        let clickedAccount = false;
+        for (let sel of accountSelectors) {
+          const loc = page.locator(sel).first();
+          if (await loc.isVisible().catch(() => false)) {
+            log(`Auto-Login: Fila de cuenta detectada. Clickeando selector: ${sel}`);
+            await loc.click({ force: true });
+            clickedAccount = true;
+            break;
+          }
+        }
+        if (clickedAccount) {
+          await new Promise(r => setTimeout(r, 1000));
           continue;
         }
 
-        // 2. Pantalla de Contraseña / Stay signed in? (Usa el botón genérico #idSIButton9)
-        const actionBtn = page.locator('#idSIButton9');
-        if (await actionBtn.isVisible().catch(() => false)) {
-          const btnVal = await actionBtn.getAttribute('value') || 'Sign in';
-          log(`Auto-Login: Botón de acción detectado (${btnVal}). Presionando...`);
-          await actionBtn.click();
+        // 2. Intentar presionar el botón de inicio o confirmación (Next / Sign in / Yes)
+        const btnSelectors = [
+          '#idSIButton9',
+          'input[type="submit"]',
+          'button[type="submit"]',
+          'input[value="Sign in"]',
+          'input[value="Yes"]',
+          'input[value="Sí"]',
+          'input[value="Iniciar sesión"]'
+        ];
+
+        let clickedButton = false;
+        for (let sel of btnSelectors) {
+          const loc = page.locator(sel).first();
+          if (await loc.isVisible().catch(() => false)) {
+            const val = await loc.getAttribute('value') || await loc.innerText() || 'Submit';
+            log(`Auto-Login: Botón de acción detectado (${val}). Presionando selector: ${sel}`);
+            await loc.click({ force: true });
+            clickedButton = true;
+            break;
+          }
+        }
+        if (clickedButton) {
+          await new Promise(r => setTimeout(r, 1000));
           continue;
         }
       }
@@ -1558,28 +1598,39 @@ process.on('SIGTERM', gracefulShutdown);
 app.listen(PORT, async () => {
   log(`Servidor unificado (API Gateway Local) escuchando en http://localhost:${PORT}`);
   
-  // Inicialización del túnel ngrok
+  // Inicialización del túnel ngrok con reintentos para evitar el error ERR_NGROK_3200
   const token = process.env.NGROK_AUTHTOKEN;
   if (token && token.trim() !== '') {
-    try {
-      log('Iniciando túnel seguro ngrok...');
-      const forwardOpts = {
-        addr: PORT,
-        authtoken: token
-      };
-      
-      const domain = process.env.NGROK_DOMAIN;
-      if (domain && domain.trim() !== '') {
-        forwardOpts.domain = domain;
-        log(`Usando dominio estático configurado: ${domain}`);
-      }
+    let retriesRemaining = 5;
+    const connectNgrok = async () => {
+      try {
+        log('Iniciando túnel seguro ngrok...');
+        const forwardOpts = {
+          addr: PORT,
+          authtoken: token
+        };
+        
+        const domain = process.env.NGROK_DOMAIN;
+        if (domain && domain.trim() !== '') {
+          forwardOpts.domain = domain;
+          log(`Usando dominio estático configurado: ${domain}`);
+        }
 
-      ngrokListener = await ngrok.forward(forwardOpts);
-      ngrokUrl = ngrokListener.url();
-      log(`¡Túnel ngrok establecido! URL Pública: ${ngrokUrl}`);
-    } catch (error) {
-      log(`Error al establecer el túnel ngrok: ${error.message}`);
-    }
+        ngrokListener = await ngrok.forward(forwardOpts);
+        ngrokUrl = ngrokListener.url();
+        log(`¡Túnel ngrok establecido! URL Pública: ${ngrokUrl}`);
+      } catch (error) {
+        log(`Error al establecer el túnel ngrok: ${error.message}`);
+        if (retriesRemaining > 0) {
+          retriesRemaining--;
+          log(`Reintentando conexión ngrok en 5 segundos... (Reintentos restantes: ${retriesRemaining})`);
+          setTimeout(connectNgrok, 5000);
+        } else {
+          log('Se agotaron los reintentos para establecer el túnel ngrok.');
+        }
+      }
+    };
+    connectNgrok();
   } else {
     log('Variable NGROK_AUTHTOKEN vacía o no configurada. Servidor operando solo localmente.');
   }
