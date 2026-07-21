@@ -1,3 +1,10 @@
 node_modules/
 browser_user_data/
+browser_user_data/
 .env
+desktop_screenshot.png
+take_screenshot.ps1
+find_profile.js
+find_all_keys.js
+inspect_preferences.js
+copy_profile.js
