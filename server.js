@@ -709,6 +709,33 @@ app.post('/sistema/ejecutar', (req, res) => {
   });
 });
 
+// Endpoint POST /sistema/cerrar para cerrar programas locales como el Emulador
+app.post('/sistema/cerrar', (req, res) => {
+  const { programa } = req.body;
+
+  if (programa !== 'emulador') {
+    return res.status(400).json({
+      error: 'Bad Request',
+      message: "Programa no soportado. Actualmente solo se soporta 'emulador'."
+    });
+  }
+
+  log('Solicitado cierre del emulador Android...');
+
+  // Intentamos matar los procesos del emulador de Android estándar
+  exec('taskkill /f /im emulator.exe & taskkill /f /im qemu-system-x86_64.exe', (error, stdout, stderr) => {
+    if (error) {
+      log(`Cierre de emulador: Algunos procesos no estaban activos o dieron error: ${error.message}`);
+    }
+    log(`Cierre de emulador completado. Salida: ${stdout || 'sin salida'}`);
+  });
+
+  return res.status(200).json({
+    status: 'ok',
+    message: 'Comando de cierre de emulador enviado con éxito.'
+  });
+});
+
 // Endpoint POST /gateway/restart para reiniciar el servidor de forma remota y controlada
 app.post('/gateway/restart', (req, res) => {
   log('Solicitud de reinicio remoto del servidor recibida.');
@@ -727,11 +754,11 @@ app.post('/gateway/restart', (req, res) => {
   });
   child.unref();
 
-  // Apagar este proceso después de 1 segundo para dar tiempo a enviar la respuesta
+  // Apagar este proceso después de 2 segundos para dar tiempo a enviar la respuesta y guardar logs
   setTimeout(() => {
     log('Cerrando proceso actual para reiniciar...');
     process.exit(0);
-  }, 1000);
+  }, 2000);
 });
 
 // HTML para la Pantalla de Login Segura (Glassmorphism)
@@ -1401,10 +1428,16 @@ const DASHBOARD_HTML = `
           Permite iniciar el emulador configurado en el archivo <code>.env</code> desde tu celular.
         </p>
       </div>
-      <button class="btn btn-primary" id="btnEmulador" style="width: 100%; margin-top: 5px;" onclick="ejecutarPrograma('emulador')">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="12" y1="2" x2="12" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line></svg>
-        Iniciar Emulador (.bat)
-      </button>
+      <div style="display: flex; gap: 8px; margin-top: 5px; width: 100%;">
+        <button class="btn btn-primary" id="btnEmulador" style="flex: 1; margin-top: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="ejecutarPrograma('emulador')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          Iniciar
+        </button>
+        <button class="btn btn-danger" id="btnCerrarEmulador" style="flex: 1; margin-top: 0; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68); display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="cerrarPrograma('emulador')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>
+          Cerrar
+        </button>
+      </div>
     </div>
 
     <!-- CARD 3: REINICIAR GATEWAY -->
@@ -1641,6 +1674,12 @@ const DASHBOARD_HTML = `
     }
 
     async function ejecutarPrograma(programa) {
+      const msgs = {
+        'emulador': '¿Estás seguro de que deseas iniciar el emulador Android?'
+      };
+      const conf = confirm(msgs[programa] || '¿Deseas iniciar este programa?');
+      if (!conf) return;
+
       showToast('Enviando señal de ejecución...', 'info');
 
       try {
@@ -1655,6 +1694,33 @@ const DASHBOARD_HTML = `
           showToast(data.message, 'success');
         } else {
           showToast(data.message || 'Error al ejecutar programa', 'error');
+        }
+      } catch (error) {
+        showToast('Error al conectar con la PC', 'error');
+      }
+    }
+
+    async function cerrarPrograma(programa) {
+      const msgs = {
+        'emulador': '¿Estás seguro de que deseas cerrar el emulador Android?'
+      };
+      const conf = confirm(msgs[programa] || '¿Deseas cerrar este programa?');
+      if (!conf) return;
+
+      showToast('Cerrando programa...', 'info');
+
+      try {
+        const response = await fetch('/sistema/cerrar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ programa })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          showToast(data.message, 'success');
+        } else {
+          showToast(data.message || 'Error al cerrar programa', 'error');
         }
       } catch (error) {
         showToast('Error al conectar con la PC', 'error');
