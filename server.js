@@ -1669,6 +1669,63 @@ const DASHBOARD_HTML = `
 
       <div class="divider"></div>
 
+      <!-- SECCIÓN 1.C: PLANIFICACIÓN Y CONTROL HORARIO -->
+      <div class="card-section-title">Planificación y Control Horario</div>
+      <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 5px;">
+        <div style="display: flex; gap: 10px; width: 100%;">
+          <div style="flex: 1;">
+            <label style="font-size: 0.75rem; color: var(--text-muted);">Inicio Simulación</label>
+            <input type="time" id="browserStartHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
+          </div>
+          <div style="flex: 1;">
+            <label style="font-size: 0.75rem; color: var(--text-muted);">Fin Simulación</label>
+            <input type="time" id="browserEndHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; width: 100%;">
+          <div style="flex: 1.2;">
+            <label style="font-size: 0.75rem; color: var(--text-muted);">Cierre Navegador</label>
+            <input type="time" id="browserBrowserCloseHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
+          </div>
+          <div style="flex: 0.8; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; margin-top: 14px;">
+            <label style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 6px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;">
+              <input type="checkbox" id="browserBrowserCloseEnabled" onchange="updateSchedule()">
+              Auto-Cierre
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 6px;">Días Permitidos</label>
+          <div style="display: flex; justify-content: space-between; gap: 4px;">
+            <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-1">
+              <input type="checkbox" class="day-checkbox" value="1" style="display:none;" onchange="updateSchedule()">L
+            </label>
+            <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-2">
+              <input type="checkbox" class="day-checkbox" value="2" style="display:none;" onchange="updateSchedule()">M
+            </label>
+            <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-3">
+              <input type="checkbox" class="day-checkbox" value="3" style="display:none;" onchange="updateSchedule()">M
+            </label>
+            <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-4">
+              <input type="checkbox" class="day-checkbox" value="4" style="display:none;" onchange="updateSchedule()">J
+            </label>
+            <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-5">
+              <input type="checkbox" class="day-checkbox" value="5" style="display:none;" onchange="updateSchedule()">V
+            </label>
+            <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-6">
+              <input type="checkbox" class="day-checkbox" value="6" style="display:none;" onchange="updateSchedule()">S
+            </label>
+            <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-0">
+              <input type="checkbox" class="day-checkbox" value="0" style="display:none;" onchange="updateSchedule()">D
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
       <!-- SECCIÓN 1.C: PRUEBAS MANUALES EN CALIENTE -->
       <div class="card-section-title">Pruebas Manuales (Acciones al Instante)</div>
       <div class="btn-row" style="gap: 8px; margin-top: 10px;">
