@@ -336,6 +336,21 @@ function handleManualCloseCleanup() {
   browserBrowserAbierto = false;
 }
 
+// Helper para formatear los segundos de forma amigable (horas, minutos, segundos)
+function formatSecondsAgo(seconds) {
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  if (minutes < 60) {
+    return `${minutes}m ${remainingSeconds}s`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return `${hours}h ${remainingMinutes}m ${remainingSeconds}s`;
+}
+
 // Endpoint GET /gateway/status
 app.get('/gateway/status', (req, res) => {
   const helperPath = path.join(__dirname, 'AudioHelper.exe');
@@ -349,12 +364,14 @@ app.get('/gateway/status', (req, res) => {
 
     let lastActivityFormatted = 'Sin actividad';
     let lastActivitySecondsAgo = null;
+    let lastActivityTimeStr = null;
     if (lastActivityTime) {
       const now = new Date();
       lastActivitySecondsAgo = Math.floor((now - lastActivityTime) / 1000);
       const pad = (n) => String(n).padStart(2, '0');
       const d = lastActivityTime;
-      lastActivityFormatted = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      lastActivityTimeStr = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      lastActivityFormatted = formatSecondsAgo(lastActivitySecondsAgo);
     }
 
     res.json({
@@ -372,7 +389,8 @@ app.get('/gateway/status', (req, res) => {
       audioMuted: audioData.muted,
       audioPlaying: audioData.playing,
       lastActivityFormatted,
-      lastActivitySecondsAgo
+      lastActivitySecondsAgo,
+      lastActivityTimeStr
     });
   });
 });
@@ -1122,7 +1140,7 @@ app.get('/browser/ultima-actividad', (req, res) => {
     lastActivityTime: lastActivityTime.toISOString(),
     formatted,
     secondsAgo,
-    msg: `Hace ${secondsAgo}s`
+    msg: `Hace ${formatSecondsAgo(secondsAgo)}`
   });
 });
 
@@ -2439,11 +2457,11 @@ const DASHBOARD_HTML = `
         // Actualizar label de última actividad
         const lastActEl = document.getElementById('lastActivityLabel');
         if (lastActEl && data.lastActivityFormatted) {
-          let actStr = 'Última: ' + data.lastActivityFormatted;
           if (data.lastActivitySecondsAgo !== null) {
-            actStr += ' (Hace ' + data.lastActivitySecondsAgo + 's)';
+            lastActEl.innerText = 'Última: ' + data.lastActivityTimeStr + ' (Hace ' + data.lastActivityFormatted + ')';
+          } else {
+            lastActEl.innerText = 'Última: Sin actividad';
           }
-          lastActEl.innerText = actStr;
         }
 
       } catch (err) {
