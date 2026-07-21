@@ -195,9 +195,14 @@ app.post('/browser/presencia', (req, res) => {
     browserPresenciaActiva = true;
     log('Simulación de presencia activada.');
     
+    // Ejecutar una simulación inicial inmediatamente
+    runBrowserActivityLoop().catch((err) => {
+      log(`Error en simulación inicial inmediata: ${err.message}`);
+    });
+    
     return res.status(200).json({
       status: 'ok',
-      message: 'Simulación de presencia activada correctamente.',
+      message: 'Simulación de presencia activada e iniciada inmediatamente.',
       config: { browserIntervalMs }
     });
   } else {
@@ -214,47 +219,116 @@ app.post('/browser/presencia', (req, res) => {
   }
 });
 
+// Función centralizada para simular la actividad
+async function runBrowserActivityLoop() {
+  try {
+    if (!browserBrowserContext) return;
+
+    if (!browserPage || browserPage.isClosed()) {
+      const pages = browserBrowserContext.pages();
+      if (pages.length > 0) {
+        browserPage = pages[0];
+      } else {
+        log('Advertencia: No hay páginas en Browser para simular presencia.');
+        return;
+      }
+    }
+
+    log('Simulando actividad en Browser (movimiento de mouse y teclado)...');
+    
+    // 1. Movimiento del mouse
+    const x = Math.floor(Math.random() * 500) + 100;
+    const y = Math.floor(Math.random() * 500) + 100;
+    await browserPage.mouse.move(x, y);
+    
+    // 2. Pulsación de Shift
+    await browserPage.keyboard.press('Shift');
+
+    // 3. Intento de click en caja de búsqueda
+    try {
+      await browserPage.click('#search-input-selector', { timeout: 1000 });
+    } catch (e) {
+      // Ignorar
+    }
+    
+    log('Actividad simulada con éxito.');
+  } catch (err) {
+    log(`Error al ejecutar simulación de actividad de Browser: ${err.message}`);
+  }
+}
+
 // Iniciar intervalo de actividad de Browser
 function setupBrowserInterval() {
   browserIntervalId = setInterval(async () => {
-    try {
-      if (!browserBrowserContext) {
-        clearInterval(browserIntervalId);
-        browserIntervalId = null;
-        browserPresenciaActiva = false;
-        return;
-      }
+    await runBrowserActivityLoop();
+  }, browserIntervalMs);
+}
 
-      if (!browserPage || browserPage.isClosed()) {
-        const pages = browserBrowserContext.pages();
-        if (pages.length > 0) {
-          browserPage = pages[0];
-        } else {
-          log('Advertencia: No hay páginas en Browser para simular presencia.');
-          return;
-        }
-      }
+// 2.A Endpoint POST /browser/simular-accion para ejecutar acciones de test manuales e inmediatas
+app.post('/browser/simular-accion', async (req, res) => {
+  const { accion } = req.body;
 
-      log('Simulando actividad en Browser (movimiento de mouse y teclado)...');
-      
+  if (!browserBrowserContext || !browserPage || browserPage.isClosed()) {
+    log('Fallo de prueba: Intento de simular acción sin ventana de Browser abierta.');
+    return res.status(400).json({
+      error: 'Precondition Failed',
+      message: 'No se puede simular la acción si la ventana de Browser está cerrada.'
+    });
+  }
+
+  try {
+    log(`Ejecutando acción de test manual: '${accion}'`);
+
+    if (accion === 'mover-mouse') {
       const x = Math.floor(Math.random() * 500) + 100;
       const y = Math.floor(Math.random() * 500) + 100;
       await browserPage.mouse.move(x, y);
-      
-      await browserPage.keyboard.press('Shift');
-
+      log('Movimiento manual de cursor completado.');
+      return res.status(200).json({
+        status: 'ok',
+        message: `Mouse desplazado con éxito a (${x}, ${y}).`
+      });
+    } else if (accion === 'tipear-buscador') {
+      const selector = '#search-input-selector';
       try {
-        await browserPage.click('#search-input-selector', { timeout: 1000 });
-      } catch (e) {
-        // Ignorar
+        await browserPage.click(selector, { timeout: 2000 });
+        await browserPage.keyboard.type('Activo', { delay: 80 });
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        await browserPage.keyboard.press('Control+A');
+        await browserPage.keyboard.press('Backspace');
+        log('Simulación de tipeo y borrado de prueba completado.');
+        return res.status(200).json({
+          status: 'ok',
+          message: 'Tipeado de texto "Activo" y borrado completado.'
+        });
+      } catch (err) {
+        log(`Error al interactuar con el buscador: ${err.message}`);
+        return res.status(400).json({
+          error: 'Element Not Found',
+          message: 'No se pudo hacer clic en el buscador (#search-input-selector). Asegúrate de estar en una pantalla con buscador.'
+        });
       }
-      
-      log('Actividad simulada con éxito.');
-    } catch (err) {
-      log(`Error al simular actividad de Browser: ${err.message}`);
+    } else if (accion === 'pulsar-shift') {
+      await browserPage.keyboard.press('Shift');
+      log('Pulsación manual de Shift completada.');
+      return res.status(200).json({
+        status: 'ok',
+        message: 'Pulsación de tecla Shift simulada correctamente.'
+      });
+    } else {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Acción de prueba no reconocida.'
+      });
     }
-  }, browserIntervalMs);
-}
+  } catch (err) {
+    log(`Error al ejecutar acción de test manual: ${err.message}`);
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: err.message
+    });
+  }
+});
 
 // Endpoint POST /browser/status (Compatibilidad hacia atrás)
 app.post('/browser/status', async (req, res) => {
@@ -281,6 +355,9 @@ app.post('/browser/status', async (req, res) => {
       if (browserIntervalId) clearInterval(browserIntervalId);
       setupBrowserInterval();
       browserPresenciaActiva = true;
+
+      // Iniciar simulación inmediatamente
+      runBrowserActivityLoop().catch(() => {});
 
       return res.status(200).json({
         status: 'ok',
@@ -491,15 +568,12 @@ const LOGIN_HTML = `
       errorDiv.style.display = 'none';
 
       try {
-        // Validar la key directamente con el endpoint de estado
         const response = await fetch('/gateway/status', {
           headers: { 'X-API-KEY': key }
         });
 
         if (response.ok) {
-          // Guardar en cookie por 1 año
           document.cookie = "api_key=" + encodeURIComponent(key) + "; path=/; max-age=" + (365*24*60*60) + "; SameSite=Strict";
-          // Recargar para entrar al dashboard
           window.location.reload();
         } else {
           errorDiv.innerText = 'Clave API incorrecta o rechazada por el servidor.';
@@ -912,7 +986,7 @@ const DASHBOARD_HTML = `
   </header>
 
   <main>
-    <!-- CARD 1: MICROSOFT TEAMS (CONTROLES DESACOPLADOS) -->
+    <!-- CARD 1: MICROSOFT TEAMS -->
     <div class="card" id="cardBrowser">
       <div class="card-header">
         <div class="card-title-group">
@@ -967,6 +1041,22 @@ const DASHBOARD_HTML = `
           Pausar
         </button>
       </div>
+
+      <div class="divider"></div>
+
+      <!-- SECCIÓN 1.C: PRUEBAS MANUALES EN CALIENTE -->
+      <div class="card-section-title">Pruebas Manuales (Acciones al Instante)</div>
+      <div class="btn-row" style="gap: 8px; margin-top: 10px;">
+        <button class="btn" id="btnTestMouse" onclick="enviarAccionPrueba('mover-mouse')" style="padding: 8px; font-size: 0.75rem;">
+          Mover Mouse
+        </button>
+        <button class="btn" id="btnTestTipeo" onclick="enviarAccionPrueba('tipear-buscador')" style="padding: 8px; font-size: 0.75rem;">
+          Tipear Buscador
+        </button>
+        <button class="btn" id="btnTestShift" onclick="enviarAccionPrueba('pulsar-shift')" style="padding: 8px; font-size: 0.75rem;">
+          Pulsar Shift
+        </button>
+      </div>
     </div>
 
     <!-- CARD 2: ACCIONES DE SISTEMA -->
@@ -1006,7 +1096,6 @@ const DASHBOARD_HTML = `
     });
 
     function logout() {
-      // Eliminar cookie de API Key
       document.cookie = "api_key=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
       window.location.reload();
     }
@@ -1055,6 +1144,10 @@ const DASHBOARD_HTML = `
         const btnBrowserOpen = document.getElementById('btnBrowserOpen');
         const btnBrowserClose = document.getElementById('btnBrowserClose');
 
+        const testMouseBtn = document.getElementById('btnTestMouse');
+        const testTipeoBtn = document.getElementById('btnTestTipeo');
+        const testShiftBtn = document.getElementById('btnTestShift');
+
         if (data.browserBrowserAbierto) {
           browserBadge.className = 'status-badge active';
           browserBadgeText.innerText = 'Navegador: Abierto';
@@ -1064,6 +1157,10 @@ const DASHBOARD_HTML = `
           document.getElementById('btnPresenciaPlay').classList.remove('btn-disabled');
           document.getElementById('btnPresenciaPause').classList.remove('btn-disabled');
           document.getElementById('browserIntervalSlider').classList.remove('btn-disabled');
+
+          testMouseBtn.classList.remove('btn-disabled');
+          testTipeoBtn.classList.remove('btn-disabled');
+          testShiftBtn.classList.remove('btn-disabled');
         } else {
           browserBadge.className = 'status-badge';
           browserBadgeText.innerText = 'Navegador: Cerrado';
@@ -1073,6 +1170,10 @@ const DASHBOARD_HTML = `
           document.getElementById('btnPresenciaPlay').classList.add('btn-disabled');
           document.getElementById('btnPresenciaPause').classList.add('btn-disabled');
           document.getElementById('browserIntervalSlider').classList.add('btn-disabled');
+
+          testMouseBtn.classList.add('btn-disabled');
+          testTipeoBtn.classList.add('btn-disabled');
+          testShiftBtn.classList.add('btn-disabled');
         }
 
         // Sincronizar UI de Presencia Browser
@@ -1172,6 +1273,27 @@ const DASHBOARD_HTML = `
         }
       } catch (error) {
         showToast('Error de conexión con el servidor', 'error');
+      }
+    }
+
+    async function enviarAccionPrueba(accion) {
+      showToast('Enviando acción de prueba...', 'info');
+
+      try {
+        const response = await fetch('/browser/simular-accion', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accion })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          showToast(data.message, 'success');
+        } else {
+          showToast(data.message || 'Error en la prueba', 'error');
+        }
+      } catch (error) {
+        showToast('Error al conectar con la PC', 'error');
       }
     }
 
