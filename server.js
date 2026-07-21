@@ -555,6 +555,14 @@ const LOGIN_HTML = `
   </div>
 
   <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const savedKey = localStorage.getItem('X-API-KEY');
+      if (savedKey) {
+        document.getElementById('apiKeyInput').value = savedKey;
+        login();
+      }
+    });
+
     async function login() {
       const key = document.getElementById('apiKeyInput').value.trim();
       const errorDiv = document.getElementById('errorMsg');
@@ -573,7 +581,10 @@ const LOGIN_HTML = `
         });
 
         if (response.ok) {
+          // Guardar en cookie para la sesión de navegación GET /
           document.cookie = "api_key=" + encodeURIComponent(key) + "; path=/; max-age=" + (365*24*60*60) + "; SameSite=Strict";
+          // Guardar en localStorage para migrar/mantener sesiones guardadas y auto-login
+          localStorage.setItem('X-API-KEY', key);
           window.location.reload();
         } else {
           errorDiv.innerText = 'Clave API incorrecta o rechazada por el servidor.';
