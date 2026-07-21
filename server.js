@@ -134,7 +134,8 @@ app.post('/browser/browser', async (req, res) => {
           ignoreDefaultArgs: ['--no-sandbox'], // Elimina el cartel molesto de advertencia de sandbox
           args: [
             '--disable-blink-features=AutomationControlled',
-            '--disable-features=ImplicitSignin' // Evita que use el inicio de sesión automático del S.O.
+            '--disable-features=ImplicitSignin', // Evita que use el inicio de sesión automático del S.O.
+            '--test-type' // Elimina la advertencia de bandera experimental no soportada
           ]
         });
       } catch (errEdge) {
@@ -147,7 +148,8 @@ app.post('/browser/browser', async (req, res) => {
             ignoreDefaultArgs: ['--no-sandbox'],
             args: [
               '--disable-blink-features=AutomationControlled',
-              '--disable-features=ImplicitSignin'
+              '--disable-features=ImplicitSignin',
+              '--test-type'
             ]
           });
         } catch (errChrome) {
@@ -158,7 +160,8 @@ app.post('/browser/browser', async (req, res) => {
             ignoreDefaultArgs: ['--no-sandbox'],
             args: [
               '--disable-blink-features=AutomationControlled',
-              '--disable-features=ImplicitSignin'
+              '--disable-features=ImplicitSignin',
+              '--test-type'
             ]
           });
         }
