@@ -521,6 +521,20 @@ app.post('/browser/browser', async (req, res) => {
 
       browserBrowserAbierto = true;
 
+      // Auto-minimizar la ventana a los 10 segundos de abrirse
+      setTimeout(async () => {
+        if (browserBrowserContext && browserPage && !browserPage.isClosed()) {
+          try {
+            const session = await browserPage.context().newCDPSession(browserPage);
+            const { windowId } = await session.send('Browser.getWindowForTarget');
+            await session.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'minimized' } });
+            log('Ventana de Browser minimizada automáticamente a los 10 segundos.');
+          } catch (err) {
+            log(`Error al auto-minimizar: ${err.message}`);
+          }
+        }
+      }, 10000);
+
       // Si la simulación (Mantener Activo) está activa, iniciarla automáticamente después de 20 segundos
       if (browserPresenciaActiva) {
         log('Mantener Activo está encendido. Iniciando simulación automática en 20 segundos...');
@@ -610,13 +624,6 @@ app.post('/browser/presencia', (req, res) => {
   }
 
   if (accion === 'iniciar') {
-    if (!browserBrowserContext || !browserPage) {
-      log('Error de presencia: Se intentó simular actividad sin tener el navegador abierto.');
-      return res.status(400).json({
-        error: 'Precondition Failed',
-        message: 'No se puede iniciar la simulación si la ventana de Browser no está abierta.'
-      });
-    }
 
     if (browserIntervalId) {
       log('La simulación de presencia ya está activa. Reconfigurando intervalo.');
@@ -927,7 +934,8 @@ app.post('/sistema/energia', (req, res) => {
 
 // Endpoint GET /sistema/portapapeles - Leer portapapeles de la PC
 app.get('/sistema/portapapeles', (req, res) => {
-  exec('powershell -Command "Get-Clipboard"', (error, stdout) => {
+  const psCommand = 'powershell -OutputEncoding UTF8 -Command "Get-Clipboard"';
+  exec(psCommand, { encoding: 'utf8' }, (error, stdout) => {
     if (error) {
       return res.status(500).json({ error: 'Error al obtener portapapeles', message: error.message });
     }
@@ -958,7 +966,27 @@ app.post('/sistema/portapapeles', (req, res) => {
 app.get('/sistema/screenshot', (req, res) => {
   const screenshotPath = path.join(__dirname, 'temp_screenshot.png');
   const escapedPath = screenshotPath.replace(/\\/g, '\\\\');
-  const psCommand = `powershell -Command "[Reflection.Assembly]::LoadWithPartialName('System.Drawing'); [Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); $bounds = [System.Windows.Forms.SystemInformation]::VirtualScreen; $bmp = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height; $graphics = [System.Drawing.Graphics]::FromImage($bmp); $graphics.CopyFromScreen($bounds.Left, $bounds.Top, 0, 0, $bounds.Size); $bmp.Save('${escapedPath}', [System.Drawing.Imaging.ImageFormat]::Png); $graphics.Dispose(); $bmp.Dispose();"`;
+  // SetProcessDPIAware para obtener dimensiones físicas reales (incluye barra de tareas)
+  const psCommand = `powershell -Command "
+    Add-Type -TypeDefinition @'
+      using System;
+      using System.Runtime.InteropServices;
+      public class Screen {
+        [DllImport(\"user32.dll\")] public static extern bool SetProcessDPIAware();
+        [DllImport(\"user32.dll\")] public static extern int GetSystemMetrics(int n);
+      }
+'@;
+    [Screen]::SetProcessDPIAware() | Out-Null;
+    [Reflection.Assembly]::LoadWithPartialName('System.Drawing') | Out-Null;
+    $w = [Screen]::GetSystemMetrics(0);
+    $h = [Screen]::GetSystemMetrics(1);
+    $bmp = New-Object System.Drawing.Bitmap $w, $h;
+    $g = [System.Drawing.Graphics]::FromImage($bmp);
+    $g.CopyFromScreen(0, 0, 0, 0, (New-Object System.Drawing.Size($w, $h)));
+    $bmp.Save('${escapedPath}', [System.Drawing.Imaging.ImageFormat]::Png);
+    $g.Dispose();
+    $bmp.Dispose();
+  "`;
   
   exec(psCommand, (error) => {
     if (error) {
@@ -1761,8 +1789,19 @@ const DASHBOARD_HTML = `
         <input type="range" class="slider" id="browserIntervalSlider" min="1" max="15" step="0.5" value="4" oninput="updateBrowserSliderLabel(this.value)">
       </div>
 
+      <div class="btn-row">
+        <button class="btn btn-success" id="btnPresenciaPlay" onclick="controlPresencia('iniciar')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          Iniciar Simulación
+        </button>
+        <button class="btn" id="btnPresenciaPause" onclick="controlPresencia('pausar')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+          Pausar
+        </button>
+      </div>
+
       <div class="switch-container" style="margin-top: 15px; margin-bottom: 5px;">
-        <span style="font-size: 0.95rem; font-weight: 500; font-family: 'Outfit', sans-serif;">Simulación Activa</span>
+        <span style="font-size: 0.85rem; color: var(--text-muted);">Auto-simular al abrir navegador</span>
         <label class="switch">
           <input type="checkbox" id="browserPresenciaToggle" onchange="togglePresencia(this.checked)">
           <span class="slider-toggle"></span>
@@ -1788,6 +1827,9 @@ const DASHBOARD_HTML = `
         <div>
           <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 6px;">Días Permitidos</label>
           <div style="display: flex; justify-content: space-between; gap: 4px;">
+            <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-0">
+              <input type="checkbox" class="day-checkbox" value="0" style="display:none;" onchange="updateSchedule()">D
+            </label>
             <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-1">
               <input type="checkbox" class="day-checkbox" value="1" style="display:none;" onchange="updateSchedule()">L
             </label>
@@ -1805,9 +1847,6 @@ const DASHBOARD_HTML = `
             </label>
             <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-6">
               <input type="checkbox" class="day-checkbox" value="6" style="display:none;" onchange="updateSchedule()">S
-            </label>
-            <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-0">
-              <input type="checkbox" class="day-checkbox" value="0" style="display:none;" onchange="updateSchedule()">D
             </label>
           </div>
         </div>
@@ -2025,7 +2064,6 @@ const DASHBOARD_HTML = `
           document.getElementById('btnBrowserMinimize').classList.remove('btn-disabled');
           document.getElementById('btnBrowserRestore').classList.remove('btn-disabled');
           
-          document.getElementById('browserPresenciaToggle').disabled = false;
           document.getElementById('browserIntervalSlider').classList.remove('btn-disabled');
 
           testMouseBtn.classList.remove('btn-disabled');
@@ -2040,7 +2078,6 @@ const DASHBOARD_HTML = `
           document.getElementById('btnBrowserMinimize').classList.add('btn-disabled');
           document.getElementById('btnBrowserRestore').classList.add('btn-disabled');
 
-          document.getElementById('browserPresenciaToggle').disabled = true;
           document.getElementById('browserIntervalSlider').classList.add('btn-disabled');
 
           testMouseBtn.classList.add('btn-disabled');
