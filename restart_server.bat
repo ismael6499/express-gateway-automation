@@ -5,8 +5,8 @@ for /f "tokens=5" %%a in ('netstat -aon ^| findstr :3000') do (
     taskkill /f /pid %%a
 )
 echo Esperando 3 segundos para liberar el tunel ngrok...
-timeout /t 3 /nobreak > nul
+ping 127.0.0.1 -n 4 > nul
 echo Iniciando servidor en segundo plano...
 wscript.exe run_silent.vbs
 echo Servidor reiniciado con exito en segundo plano.
-timeout /t 3
+ping 127.0.0.1 -n 4 > nul
