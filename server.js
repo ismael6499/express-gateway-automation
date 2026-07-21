@@ -20,6 +20,17 @@ function log(message) {
   console.log(`${timestamp} ${message}`);
 }
 
+// Helper para leer cookies de forma manual (evita dependencias adicionales)
+function getApiKeyFromCookie(cookieHeader) {
+  if (!cookieHeader) return null;
+  const cookies = cookieHeader.split(';');
+  for (let cookie of cookies) {
+    const [name, value] = cookie.trim().split('=');
+    if (name === 'api_key') return decodeURIComponent(value);
+  }
+  return null;
+}
+
 // Variables de estado en Runtime
 let browserBrowserAbierto = false;
 let browserPresenciaActiva = false;
@@ -38,14 +49,14 @@ app.use((req, res, next) => {
     return next();
   }
 
-  const clientApiKey = req.headers['x-api-key'];
+  const clientApiKey = req.headers['x-api-key'] || getApiKeyFromCookie(req.headers.cookie);
   log(`Solicitud API interceptada: ${req.method} ${req.originalUrl}`);
 
   if (!clientApiKey || clientApiKey !== API_KEY) {
     log('Acceso denegado: API Key inválida o ausente.');
     return res.status(403).json({
       error: 'Forbidden',
-      message: 'Acceso no autorizado. El encabezado X-API-KEY es requerido y debe ser válido.'
+      message: 'Acceso no autorizado. El encabezado X-API-KEY o cookie es requerido y debe ser válido.'
     });
   }
 
@@ -86,7 +97,7 @@ app.get('/gateway/status', (req, res) => {
   });
 });
 
-// 1. Endpoint POST /browser/browser para controlar el ciclo del navegador Browser
+// Endpoint POST /browser/browser para controlar el ciclo del navegador Browser
 app.post('/browser/browser', async (req, res) => {
   const { accion } = req.body;
 
@@ -150,7 +161,7 @@ app.post('/browser/browser', async (req, res) => {
   }
 });
 
-// 2. Endpoint POST /browser/presencia para controlar la simulación de actividad
+// Endpoint POST /browser/presencia para controlar la simulación de actividad
 app.post('/browser/presencia', (req, res) => {
   const { accion, intervaloMs } = req.body;
 
@@ -161,7 +172,6 @@ app.post('/browser/presencia', (req, res) => {
     });
   }
 
-  // Actualizar intervalo en runtime si se especifica
   if (intervaloMs && typeof intervaloMs === 'number' && intervaloMs > 0) {
     browserIntervalMs = intervaloMs;
     log(`Intervalo de Browser actualizado a: ${browserIntervalMs} ms`);
@@ -191,7 +201,6 @@ app.post('/browser/presencia', (req, res) => {
       config: { browserIntervalMs }
     });
   } else {
-    // Pausar
     if (browserIntervalId) {
       clearInterval(browserIntervalId);
       browserIntervalId = null;
@@ -216,7 +225,6 @@ function setupBrowserInterval() {
         return;
       }
 
-      // Validar si la página sigue abierta
       if (!browserPage || browserPage.isClosed()) {
         const pages = browserBrowserContext.pages();
         if (pages.length > 0) {
@@ -229,19 +237,16 @@ function setupBrowserInterval() {
 
       log('Simulando actividad en Browser (movimiento de mouse y teclado)...');
       
-      // 1. Movimiento del mouse
       const x = Math.floor(Math.random() * 500) + 100;
       const y = Math.floor(Math.random() * 500) + 100;
       await browserPage.mouse.move(x, y);
       
-      // 2. Pulsación de Shift
       await browserPage.keyboard.press('Shift');
 
-      // 3. Intento de click en caja de búsqueda
       try {
         await browserPage.click('#search-input-selector', { timeout: 1000 });
       } catch (e) {
-        // Ignorar, ya cubierto con mouse y teclado
+        // Ignorar
       }
       
       log('Actividad simulada con éxito.');
@@ -294,7 +299,7 @@ app.post('/browser/status', async (req, res) => {
   }
 });
 
-// 3. Endpoint POST /sistema/ejecutar para lanzar programas locales como el Emulador
+// Endpoint POST /sistema/ejecutar para lanzar programas locales como el Emulador
 app.post('/sistema/ejecutar', (req, res) => {
   const { programa } = req.body;
 
@@ -334,9 +339,184 @@ app.post('/sistema/ejecutar', (req, res) => {
   });
 });
 
-// Endpoint GET /: Interfaz Web Dashboard Premium con controles desacoplados y acciones de sistema
-app.get('/', (req, res) => {
-  res.send(`
+// HTML para la Pantalla de Login Segura (Glassmorphism)
+const LOGIN_HTML = `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acceso requerido - Gateway</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-gradient: linear-gradient(135deg, #0d0e15 0%, #151722 100%);
+      --card-bg: rgba(255, 255, 255, 0.03);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --primary: #6366f1;
+      --primary-glow: rgba(99, 102, 241, 0.4);
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --danger: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    body {
+      background: var(--bg-gradient);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .login-container {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      padding: 35px 30px;
+      width: 100%;
+      max-width: 400px;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      background: linear-gradient(to right, #818cf8, #c084fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    p.subtitle {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 25px;
+    }
+
+    .form-group {
+      text-align: left;
+      margin-bottom: 20px;
+    }
+
+    label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    input {
+      width: 100%;
+      padding: 14px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      color: var(--text);
+      font-size: 0.95rem;
+      outline: none;
+      margin-top: 6px;
+      transition: border-color 0.2s ease;
+    }
+
+    input:focus {
+      border-color: var(--primary);
+    }
+
+    .btn {
+      width: 100%;
+      background: var(--primary);
+      border: 1px solid var(--primary);
+      color: var(--text);
+      padding: 14px;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      box-shadow: 0 4px 15px var(--primary-glow);
+      transition: all 0.2s ease;
+    }
+
+    .btn:hover {
+      background: #4f46e5;
+      transform: translateY(-2px);
+    }
+
+    .error-msg {
+      color: var(--danger);
+      font-size: 0.8rem;
+      margin-top: 15px;
+      display: none;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="login-container">
+    <h1>Acceso al Gateway</h1>
+    <p class="subtitle">Introduce tu X-API-KEY para continuar</p>
+    
+    <div class="form-group">
+      <label for="apiKeyInput">Clave X-API-KEY</label>
+      <input type="password" id="apiKeyInput" placeholder="Introduce la API Key del servidor" onkeydown="if(event.key === 'Enter') login()">
+    </div>
+    
+    <button class="btn" onclick="login()">Acceder</button>
+    <div id="errorMsg" class="error-msg">Clave API incorrecta. Inténtalo de nuevo.</div>
+  </div>
+
+  <script>
+    async function login() {
+      const key = document.getElementById('apiKeyInput').value.trim();
+      const errorDiv = document.getElementById('errorMsg');
+      
+      if (!key) {
+        errorDiv.innerText = 'Por favor, ingresa una clave.';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      errorDiv.style.display = 'none';
+
+      try {
+        // Validar la key directamente con el endpoint de estado
+        const response = await fetch('/gateway/status', {
+          headers: { 'X-API-KEY': key }
+        });
+
+        if (response.ok) {
+          // Guardar en cookie por 1 año
+          document.cookie = "api_key=" + encodeURIComponent(key) + "; path=/; max-age=" + (365*24*60*60) + "; SameSite=Strict";
+          // Recargar para entrar al dashboard
+          window.location.reload();
+        } else {
+          errorDiv.innerText = 'Clave API incorrecta o rechazada por el servidor.';
+          errorDiv.style.display = 'block';
+        }
+      } catch (err) {
+        errorDiv.innerText = 'Error al comunicar con el servidor.';
+        errorDiv.style.display = 'block';
+      }
+    }
+  </script>
+</body>
+</html>
+`;
+
+// HTML para el Dashboard de Control Premium
+const DASHBOARD_HTML = `
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -357,7 +537,6 @@ app.get('/', (req, res) => {
       --success-glow: rgba(16, 185, 129, 0.4);
       --danger: #ef4444;
       --danger-glow: rgba(239, 68, 68, 0.4);
-      --warning: #f59e0b;
       --text: #f3f4f6;
       --text-muted: #9ca3af;
     }
@@ -402,6 +581,11 @@ app.get('/', (req, res) => {
     .logo-container p {
       font-size: 0.75rem;
       color: var(--text-muted);
+    }
+
+    .header-buttons {
+      display: flex;
+      gap: 10px;
     }
 
     .btn-icon {
@@ -618,99 +802,21 @@ app.get('/', (req, res) => {
       pointer-events: none;
     }
 
-    /* Modal de Configuración */
-    .modal-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.75);
-      backdrop-filter: blur(8px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.3s ease;
-      padding: 20px;
+    .divider {
+      height: 1px;
+      background: var(--card-border);
+      margin: 15px 0;
     }
 
-    .modal-overlay.open {
-      opacity: 1;
-      pointer-events: auto;
-    }
-
-    .modal {
-      background: #11131c;
-      border: 1px solid var(--card-border);
-      border-radius: 24px;
-      width: 100%;
-      max-width: 450px;
-      padding: 28px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-      transform: translateY(-20px);
-      transition: transform 0.3s ease;
-    }
-
-    .modal-overlay.open .modal {
-      transform: translateY(0);
-    }
-
-    .modal-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-    }
-
-    .modal-header h3 {
-      font-size: 1.25rem;
-      font-weight: 600;
-    }
-
-    .modal-body input {
-      width: 100%;
-      padding: 12px 16px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--card-border);
-      border-radius: 12px;
-      color: var(--text);
-      font-size: 0.9rem;
-      outline: none;
-      margin-top: 8px;
-    }
-
-    /* Advertencias */
-    .warning-banner {
-      width: 100%;
-      max-width: 600px;
-      background: rgba(239, 68, 68, 0.15);
-      border: 1px solid rgba(239, 68, 68, 0.3);
-      color: #fca5a5;
-      padding: 14px 20px;
-      border-radius: 14px;
-      margin-bottom: 15px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 0.85rem;
-      animation: slideInDown 0.3s ease;
-    }
-
-    .warning-banner button {
-      background: var(--danger);
-      border: none;
-      color: white;
-      padding: 6px 12px;
-      border-radius: 8px;
-      font-weight: 600;
-      cursor: pointer;
+    .card-section-title {
       font-size: 0.75rem;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+      font-weight: 600;
     }
 
-    /* Tunnel Bar */
     .tunnel-bar {
       width: 100%;
       max-width: 600px;
@@ -745,7 +851,6 @@ app.get('/', (req, res) => {
       text-decoration: underline;
     }
 
-    /* Toast Notifications */
     .toast-container {
       position: fixed;
       bottom: 20px;
@@ -786,26 +891,6 @@ app.get('/', (req, res) => {
       to { transform: translateX(0); opacity: 1; }
     }
 
-    @keyframes slideInDown {
-      from { transform: translateY(-20px); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
-    }
-
-    .divider {
-      height: 1px;
-      background: var(--card-border);
-      margin: 15px 0;
-    }
-
-    .card-section-title {
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      letter-spacing: 0.5px;
-      margin-bottom: 10px;
-      font-weight: 600;
-    }
-
     @media (max-width: 480px) {
       body { padding: 15px; }
       .card { padding: 20px; }
@@ -819,17 +904,14 @@ app.get('/', (req, res) => {
       <h1>Gateway Control Center</h1>
       <p>API Gateway & Automatizaciones</p>
     </div>
-    <button class="btn-icon" onclick="openSettings()" title="Configuración de Credenciales">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-    </button>
+    <div class="header-buttons">
+      <button class="btn-icon" onclick="logout()" title="Cerrar Sesión">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+      </button>
+    </div>
   </header>
 
   <main>
-    <div id="apiKeyWarning" class="warning-banner" style="display: none;">
-      <span>⚠️ No has configurado tu clave X-API-KEY en el panel.</span>
-      <button onclick="openSettings()">Configurar</button>
-    </div>
-
     <!-- CARD 1: MICROSOFT TEAMS (CONTROLES DESACOPLADOS) -->
     <div class="card" id="cardBrowser">
       <div class="card-header">
@@ -913,67 +995,20 @@ app.get('/', (req, res) => {
     </div>
   </main>
 
-  <!-- MODAL DE AJUSTES -->
-  <div class="modal-overlay" id="settingsModal">
-    <div class="modal">
-      <div class="modal-header">
-        <h3>Credenciales de Acceso</h3>
-        <button class="btn-icon" onclick="closeSettings()">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-        </button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group">
-          <label style="font-size: 0.85rem; color: var(--text-muted);">Clave X-API-KEY</label>
-          <input type="password" id="inputApiKey" placeholder="Introduce la API Key del servidor">
-        </div>
-        <button class="btn btn-primary" style="width: 100%; margin-top: 10px;" onclick="saveSettings()">
-          Guardar Configuración
-        </button>
-      </div>
-    </div>
-  </div>
-
   <div class="toast-container" id="toastContainer"></div>
 
   <script>
     let currentBrowserInterval = 4.0;
 
     document.addEventListener('DOMContentLoaded', () => {
-      const savedKey = localStorage.getItem('X-API-KEY');
-      if (savedKey) {
-        document.getElementById('inputApiKey').value = savedKey;
-      } else {
-        document.getElementById('apiKeyWarning').style.display = 'flex';
-      }
-      
       pollGatewayStatus();
       setInterval(pollGatewayStatus, 5000);
     });
 
-    function getApiKey() {
-      return localStorage.getItem('X-API-KEY') || '';
-    }
-
-    function openSettings() {
-      document.getElementById('settingsModal').classList.add('open');
-    }
-
-    function closeSettings() {
-      document.getElementById('settingsModal').classList.remove('open');
-    }
-
-    function saveSettings() {
-      const key = document.getElementById('inputApiKey').value.trim();
-      if (!key) {
-        showToast('Debes ingresar una clave API', 'error');
-        return;
-      }
-      localStorage.setItem('X-API-KEY', key);
-      document.getElementById('apiKeyWarning').style.display = 'none';
-      closeSettings();
-      showToast('Configuración guardada correctamente', 'success');
-      pollGatewayStatus();
+    function logout() {
+      // Eliminar cookie de API Key
+      document.cookie = "api_key=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+      window.location.reload();
     }
 
     function updateBrowserSliderLabel(val) {
@@ -1003,18 +1038,12 @@ app.get('/', (req, res) => {
       }, 4000);
     }
 
-    // Consultar el estado en tiempo real del Gateway
     async function pollGatewayStatus() {
-      const key = getApiKey();
-      if (!key) return;
-
       try {
-        const response = await fetch('/gateway/status', {
-          headers: { 'X-API-KEY': key }
-        });
+        const response = await fetch('/gateway/status');
         
         if (response.status === 403) {
-          document.getElementById('apiKeyWarning').style.display = 'flex';
+          logout();
           return;
         }
 
@@ -1032,7 +1061,6 @@ app.get('/', (req, res) => {
           btnBrowserOpen.className = 'btn btn-primary btn-disabled';
           btnBrowserClose.className = 'btn btn-danger';
           
-          // Habilitar controles de presencia
           document.getElementById('btnPresenciaPlay').classList.remove('btn-disabled');
           document.getElementById('btnPresenciaPause').classList.remove('btn-disabled');
           document.getElementById('browserIntervalSlider').classList.remove('btn-disabled');
@@ -1042,7 +1070,6 @@ app.get('/', (req, res) => {
           btnBrowserOpen.className = 'btn btn-primary';
           btnBrowserClose.className = 'btn btn-disabled';
 
-          // Deshabilitar controles de presencia (requiere navegador abierto)
           document.getElementById('btnPresenciaPlay').classList.add('btn-disabled');
           document.getElementById('btnPresenciaPause').classList.add('btn-disabled');
           document.getElementById('browserIntervalSlider').classList.add('btn-disabled');
@@ -1071,14 +1098,12 @@ app.get('/', (req, res) => {
           btnPresenciaPause.className = 'btn btn-disabled';
         }
 
-        // Sincronizar Slider de Browser (solo si el usuario no lo está manipulando)
         if (document.activeElement !== document.getElementById('browserIntervalSlider')) {
           const mins = data.browserIntervalMs / 60000;
           document.getElementById('browserIntervalSlider').value = mins;
           updateBrowserSliderLabel(mins);
         }
 
-        // Sincronizar emulador
         const btnEmulador = document.getElementById('btnEmulador');
         if (!data.hasEmulatorPath) {
           btnEmulador.classList.add('btn-disabled');
@@ -1088,7 +1113,6 @@ app.get('/', (req, res) => {
           btnEmulador.title = '';
         }
 
-        // Configuración de Ngrok Link
         const tunnelBar = document.getElementById('tunnelBar');
         if (data.ngrokUrl && data.ngrokUrl !== 'Inactivo') {
           tunnelBar.style.display = 'flex';
@@ -1104,20 +1128,13 @@ app.get('/', (req, res) => {
       }
     }
 
-    // Controlar Navegador Browser (abrir/cerrar)
     async function controlBrowser(accion) {
-      const key = getApiKey();
-      if (!key) { openSettings(); return; }
-
       showToast(accion === 'abrir' ? 'Iniciando navegador...' : 'Cerrando navegador...', 'info');
 
       try {
         const response = await fetch('/browser/browser', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-API-KEY': key
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ accion })
         });
 
@@ -1133,11 +1150,7 @@ app.get('/', (req, res) => {
       }
     }
 
-    // Controlar Simulación de Presencia (iniciar/pausar)
     async function controlPresencia(accion) {
-      const key = getApiKey();
-      if (!key) { openSettings(); return; }
-
       const mins = parseFloat(document.getElementById('browserIntervalSlider').value);
       const ms = mins * 60000;
 
@@ -1146,10 +1159,7 @@ app.get('/', (req, res) => {
       try {
         const response = await fetch('/browser/presencia', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-API-KEY': key
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ accion, intervaloMs: ms })
         });
 
@@ -1165,20 +1175,13 @@ app.get('/', (req, res) => {
       }
     }
 
-    // Ejecutar programa en la PC (.bat del emulador)
     async function ejecutarPrograma(programa) {
-      const key = getApiKey();
-      if (!key) { openSettings(); return; }
-
       showToast('Enviando señal de ejecución...', 'info');
 
       try {
         const response = await fetch('/sistema/ejecutar', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-API-KEY': key
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ programa })
         });
 
@@ -1195,7 +1198,16 @@ app.get('/', (req, res) => {
   </script>
 </body>
 </html>
-  `);
+`;
+
+// Ruta principal GET /
+app.get('/', (req, res) => {
+  const cookieKey = getApiKeyFromCookie(req.headers.cookie);
+  if (cookieKey === API_KEY) {
+    res.send(DASHBOARD_HTML);
+  } else {
+    res.send(LOGIN_HTML);
+  }
 });
 
 // Manejo centralizado de cierre de proceso
