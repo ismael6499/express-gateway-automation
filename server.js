@@ -295,7 +295,9 @@ app.post('/browser/browser', async (req, res) => {
           args: [
             '--disable-blink-features=AutomationControlled',
             '--disable-features=ImplicitSignin', // Evita que use el inicio de sesión automático del S.O.
-            '--test-type' // Elimina la advertencia de bandera experimental no soportada
+            '--test-type', // Elimina la advertencia de bandera experimental no soportada
+            '--restore-last-session', // Restaura la sesión anterior y cookies temporales
+            '--hide-crash-restore-bubble' // Oculta el cartel molesto de restauración de páginas por cierre sucio
           ]
         });
       } catch (errChrome) {
@@ -308,7 +310,9 @@ app.post('/browser/browser', async (req, res) => {
             args: [
               '--disable-blink-features=AutomationControlled',
               '--disable-features=ImplicitSignin',
-              '--test-type'
+              '--test-type',
+              '--restore-last-session',
+              '--hide-crash-restore-bubble'
             ]
           });
         } catch (errChromium) {
@@ -321,17 +325,43 @@ app.post('/browser/browser', async (req, res) => {
             args: [
               '--disable-blink-features=AutomationControlled',
               '--disable-features=ImplicitSignin',
-              '--test-type'
+              '--test-type',
+              '--restore-last-session',
+              '--hide-crash-restore-bubble'
             ]
           });
         }
       }
 
+      // Esperar un breve instante para dar tiempo a que se restauren las páginas de la sesión anterior
+      await new Promise(resolve => setTimeout(resolve, 800));
+
       const pages = browserBrowserContext.pages();
-      if (pages.length > 0) {
-        browserPage = pages[0];
+      // Buscar si ya hay alguna pestaña restaurada de Browser
+      const restoredBrowserPage = pages.find(p => p.url().includes('example.com') || p.url().includes('cloud.example.com'));
+
+      if (restoredBrowserPage) {
+        log('Auto-Login: Reutilizando pestaña de Browser restaurada automáticamente.');
+        browserPage = restoredBrowserPage;
+
+        // Cerrar las pestañas about:blank sobrantes
+        for (let p of pages) {
+          if (p !== browserPage && (p.url() === 'about:blank' || p.url() === '')) {
+            await p.close().catch(() => {});
+          }
+        }
       } else {
-        browserPage = await browserBrowserContext.newPage();
+        log('Auto-Login: No se encontró pestaña restaurada. Usando o creando pestaña por defecto...');
+        if (pages.length > 0) {
+          browserPage = pages[0];
+        } else {
+          browserPage = await browserBrowserContext.newPage();
+        }
+
+        log('Navegando asíncronamente a https://example.com...');
+        browserPage.goto('https://example.com').catch((err) => {
+          log(`Error al navegar a Browser: ${err.message}`);
+        });
       }
 
       // Detectar si el usuario cierra la página de Browser directamente
@@ -344,11 +374,6 @@ app.post('/browser/browser', async (req, res) => {
       browserBrowserContext.on('close', async () => {
         log('Aviso: El navegador de Browser fue cerrado manualmente por el usuario.');
         handleManualCloseCleanup();
-      });
-
-      log('Navegando asíncronamente a https://example.com...');
-      browserPage.goto('https://example.com').catch((err) => {
-        log(`Error al navegar a Browser: ${err.message}`);
       });
 
       // Ejecutar el asistente de auto-login en segundo plano
