@@ -131,6 +131,7 @@ app.post('/browser/browser', async (req, res) => {
           headless: false,
           channel: 'msedge', // Microsoft Edge es nativo en Windows y comparte políticas corporativas/AD
           viewport: null,
+          ignoreDefaultArgs: ['--no-sandbox'], // Elimina el cartel molesto de advertencia de sandbox
           args: [
             '--disable-blink-features=AutomationControlled',
             '--disable-features=ImplicitSignin' // Evita que use el inicio de sesión automático del S.O.
@@ -143,6 +144,7 @@ app.post('/browser/browser', async (req, res) => {
             headless: false,
             channel: 'chrome',
             viewport: null,
+            ignoreDefaultArgs: ['--no-sandbox'],
             args: [
               '--disable-blink-features=AutomationControlled',
               '--disable-features=ImplicitSignin'
@@ -153,6 +155,7 @@ app.post('/browser/browser', async (req, res) => {
           browserBrowserContext = await chromium.launchPersistentContext(userDataDir, {
             headless: false,
             viewport: null,
+            ignoreDefaultArgs: ['--no-sandbox'],
             args: [
               '--disable-blink-features=AutomationControlled',
               '--disable-features=ImplicitSignin'
