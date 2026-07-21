@@ -2024,7 +2024,7 @@ const DASHBOARD_HTML = `
     function showToast(message, type = 'info') {
       const container = document.getElementById('toastContainer');
       const toast = document.createElement('div');
-      toast.className = \`toast \${type}\`;
+      toast.className = 'toast ' + type;
       
       let icon = '';
       if (type === 'success') {
@@ -2037,11 +2037,46 @@ const DASHBOARD_HTML = `
 
       toast.innerHTML = icon + ' <span>' + message + '</span>';
       
-      // Descartar rápido al hacer click/tap
       toast.onclick = () => {
         toast.style.animation = 'slideInRight 0.3s ease reverse forwards';
         setTimeout(() => { if (toast.parentNode) toast.remove(); }, 300);
       };
+
+      // Descartar por swipe lateral (táctil)
+      let startX = 0;
+      let currentX = 0;
+      let isSwiping = false;
+
+      toast.addEventListener('touchstart', (e) => {
+        startX = e.touches[0].clientX;
+        toast.style.transition = 'none';
+        isSwiping = true;
+      }, { passive: true });
+
+      toast.addEventListener('touchmove', (e) => {
+        if (!isSwiping) return;
+        currentX = e.touches[0].clientX;
+        const diffX = currentX - startX;
+        if (diffX > 0) {
+          toast.style.transform = 'translateX(' + diffX + 'px)';
+          toast.style.opacity = 1 - (diffX / 300);
+        }
+      }, { passive: true });
+
+      toast.addEventListener('touchend', () => {
+        if (!isSwiping) return;
+        isSwiping = false;
+        const diffX = currentX - startX;
+        toast.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
+        if (diffX > 60) {
+          toast.style.transform = 'translateX(100%)';
+          toast.style.opacity = '0';
+          setTimeout(() => { if (toast.parentNode) toast.remove(); }, 200);
+        } else {
+          toast.style.transform = 'translateX(0)';
+          toast.style.opacity = '1';
+        }
+      }, { passive: true });
 
       container.appendChild(toast);
       
