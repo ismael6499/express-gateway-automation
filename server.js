@@ -2010,8 +2010,7 @@ const DASHBOARD_HTML = `
           document.getElementById('btnBrowserMinimize').classList.remove('btn-disabled');
           document.getElementById('btnBrowserRestore').classList.remove('btn-disabled');
           
-          document.getElementById('btnPresenciaPlay').classList.remove('btn-disabled');
-          document.getElementById('btnPresenciaPause').classList.remove('btn-disabled');
+          document.getElementById('browserPresenciaToggle').disabled = false;
           document.getElementById('browserIntervalSlider').classList.remove('btn-disabled');
 
           testMouseBtn.classList.remove('btn-disabled');
@@ -2026,8 +2025,7 @@ const DASHBOARD_HTML = `
           document.getElementById('btnBrowserMinimize').classList.add('btn-disabled');
           document.getElementById('btnBrowserRestore').classList.add('btn-disabled');
 
-          document.getElementById('btnPresenciaPlay').classList.add('btn-disabled');
-          document.getElementById('btnPresenciaPause').classList.add('btn-disabled');
+          document.getElementById('browserPresenciaToggle').disabled = true;
           document.getElementById('browserIntervalSlider').classList.add('btn-disabled');
 
           testMouseBtn.classList.add('btn-disabled');
@@ -2039,23 +2037,21 @@ const DASHBOARD_HTML = `
         const presenciaBadge = document.getElementById('presenciaBadge');
         const presenciaBadgeText = document.getElementById('presenciaBadgeText');
         const cardBrowser = document.getElementById('cardBrowser');
-        const btnPresenciaPlay = document.getElementById('btnPresenciaPlay');
-        const btnPresenciaPause = document.getElementById('btnPresenciaPause');
 
         if (data.browserPresenciaActiva) {
           presenciaBadge.className = 'status-badge active';
           presenciaBadgeText.innerText = 'Mantener Activo: On';
           cardBrowser.classList.add('active-state');
-          btnPresenciaPlay.className = 'btn btn-success btn-disabled';
-          btnPresenciaPause.className = 'btn';
         } else {
           presenciaBadge.className = 'status-badge';
           presenciaBadgeText.innerText = 'Mantener Activo: Off';
           if (!data.browserBrowserAbierto) {
             cardBrowser.classList.remove('active-state');
           }
-          btnPresenciaPlay.className = 'btn btn-success';
-          btnPresenciaPause.className = 'btn btn-disabled';
+        }
+
+        if (document.activeElement !== document.getElementById('browserPresenciaToggle')) {
+          document.getElementById('browserPresenciaToggle').checked = !!data.browserPresenciaActiva;
         }
 
         if (document.activeElement !== document.getElementById('browserIntervalSlider')) {
