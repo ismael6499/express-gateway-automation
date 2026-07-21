@@ -449,7 +449,8 @@ async function runBrowserActivityLoop() {
 
     // 3. Intento de click en caja de búsqueda
     try {
-      await browserPage.click('#search-input-selector', { timeout: 1000 });
+      const searchSelector = 'input[placeholder*="Search"], input[placeholder*="Buscar"], input[placeholder*="go right to a chat"], input[placeholder*="Ctrl+Alt+G"], input#ngx-search-box-input, input[data-testid="search-box-input"], .ms-searchux-input, input[class*="ms-searchux-input"]';
+      await browserPage.click(searchSelector, { timeout: 1000 });
     } catch (e) {
       // Ignorar
     }
@@ -492,7 +493,7 @@ app.post('/browser/simular-accion', async (req, res) => {
         message: `Mouse desplazado con éxito a (${x}, ${y}).`
       });
     } else if (accion === 'tipear-buscador') {
-      const selector = '#search-input-selector';
+      const selector = 'input[placeholder*="Search"], input[placeholder*="Buscar"], input[placeholder*="go right to a chat"], input[placeholder*="Ctrl+Alt+G"], input#ngx-search-box-input, input[data-testid="search-box-input"], .ms-searchux-input, input[class*="ms-searchux-input"]';
       try {
         await browserPage.click(selector, { timeout: 2000 });
         await browserPage.keyboard.type('Activo', { delay: 80 });
@@ -508,7 +509,7 @@ app.post('/browser/simular-accion', async (req, res) => {
         log(`Error al interactuar con el buscador: ${err.message}`);
         return res.status(400).json({
           error: 'Element Not Found',
-          message: 'No se pudo hacer clic en el buscador (#search-input-selector). Asegúrate de estar en una pantalla con buscador.'
+          message: 'No se pudo hacer clic en el buscador de Browser. Asegúrate de que Browser haya cargado completamente.'
         });
       }
     } else if (accion === 'pulsar-shift') {
