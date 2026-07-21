@@ -139,18 +139,24 @@ app.post('/browser/browser', async (req, res) => {
         });
       }
 
-      // Detectar si el usuario cierra la ventana del navegador manualmente
-      browserBrowserContext.on('close', async () => {
-        log('Aviso: El navegador de Browser fue cerrado manualmente por el usuario.');
-        await cleanupBrowserSession();
-      });
-
       const pages = browserBrowserContext.pages();
       if (pages.length > 0) {
         browserPage = pages[0];
       } else {
         browserPage = await browserBrowserContext.newPage();
       }
+
+      // Detectar si el usuario cierra la página de Browser directamente
+      browserPage.on('close', async () => {
+        log('Aviso: La página de Browser fue cerrada manualmente por el usuario.');
+        await cleanupBrowserSession();
+      });
+
+      // Detectar si el contexto entero se cierra
+      browserBrowserContext.on('close', async () => {
+        log('Aviso: El navegador de Browser fue cerrado manualmente por el usuario.');
+        await cleanupBrowserSession();
+      });
 
       log('Navegando asíncronamente a https://example.com...');
       browserPage.goto('https://example.com').catch((err) => {
