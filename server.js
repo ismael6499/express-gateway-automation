@@ -2192,11 +2192,12 @@ const DASHBOARD_HTML = `
       }
     }
 
-    async function controlPresencia(accion) {
+    async function togglePresencia(checked) {
+      const accion = checked ? 'iniciar' : 'pausar';
       const mins = parseFloat(document.getElementById('browserIntervalSlider').value);
       const ms = mins * 60000;
 
-      showToast(accion === 'iniciar' ? 'Activando simulación...' : 'Pausando simulación...', 'info');
+      showToast(checked ? 'Activando simulación...' : 'Pausando simulación...', 'info');
 
       try {
         const response = await fetch('/browser/presencia', {
@@ -2211,9 +2212,11 @@ const DASHBOARD_HTML = `
           pollGatewayStatus();
         } else {
           showToast(data.message || 'Error en la petición', 'error');
+          document.getElementById('browserPresenciaToggle').checked = !checked;
         }
       } catch (error) {
         showToast('Error de conexión con el servidor', 'error');
+        document.getElementById('browserPresenciaToggle').checked = !checked;
       }
     }
 
