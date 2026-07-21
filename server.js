@@ -2388,31 +2388,34 @@ const DASHBOARD_HTML = `
       const confirmar = confirm("¿Estás seguro de que deseas reiniciar el Gateway Server? La conexión se perderá temporalmente.");
       if (!confirmar) return;
 
+      document.getElementById('restartOverlay').style.display = 'flex';
       showToast('Enviando señal de reinicio...', 'info');
 
       try {
-        const response = await fetch('/gateway/restart', {
+        fetch('/gateway/restart', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' }
-        });
+        }).catch(() => {});
+      } catch (e) {}
 
-        const data = await response.json();
-        if (response.ok) {
-          showToast(data.message, 'success');
-          setTimeout(() => {
-            showToast('Reconectando...', 'info');
-            window.location.reload();
-          }, 12000);
-        } else {
-          showToast(data.message || 'Error al reiniciar', 'error');
-        }
-      } catch (error) {
-        // En caso de corte de red rápido por apagado de Node, lo tratamos como éxito
-        showToast('Reiniciando servidor. Reconectando en 12 segundos...', 'success');
-        setTimeout(() => {
-          window.location.reload();
-        }, 12000);
+      // Iniciar sondeo activo para detectar cuándo vuelve a estar en línea
+      function pollServerBackOnline() {
+        setTimeout(async () => {
+          try {
+            const res = await fetch('/gateway/status');
+            if (res.ok) {
+              window.location.reload();
+            } else {
+              pollServerBackOnline();
+            }
+          } catch (e) {
+            pollServerBackOnline();
+          }
+        }, 1500);
       }
+      
+      // Empezar a sondear después de un pequeño delay de 3 segundos
+      setTimeout(pollServerBackOnline, 3000);
     }
   </script>
   <div id="restartOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(10, 10, 12, 0.9); z-index: 9999; align-items: center; justify-content: center; flex-direction: column; color: #fff; text-align: center; padding: 20px; box-sizing: border-box;">
