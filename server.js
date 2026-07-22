@@ -2400,7 +2400,6 @@ const DASHBOARD_HTML = `
       probarPing();
       setInterval(probarPing, 20000);
       obtenerBrillo();
-      setInterval(obtenerBrillo, 20000);
     });
 
     function updateBrilloLabel(val) {
