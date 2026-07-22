@@ -1130,8 +1130,8 @@ app.post('/sistema/teclado', (req, res) => {
 
   try {
     if (accion === 'apagar-pantalla') {
-      log('Haciendo clic en la barra de tareas y simulando Alt + X en Windows para apagar pantalla...');
-      const psCommand = 'powershell -Command "$sig = \'[DllImport(\\"user32.dll\\")] public static extern void mouse_event(int dwFlags, int dx, int dy, int cButtons, int dwExtraInfo); [DllImport(\\"user32.dll\\")] public static extern bool SetCursorPos(int X, int Y); [DllImport(\\"user32.dll\\")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, uint dwExtraInfo);\'; $win = Add-Type -MemberDefinition $sig -Name \\"WinAPI1\\" -Namespace \\"Win32\\" -PassThru; $win::SetCursorPos(500, 1070); $win::mouse_event(2, 0, 0, 0, 0); $win::mouse_event(4, 0, 0, 0, 0); Start-Sleep -Milliseconds 200; $win::keybd_event(0x12, 0, 0, 0); $win::keybd_event(0x58, 0, 0, 0); $win::keybd_event(0x58, 0, 2, 0); $win::keybd_event(0x12, 0, 2, 0);"';
+      log('Realizando doble clic en cursor actual y en la barra de tareas, y simulando Alt + X para apagar pantalla...');
+      const psCommand = 'powershell -Command "$sig = \'[DllImport(\\"user32.dll\\")] public static extern void mouse_event(int dwFlags, int dx, int dy, int cButtons, int dwExtraInfo); [DllImport(\\"user32.dll\\")] public static extern bool SetCursorPos(int X, int Y); [DllImport(\\"user32.dll\\")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, uint dwExtraInfo);\'; $win = Add-Type -MemberDefinition $sig -Name \\"WinAPI1\\" -Namespace \\"Win32\\" -PassThru; $win::mouse_event(2, 0, 0, 0, 0); $win::mouse_event(4, 0, 0, 0, 0); Start-Sleep -Milliseconds 80; $win::mouse_event(2, 0, 0, 0, 0); $win::mouse_event(4, 0, 0, 0, 0); Start-Sleep -Milliseconds 150; $win::SetCursorPos(500, 1070); $win::mouse_event(2, 0, 0, 0, 0); $win::mouse_event(4, 0, 0, 0, 0); Start-Sleep -Milliseconds 80; $win::mouse_event(2, 0, 0, 0, 0); $win::mouse_event(4, 0, 0, 0, 0); Start-Sleep -Milliseconds 250; $win::keybd_event(0x12, 0, 0, 0); $win::keybd_event(0x58, 0, 0, 0); $win::keybd_event(0x58, 0, 2, 0); $win::keybd_event(0x12, 0, 2, 0);"';
       exec(psCommand, (error) => {
         if (error) {
           log(`Error al simular Alt+X: ${error.message}`);
@@ -1139,7 +1139,7 @@ app.post('/sistema/teclado', (req, res) => {
       });
       return res.status(200).json({
         status: 'ok',
-        message: 'Comando de apagar pantalla (Alt+X con click previo) enviado.',
+        message: 'Comando de apagar pantalla (Alt+X con clics preventivos) enviado.',
         msg: 'Pantalla apagada'
       });
     } else {
@@ -1163,6 +1163,38 @@ app.post('/sistema/teclado', (req, res) => {
       message: err.message
     });
   }
+});
+
+// Endpoint GET /sistema/brillo - Obtener el brillo de pantalla actual en Windows
+app.get('/sistema/brillo', (req, res) => {
+  exec('powershell -Command "(Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness).CurrentBrightness"', (error, stdout) => {
+    if (error) {
+      log(`Error al obtener brillo de pantalla: ${error.message}`);
+      return res.status(500).json({ error: 'Error al obtener brillo', message: error.message });
+    }
+    const brillo = parseInt(stdout.trim());
+    res.json({ status: 'ok', brightness: isNaN(brillo) ? null : brillo });
+  });
+});
+
+// Endpoint POST /sistema/brillo - Modificar el brillo de pantalla en Windows (0 a 100)
+app.post('/sistema/brillo', (req, res) => {
+  const { brillo } = req.body;
+  if (brillo === undefined || brillo === null) {
+    return res.status(400).json({ error: 'Bad Request', message: 'Falta parámetro brillo.' });
+  }
+
+  const level = Math.max(0, Math.min(100, Math.round(Number(brillo))));
+  log(`Ajustando brillo de pantalla a: ${level}%`);
+
+  const psCommand = `powershell -Command "(Get-WmiObject -Namespace root/WMI -ClassName WmiMonitorBrightnessMethods).WmiSetBrightness(1, ${level})"`;
+  exec(psCommand, (error) => {
+    if (error) {
+      log(`Error al ajustar brillo: ${error.message}`);
+      return res.status(500).json({ error: 'Error al ajustar brillo', message: error.message });
+    }
+    res.json({ status: 'ok', brightness: level, message: `Brillo ajustado a ${level}%` });
+  });
 });
 
 // Endpoint POST /sistema/energia - Suspender y Bloquear PC
@@ -2232,6 +2264,14 @@ const DASHBOARD_HTML = `
           Encender (Ctrl)
         </button>
       </div>
+      <div style="border-top: 1px dashed rgba(255,255,255,0.15); margin: 15px 0 10px 0;"></div>
+      <div class="form-group" style="margin-bottom: 5px;">
+        <div class="form-label-row">
+          <span>Brillo de Pantalla</span>
+          <span id="brilloVal">--%</span>
+        </div>
+        <input type="range" class="slider" id="brilloSlider" min="0" max="100" step="5" value="50" oninput="updateBrilloLabel(this.value)" onchange="cambiarBrillo(this.value)">
+      </div>
 
       <div class="divider"></div>
       <div class="card-section-title">Energía y Sesión de PC</div>
@@ -2359,7 +2399,47 @@ const DASHBOARD_HTML = `
       setInterval(pollGatewayStatus, 5000);
       probarPing();
       setInterval(probarPing, 20000);
+      obtenerBrillo();
+      setInterval(obtenerBrillo, 20000);
     });
+
+    function updateBrilloLabel(val) {
+      document.getElementById('brilloVal').innerText = val + '%';
+    }
+
+    async function obtenerBrillo() {
+      try {
+        const response = await fetch('/sistema/brillo');
+        const data = await response.json();
+        if (response.ok && data.brightness !== null) {
+          if (document.activeElement !== document.getElementById('brilloSlider')) {
+            document.getElementById('brilloSlider').value = data.brightness;
+            updateBrilloLabel(data.brightness);
+          }
+        }
+      } catch (error) {
+        console.error('Error al obtener brillo:', error);
+      }
+    }
+
+    async function cambiarBrillo(val) {
+      updateBrilloLabel(val);
+      try {
+        const response = await fetch('/sistema/brillo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ brillo: Number(val) })
+        });
+        const data = await response.json();
+        if (response.ok) {
+          showToast('Brillo ajustado al ' + val + '%.', 'success');
+        } else {
+          showToast(data.message || 'Error al ajustar brillo', 'error');
+        }
+      } catch (error) {
+        showToast('Error de conexión con el servidor', 'error');
+      }
+    }
 
     function logout() {
       document.cookie = "api_key=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
