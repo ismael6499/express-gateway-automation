@@ -768,9 +768,12 @@ app.post('/browser/presencia', (req, res) => {
   }
 });
 
-// Función centralizada para simular la actividad
 async function runBrowserActivityLoop() {
   try {
+    if (!isSimulationInSchedule()) {
+      log('Simulación de presencia omitida: Fuera de los días/horas programados.');
+      return;
+    }
     if (!browserBrowserContext) return;
 
     if (!browserPage || browserPage.isClosed()) {
