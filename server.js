@@ -48,6 +48,7 @@ let browserIntervalMs = 240000; // 4 minutos por defecto
 let browserBrowserContext = null;
 let browserPage = null;
 let browserIntervalId = null;
+let browserSignInCheckIntervalId = null; // intervalo de 1 min para verificar banner de re-autenticación "Sign In"
 let lastAutoCierreMinute = null; // evita re-disparar auto-cierre en el mismo minuto
 let isLaunchingBrowser = false;  // guard anti-concurrencia al abrir/cerrar navegador
 let lastActivityTime = null;     // timestamp de la ultima simulacion de actividad
@@ -161,12 +162,135 @@ app.use((req, res, next) => {
   next();
 });
 
+// Helper para detectar y presionar el botón "Sign In" de re-autenticación en la barra/banner superior de Browser
+async function checkAndClickSignInBanner(page) {
+  if (!page || page.isClosed()) return false;
+  try {
+    const result = await page.evaluate(() => {
+      // Helper para verificar si un elemento está dentro del área de mensajes/conversaciones del chat
+      function isInsideChatMessage(el) {
+        let current = el;
+        while (current && current !== document.body) {
+          const tid = (current.getAttribute && current.getAttribute('data-tid')) || '';
+          const role = (current.getAttribute && current.getAttribute('role')) || '';
+          const className = typeof current.className === 'string' ? current.className : '';
+          
+          if (
+            tid.includes('chat') || 
+            tid.includes('message') || 
+            tid.includes('thread') ||
+            role === 'article' || 
+            role === 'listitem' || 
+            className.includes('ChatMessage') || 
+            className.includes('ui-chat') ||
+            className.includes('message-body') ||
+            className.includes('fui-ChatMessage')
+          ) {
+            return true;
+          }
+          current = current.parentElement;
+        }
+        return false;
+      }
+
+      // Buscar todos los botones, enlaces e inputs clickeables
+      const elements = Array.from(document.querySelectorAll('button, a, [role="button"], input[type="button"], input[type="submit"], div[role="button"]'));
+      
+      for (const el of elements) {
+        const text = (el.innerText || el.textContent || el.value || el.getAttribute('aria-label') || '').trim();
+        const textLower = text.toLowerCase();
+
+        // Verificar si la etiqueta coincide con "Sign In", "Sign in", "Iniciar sesión", "Iniciar Sesión", etc.
+        if (
+          textLower === 'sign in' || 
+          textLower === 'iniciar sesión' || 
+          textLower === 'iniciar sesion' ||
+          textLower === 're-authenticate' ||
+          textLower === 'reautenticar'
+        ) {
+          // 1. STRICT SAFEGUARD: Descartar si el botón está dentro del cuerpo o historial de mensajes de un chat
+          if (isInsideChatMessage(el)) continue;
+
+          // 2. Verificar visibilidad física en la pantalla
+          const rect = el.getBoundingClientRect();
+          if (rect.width === 0 || rect.height === 0 || rect.bottom <= 0 || rect.right <= 0) continue;
+
+          // 3. Confirmar que está situado en la barra superior o dentro de un banner/alert/bar de notificación
+          let isTopOrBanner = rect.top < 300;
+          if (!isTopOrBanner) {
+            let p = el.parentElement;
+            while (p && p !== document.body) {
+              const role = (p.getAttribute && p.getAttribute('role')) || '';
+              const className = typeof p.className === 'string' ? p.className : '';
+              const tid = (p.getAttribute && p.getAttribute('data-tid')) || '';
+              if (
+                role === 'alert' || 
+                role === 'banner' || 
+                role === 'region' || 
+                className.includes('banner') || 
+                className.includes('MessageBar') || 
+                className.includes('notification') ||
+                tid.includes('banner') ||
+                tid.includes('alert')
+              ) {
+                isTopOrBanner = true;
+                break;
+              }
+              p = p.parentElement;
+            }
+          }
+
+          if (isTopOrBanner) {
+            el.click();
+            try {
+              el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+            } catch (e) {}
+            return { clicked: true, text: text, x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+          }
+        }
+      }
+      return { clicked: false };
+    });
+
+    if (result && result.clicked) {
+      log(`Auto-Login/Banner: Detectado y presionado botón "Sign In" superior ("${result.text}") en coords (${Math.round(result.x)}, ${Math.round(result.y)}).`);
+      try {
+        await page.mouse.click(result.x, result.y).catch(() => {});
+      } catch (e) {}
+      return true;
+    }
+  } catch (err) {
+    // Si la página navega o se destruye durante la lectura, ignorar silenciosamente
+  }
+  return false;
+}
+
+// Iniciar intervalo de chequeo del banner Sign In cada 1 minuto (60000ms)
+function setupSignInCheckInterval() {
+  if (browserSignInCheckIntervalId) {
+    clearInterval(browserSignInCheckIntervalId);
+    browserSignInCheckIntervalId = null;
+  }
+  log('Iniciando monitoreo periódico de banner "Sign In" (cada 60 segundos)...');
+  browserSignInCheckIntervalId = setInterval(async () => {
+    if (browserBrowserContext && browserPage && !browserPage.isClosed()) {
+      await checkAndClickSignInBanner(browserPage);
+    }
+  }, 60000);
+}
+
 // Helper para limpiar el contexto e intervalo de Browser de forma segura
 async function cleanupBrowserSession() {
   if (browserIntervalId) {
     clearInterval(browserIntervalId);
     browserIntervalId = null;
     log('Intervalo de simulación de presencia destruido.');
+  }
+
+  if (browserSignInCheckIntervalId) {
+    clearInterval(browserSignInCheckIntervalId);
+    browserSignInCheckIntervalId = null;
+    log('Intervalo de monitoreo "Sign In" destruido.');
   }
 
   if (browserBrowserContext) {
@@ -218,6 +342,9 @@ async function autoLoginTargetSession(page) {
 
       // Si ya estamos en Browser
       if (url.includes('cloud.example.com') || url.includes('example.com')) {
+        // Verificar y presionar el botón de Sign In superior si aparece en la barra de re-autenticación
+        await checkAndClickSignInBanner(page);
+
         // Verificar si está la pantalla de carga lenta
         const loadingText = page.locator('text="We\'re setting things up for you"');
         const isSettingUp = await loadingText.isVisible().catch(() => false);
@@ -330,6 +457,11 @@ function handleManualCloseCleanup() {
     clearInterval(browserIntervalId);
     browserIntervalId = null;
     log('Intervalo de simulación destruido tras cierre manual del navegador.');
+  }
+  if (browserSignInCheckIntervalId) {
+    clearInterval(browserSignInCheckIntervalId);
+    browserSignInCheckIntervalId = null;
+    log('Intervalo de monitoreo "Sign In" destruido tras cierre manual del navegador.');
   }
   browserPresenciaActiva = false;
   browserBrowserContext = null;
@@ -582,6 +714,9 @@ app.post('/browser/browser', async (req, res) => {
         log(`Error de fondo en auto-login: ${err.message}`);
       });
 
+      // Iniciar el monitoreo periódico de "Sign In" en la barra superior
+      setupSignInCheckInterval();
+
       browserBrowserAbierto = true;
 
       // Auto-minimizar la ventana a los 10 segundos de abrirse
@@ -786,6 +921,9 @@ async function runBrowserActivityLoop() {
       }
     }
 
+    // Verificar y clickear si existe el banner de Sign In en la barra superior
+    await checkAndClickSignInBanner(browserPage);
+
     log('Simulando actividad en Browser (movimiento de mouse y teclado)...');
     
     // 1. Movimiento del mouse
@@ -953,6 +1091,7 @@ app.post('/browser/status', async (req, res) => {
         browserPage = pages.length > 0 ? pages[0] : await browserBrowserContext.newPage();
         browserPage.goto('https://example.com').catch(() => {});
         browserBrowserAbierto = true;
+        setupSignInCheckInterval();
       }
       if (browserIntervalId) clearInterval(browserIntervalId);
       setupBrowserInterval();
