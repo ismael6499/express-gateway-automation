@@ -463,7 +463,7 @@ function handleManualCloseCleanup() {
     browserSignInCheckIntervalId = null;
     log('Intervalo de monitoreo "Sign In" destruido tras cierre manual del navegador.');
   }
-  browserPresenciaActiva = false;
+  // Mantener browserPresenciaActiva intacto
   browserBrowserContext = null;
   browserPage = null;
   browserBrowserAbierto = false;
@@ -761,7 +761,7 @@ app.post('/browser/browser', async (req, res) => {
       isLaunchingBrowser = false;
       return res.status(200).json({
         status: 'ok',
-        message: 'Navegador de Browser cerrado y simulación desactivada.',
+        message: 'Navegador de Browser cerrado (la simulación continuará activa al abrirlo de nuevo).',
         msg: 'Navegador cerrado'
       });
     }
