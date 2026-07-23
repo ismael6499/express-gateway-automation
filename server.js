@@ -822,8 +822,11 @@ app.post('/browser/presencia', (req, res) => {
   }
 
   if (intervaloMs && typeof intervaloMs === 'number' && intervaloMs > 0) {
-    browserIntervalMs = intervaloMs;
-    log(`Intervalo de Browser actualizado a: ${browserIntervalMs} ms`);
+    let mins = Math.round(intervaloMs / 60000);
+    if (mins < 1) mins = 1;
+    if (mins > 9999) mins = 9999;
+    browserIntervalMs = mins * 60000;
+    log(`Browser interval updated to: ${browserIntervalMs} ms (${mins} minutes)`);
   }
 
   if (accion === 'iniciar') {
@@ -1861,6 +1864,35 @@ const DASHBOARD_HTML = `
       transform: scale(1.2);
     }
 
+    .number-input {
+      width: 100%;
+      padding: 10px 14px;
+      font-size: 0.85rem;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      color: var(--text);
+      outline: none;
+      transition: all 0.3s ease;
+      box-sizing: border-box;
+    }
+
+    .number-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .number-input::-webkit-outer-spin-button,
+    .number-input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    .number-input[type=number] {
+      -moz-appearance: textfield;
+    }
+
     .btn-row {
       display: flex;
       gap: 10px;
@@ -2131,10 +2163,10 @@ const DASHBOARD_HTML = `
       
       <div class="form-group">
         <div class="form-label-row">
-          <span>Intervalo de Simulación</span>
-          <span id="browserIntervalVal">4.0 minutos</span>
+          <span>Intervalo de Simulación (minutos)</span>
+          <span id="browserIntervalVal">4 minutos</span>
         </div>
-        <input type="range" class="slider" id="browserIntervalSlider" min="1" max="15" step="0.5" value="4" oninput="updateBrowserSliderLabel(this.value)" onchange="cambiarIntervaloEnCaliente(this.value)">
+        <input type="number" class="number-input" id="browserIntervalInput" min="1" max="9999" step="1" value="4" onchange="cambiarIntervaloEnCaliente(this.value)">
       </div>
 
       <div class="btn-row">
@@ -2274,17 +2306,6 @@ const DASHBOARD_HTML = `
       </div>
 
       <div class="divider"></div>
-      <div class="card-section-title">Energía y Sesión de PC</div>
-      <div style="display: flex; gap: 8px; margin-top: 5px; width: 100%;">
-        <button class="btn btn-danger" style="flex: 1; margin-top: 0; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68); display: inline-flex; align-items: center; justify-content: center;" onclick="controlarEnergia('bloquear')">
-          Bloquear PC
-        </button>
-        <button class="btn btn-danger" style="flex: 1; margin-top: 0; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68); display: inline-flex; align-items: center; justify-content: center;" onclick="controlarEnergia('suspender')">
-          Suspender PC
-        </button>
-      </div>
-
-      <div class="divider"></div>
       <div class="card-section-title">Portapapeles de la PC</div>
       <div style="display: flex; gap: 8px; margin-top: 5px;">
         <input type="text" id="inputPortapapeles" placeholder="Texto para enviar a la PC..." style="flex: 2; padding: 10px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 0;">
@@ -2380,7 +2401,25 @@ const DASHBOARD_HTML = `
       </div>
     </div>
 
-
+    <!-- CARD 6: ENERGÍA Y SESIÓN DE PC -->
+    <div class="card" id="cardEnergia" style="margin-top: 10px; border-color: rgba(239, 68, 68, 0.15);">
+      <div class="card-header" style="margin-bottom: 15px;">
+        <div class="card-title-group">
+          <h2>Energía y Sesión de PC</h2>
+          <p>Bloquear o suspender la computadora</p>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px; width: 100%;">
+        <button class="btn btn-danger" style="flex: 1; margin-top: 0; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68); display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="controlarEnergia('bloquear')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+          Bloquear PC
+        </button>
+        <button class="btn btn-danger" style="flex: 1; margin-top: 0; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68); display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="controlarEnergia('suspender')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+          Suspender PC
+        </button>
+      </div>
+    </div>
 
     <!-- Barra de info de túnel ngrok -->
     <div class="tunnel-bar" id="tunnelBar" style="display: none;">
@@ -2500,7 +2539,10 @@ const DASHBOARD_HTML = `
     }
 
     function updateBrowserSliderLabel(val) {
-      document.getElementById('browserIntervalVal').innerText = parseFloat(val).toFixed(1) + ' minutos';
+      const labelEl = document.getElementById('browserIntervalVal');
+      if (labelEl) {
+        labelEl.innerText = Math.round(parseFloat(val)) + ' minutos';
+      }
     }
 
     function showToast(message, type = 'info') {
@@ -2603,8 +2645,6 @@ const DASHBOARD_HTML = `
           document.getElementById('btnBrowserMinimize').classList.remove('btn-disabled');
           document.getElementById('btnBrowserRestore').classList.remove('btn-disabled');
           
-          document.getElementById('browserIntervalSlider').classList.remove('btn-disabled');
-
           testMouseBtn.classList.remove('btn-disabled');
           testTipeoBtn.classList.remove('btn-disabled');
           testShiftBtn.classList.remove('btn-disabled');
@@ -2617,12 +2657,15 @@ const DASHBOARD_HTML = `
           document.getElementById('btnBrowserMinimize').classList.add('btn-disabled');
           document.getElementById('btnBrowserRestore').classList.add('btn-disabled');
 
-          document.getElementById('browserIntervalSlider').classList.add('btn-disabled');
-
           testMouseBtn.classList.add('btn-disabled');
           testTipeoBtn.classList.add('btn-disabled');
           testShiftBtn.classList.add('btn-disabled');
         }
+
+        // Ensure the interval input is always enabled for hot reconfiguration
+        const intervalInput = document.getElementById('browserIntervalInput');
+        intervalInput.classList.remove('btn-disabled');
+        intervalInput.disabled = false;
 
         // Sincronizar UI de Presencia Browser
         const presenciaBadge = document.getElementById('presenciaBadge');
@@ -2652,9 +2695,9 @@ const DASHBOARD_HTML = `
           btnPause.classList.add('btn-disabled');
         }
 
-        if (document.activeElement !== document.getElementById('browserIntervalSlider')) {
-          const mins = data.browserIntervalMs / 60000;
-          document.getElementById('browserIntervalSlider').value = mins;
+        if (document.activeElement !== document.getElementById('browserIntervalInput')) {
+          const mins = Math.round(data.browserIntervalMs / 60000);
+          document.getElementById('browserIntervalInput').value = mins;
           updateBrowserSliderLabel(mins);
         }
 
@@ -2815,7 +2858,14 @@ const DASHBOARD_HTML = `
     }
 
     async function controlPresencia(accion) {
-      const mins = parseFloat(document.getElementById('browserIntervalSlider').value);
+      let mins = parseInt(document.getElementById('browserIntervalInput').value);
+      if (isNaN(mins) || mins < 1) {
+        mins = 1;
+      } else if (mins > 9999) {
+        mins = 9999;
+      }
+      document.getElementById('browserIntervalInput').value = mins;
+      updateBrowserSliderLabel(mins);
       const ms = mins * 60000;
       showToast(accion === 'iniciar' ? 'Activando simulación...' : 'Pausando simulación...', 'info');
       try {
@@ -2837,7 +2887,14 @@ const DASHBOARD_HTML = `
     }
 
     async function cambiarIntervaloEnCaliente(val) {
-      const mins = parseFloat(val);
+      let mins = parseInt(val);
+      if (isNaN(mins) || mins < 1) {
+        mins = 1;
+      } else if (mins > 9999) {
+        mins = 9999;
+      }
+      document.getElementById('browserIntervalInput').value = mins;
+      updateBrowserSliderLabel(mins);
       const ms = mins * 60000;
       
       const btnPause = document.getElementById('btnPresenciaPause');
@@ -2854,7 +2911,7 @@ const DASHBOARD_HTML = `
         });
         const data = await response.json();
         if (response.ok) {
-          showToast(estaActiva ? 'Intervalo reconfigurado en caliente a ' + val + ' minutos.' : 'Intervalo guardado: ' + val + ' minutos.', 'success');
+          showToast(estaActiva ? 'Intervalo reconfigurado en caliente a ' + mins + ' minutos.' : 'Intervalo guardado: ' + mins + ' minutos.', 'success');
           pollGatewayStatus();
         } else {
           showToast(data.message || 'Error al guardar intervalo', 'error');
@@ -2955,6 +3012,14 @@ const DASHBOARD_HTML = `
     }
 
     async function controlarEnergia(accion) {
+      const confirmMsg = accion === 'bloquear' 
+        ? '¿Estás seguro de que deseas bloquear la PC?' 
+        : '¿Estás seguro de que deseas suspender la PC?';
+      
+      if (!confirm(confirmMsg)) {
+        return;
+      }
+
       showToast('Enviando comando de energía...', 'info');
       try {
         const response = await fetch('/sistema/energia', {
