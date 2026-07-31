@@ -11,5 +11,8 @@
     5
   ],
   "browserBrowserCloseHour": "18:04",
-  "browserBrowserCloseEnabled": true
+  "browserBrowserCloseEnabled": true,
+  "browserFlexCloseDate": "2026-07-31",
+  "browserFlexCloseHour": "13:01",
+  "browserFlexCloseEnabled": true
 }

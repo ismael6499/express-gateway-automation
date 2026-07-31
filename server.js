@@ -1164,8 +1164,8 @@ app.post('/sistema/teclado', (req, res) => {
 
   try {
     if (accion === 'apagar-pantalla') {
-      log('Realizando doble clic en la barra de tareas (coordenadas 1282, 1059) y simulando Alt + X para apagar pantalla...');
-      const psCommand = 'powershell -Command "$sig = \'[DllImport(\\"user32.dll\\")] public static extern void mouse_event(int dwFlags, int dx, int dy, int cButtons, int dwExtraInfo); [DllImport(\\"user32.dll\\")] public static extern bool SetCursorPos(int X, int Y); [DllImport(\\"user32.dll\\")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, uint dwExtraInfo);\'; $win = Add-Type -MemberDefinition $sig -Name \\"WinAPI1\\" -Namespace \\"Win32\\" -PassThru; $win::SetCursorPos(1282, 1059); $win::mouse_event(2, 0, 0, 0, 0); $win::mouse_event(4, 0, 0, 0, 0); Start-Sleep -Milliseconds 80; $win::mouse_event(2, 0, 0, 0, 0); $win::mouse_event(4, 0, 0, 0, 0); Start-Sleep -Milliseconds 250; $win::keybd_event(0x12, 0, 0, 0); $win::keybd_event(0x58, 0, 0, 0); $win::keybd_event(0x58, 0, 2, 0); $win::keybd_event(0x12, 0, 2, 0);"';
+      log('Simulando doble pulsación de la tecla Windows y Alt + X para apagar pantalla...');
+      const psCommand = 'powershell -Command "$sig = \'[DllImport(\\"user32.dll\\")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, uint dwExtraInfo);\'; $win = Add-Type -MemberDefinition $sig -Name \\"WinAPI1\\" -Namespace \\"Win32\\" -PassThru; $win::keybd_event(0x5B, 0, 0, 0); $win::keybd_event(0x5B, 0, 2, 0); Start-Sleep -Milliseconds 100; $win::keybd_event(0x5B, 0, 0, 0); $win::keybd_event(0x5B, 0, 2, 0); Start-Sleep -Milliseconds 150; $win::keybd_event(0x12, 0, 0, 0); $win::keybd_event(0x58, 0, 0, 0); $win::keybd_event(0x58, 0, 2, 0); $win::keybd_event(0x12, 0, 2, 0);"';
       exec(psCommand, (error) => {
         if (error) {
           log(`Error al simular Alt+X: ${error.message}`);
@@ -1173,7 +1173,7 @@ app.post('/sistema/teclado', (req, res) => {
       });
       return res.status(200).json({
         status: 'ok',
-        message: 'Comando de apagar pantalla (Alt+X con clics preventivos) enviado.',
+        message: 'Comando de apagar pantalla (Alt+X) enviado.',
         msg: 'Pantalla apagada'
       });
     } else {
