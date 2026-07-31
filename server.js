@@ -2350,14 +2350,6 @@ const DASHBOARD_HTML = `
           Encender (Ctrl)
         </button>
       </div>
-      <div style="border-top: 1px dashed rgba(255,255,255,0.15); margin: 15px 0 10px 0;"></div>
-      <div class="form-group" style="margin-bottom: 5px;">
-        <div class="form-label-row">
-          <span>Brillo de Pantalla</span>
-          <span id="brilloVal">--%</span>
-        </div>
-        <input type="range" class="slider" id="brilloSlider" min="0" max="100" step="5" value="50" oninput="updateBrilloLabel(this.value)" onchange="cambiarBrillo(this.value)">
-      </div>
 
       <div class="divider"></div>
       <div class="card-section-title">Portapapeles de la PC</div>
@@ -2400,12 +2392,12 @@ const DASHBOARD_HTML = `
 
 
 
-    <!-- CARD 5: AUDIO, MULTIMEDIA & VOZ -->
+    <!-- CARD 5: AUDIO, MULTIMEDIA, BRILLO & VOZ -->
     <div class="card" id="cardMultimedia" style="margin-top: 10px;">
       <div class="card-header" style="margin-bottom: 15px;">
         <div class="card-title-group">
-          <h2>Controles Multimedia & Voz</h2>
-          <p>Audio del sistema y Lector de voz (TTS)</p>
+          <h2>Controles Multimedia, Brillo & Voz</h2>
+          <p>Audio, brillo del sistema y Lector de voz (TTS)</p>
         </div>
       </div>
       
@@ -2441,6 +2433,16 @@ const DASHBOARD_HTML = `
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
           </button>
         </div>
+      </div>
+
+      <div style="border-top: 1px dashed rgba(255,255,255,0.15); margin: 15px 0 10px 0;"></div>
+
+      <div class="form-group" style="margin-bottom: 5px;">
+        <div class="form-label-row">
+          <span>Brillo de Pantalla</span>
+          <span id="brilloVal">--%</span>
+        </div>
+        <input type="range" class="slider" id="brilloSlider" min="0" max="100" step="5" value="50" oninput="updateBrilloLabel(this.value)" onchange="cambiarBrillo(this.value)">
       </div>
 
       <div class="divider"></div>
