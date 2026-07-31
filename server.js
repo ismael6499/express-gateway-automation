@@ -1165,7 +1165,7 @@ app.post('/sistema/teclado', (req, res) => {
   try {
     if (accion === 'apagar-pantalla') {
       log('Simulando doble pulsación de la tecla Windows y Alt + X para apagar pantalla...');
-      const psCommand = 'powershell -Command "$sig = \'[DllImport(\\"user32.dll\\")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, uint dwExtraInfo);\'; $win = Add-Type -MemberDefinition $sig -Name \\"WinAPI1\\" -Namespace \\"Win32\\" -PassThru; $win::keybd_event(0x5B, 0, 0, 0); $win::keybd_event(0x5B, 0, 2, 0); Start-Sleep -Milliseconds 100; $win::keybd_event(0x5B, 0, 0, 0); $win::keybd_event(0x5B, 0, 2, 0); Start-Sleep -Milliseconds 150; $win::keybd_event(0x12, 0, 0, 0); $win::keybd_event(0x58, 0, 0, 0); $win::keybd_event(0x58, 0, 2, 0); $win::keybd_event(0x12, 0, 2, 0);"';
+      const psCommand = 'powershell -Command "$sig = \'[DllImport(\\"user32.dll\\")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, uint dwExtraInfo);\'; $win = Add-Type -MemberDefinition $sig -Name \\"WinAPI1\\" -Namespace \\"Win32\\" -PassThru; $win::keybd_event(0x5B, 0, 0, 0); $win::keybd_event(0x5B, 0, 2, 0); Start-Sleep -Milliseconds 250; $win::keybd_event(0x5B, 0, 0, 0); $win::keybd_event(0x5B, 0, 2, 0); Start-Sleep -Milliseconds 200; $win::keybd_event(0x12, 0, 0, 0); $win::keybd_event(0x58, 0, 0, 0); $win::keybd_event(0x58, 0, 2, 0); $win::keybd_event(0x12, 0, 2, 0);"';
       exec(psCommand, (error) => {
         if (error) {
           log(`Error al simular Alt+X: ${error.message}`);
