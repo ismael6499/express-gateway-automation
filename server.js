@@ -50,6 +50,7 @@ let browserPage = null;
 let browserIntervalId = null;
 let browserSignInCheckIntervalId = null; // intervalo de 1 min para verificar banner de re-autenticación "Sign In"
 let lastAutoCierreMinute = null; // evita re-disparar auto-cierre en el mismo minuto
+let lastFlexCierreMinute = null; // evita re-disparar flex-cierre en el mismo minuto
 let isLaunchingBrowser = false;  // guard anti-concurrencia al abrir/cerrar navegador
 let lastActivityTime = null;     // timestamp de la ultima simulacion de actividad
 let browserPresenciaActiveSince = null; // timestamp de cuando se inicio la simulacion activa
@@ -58,6 +59,9 @@ let browserSimulacionEndHour = '18:00';
 let browserSimulacionDays = [1, 2, 3, 4, 5]; // Lunes a Viernes por defecto
 let browserBrowserCloseHour = '18:03';
 let browserBrowserCloseEnabled = true;
+let browserFlexCloseDate = '';
+let browserFlexCloseHour = '';
+let browserFlexCloseEnabled = false;
 
 function isSimulationInSchedule() {
   const now = new Date();
@@ -99,7 +103,10 @@ function saveSimulationState() {
       browserSimulacionEndHour,
       browserSimulacionDays,
       browserBrowserCloseHour,
-      browserBrowserCloseEnabled
+      browserBrowserCloseEnabled,
+      browserFlexCloseDate,
+      browserFlexCloseHour,
+      browserFlexCloseEnabled
     }, null, 2));
   } catch (err) {
     log(`Error al guardar estado de simulación: ${err.message}`);
@@ -131,7 +138,16 @@ function loadSimulationState() {
       if (data.browserBrowserCloseEnabled !== undefined) {
         browserBrowserCloseEnabled = data.browserBrowserCloseEnabled;
       }
-      log(`Estado de simulación cargado: Habilitada=${browserPresenciaActiva}, Intervalo=${browserIntervalMs}ms, Horario=${browserSimulacionStartHour}-${browserSimulacionEndHour}, Cierre=${browserBrowserCloseHour} (Activo=${browserBrowserCloseEnabled})`);
+      if (data.browserFlexCloseDate !== undefined) {
+        browserFlexCloseDate = data.browserFlexCloseDate;
+      }
+      if (data.browserFlexCloseHour !== undefined) {
+        browserFlexCloseHour = data.browserFlexCloseHour;
+      }
+      if (data.browserFlexCloseEnabled !== undefined) {
+        browserFlexCloseEnabled = data.browserFlexCloseEnabled;
+      }
+      log(`Estado de simulación cargado: Habilitada=${browserPresenciaActiva}, Intervalo=${browserIntervalMs}ms, Horario=${browserSimulacionStartHour}-${browserSimulacionEndHour}, Cierre=${browserBrowserCloseHour} (Activo=${browserBrowserCloseEnabled}), FlexCierre=${browserFlexCloseDate} ${browserFlexCloseHour} (Activo=${browserFlexCloseEnabled})`);
     }
   } catch (err) {
     log(`Error al cargar estado de simulación: ${err.message}`);
@@ -516,6 +532,9 @@ app.get('/gateway/status', (req, res) => {
       browserSimulacionDays,
       browserBrowserCloseHour,
       browserBrowserCloseEnabled,
+      browserFlexCloseDate,
+      browserFlexCloseHour,
+      browserFlexCloseEnabled,
       ngrokUrl: ngrokUrl || 'Inactivo',
       hasEmulatorPath: !!process.env.EMULATOR_BAT_PATH,
       audioVolume: audioData.volume,
@@ -778,7 +797,7 @@ app.post('/browser/browser', async (req, res) => {
 
 // Endpoint POST /browser/programacion - Actualizar horario y días de la simulación
 app.post('/browser/programacion', (req, res) => {
-  const { startHour, endHour, days, browserCloseHour, browserCloseEnabled } = req.body;
+  const { startHour, endHour, days, browserCloseHour, browserCloseEnabled, flexCloseDate, flexCloseHour, flexCloseEnabled } = req.body;
 
   if (startHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(startHour)) {
     browserSimulacionStartHour = startHour;
@@ -795,9 +814,18 @@ app.post('/browser/programacion', (req, res) => {
   if (browserCloseEnabled !== undefined) {
     browserBrowserCloseEnabled = !!browserCloseEnabled;
   }
+  if (flexCloseDate !== undefined) {
+    browserFlexCloseDate = flexCloseDate;
+  }
+  if (flexCloseHour !== undefined && (flexCloseHour === '' || /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(flexCloseHour))) {
+    browserFlexCloseHour = flexCloseHour;
+  }
+  if (flexCloseEnabled !== undefined) {
+    browserFlexCloseEnabled = !!flexCloseEnabled;
+  }
 
   saveSimulationState();
-  log(`Programación actualizada: Rango: ${browserSimulacionStartHour}-${browserSimulacionEndHour}, Días: ${browserSimulacionDays.join(',')}, Cierre: ${browserBrowserCloseHour} (Activo=${browserBrowserCloseEnabled})`);
+  log(`Programación actualizada: Rango: ${browserSimulacionStartHour}-${browserSimulacionEndHour}, Días: ${browserSimulacionDays.join(',')}, Cierre: ${browserBrowserCloseHour} (Activo=${browserBrowserCloseEnabled}), Flex: ${browserFlexCloseDate} ${browserFlexCloseHour} (Activo=${browserFlexCloseEnabled})`);
 
   res.json({
     status: 'ok',
@@ -806,7 +834,10 @@ app.post('/browser/programacion', (req, res) => {
     browserSimulacionEndHour,
     browserSimulacionDays,
     browserBrowserCloseHour,
-    browserBrowserCloseEnabled
+    browserBrowserCloseEnabled,
+    browserFlexCloseDate,
+    browserFlexCloseHour,
+    browserFlexCloseEnabled
   });
 });
 
@@ -2244,6 +2275,29 @@ const DASHBOARD_HTML = `
         </div>
       </div>
 
+      <div style="border-top: 1px dashed rgba(255,255,255,0.15); margin: 20px 0 15px 0;"></div>
+
+      <div class="card-section-title">Cierre Flex</div>
+      <div style="display: flex; gap: 10px; width: 100%; align-items: center; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 120px;">
+          <label style="font-size: 0.75rem; color: var(--text-muted);">Fecha</label>
+          <input type="date" id="browserFlexCloseDate" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
+        </div>
+        <div style="flex: 1; min-width: 100px;">
+          <label style="font-size: 0.75rem; color: var(--text-muted);">Hora de Cierre</label>
+          <input type="time" id="browserFlexCloseHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
+        </div>
+        <div style="flex: 0.8; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; margin-top: 14px; min-width: 120px;">
+          <div class="switch-container" style="margin-top: 0; justify-content: flex-end; gap: 10px;">
+            <span style="font-size: 0.85rem; color: var(--text-muted);">Cierre Flex</span>
+            <label class="switch">
+              <input type="checkbox" id="browserFlexCloseEnabled" onchange="updateSchedule()">
+              <span class="slider-toggle"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
       <div class="divider"></div>
 
       <!-- SECCIÓN 1.C: PRUEBAS MANUALES EN CALIENTE -->
@@ -2714,6 +2768,15 @@ const DASHBOARD_HTML = `
         if (document.activeElement !== document.getElementById('browserBrowserCloseEnabled')) {
           document.getElementById('browserBrowserCloseEnabled').checked = !!data.browserBrowserCloseEnabled;
         }
+        if (document.activeElement !== document.getElementById('browserFlexCloseDate')) {
+          document.getElementById('browserFlexCloseDate').value = data.browserFlexCloseDate || '';
+        }
+        if (document.activeElement !== document.getElementById('browserFlexCloseHour')) {
+          document.getElementById('browserFlexCloseHour').value = data.browserFlexCloseHour || '';
+        }
+        if (document.activeElement !== document.getElementById('browserFlexCloseEnabled')) {
+          document.getElementById('browserFlexCloseEnabled').checked = !!data.browserFlexCloseEnabled;
+        }
 
         // Sincronizar días permitidos
         if (data.browserSimulacionDays) {
@@ -2797,6 +2860,9 @@ const DASHBOARD_HTML = `
       const endHour = document.getElementById('browserEndHour').value;
       const browserCloseHour = document.getElementById('browserBrowserCloseHour').value;
       const browserCloseEnabled = document.getElementById('browserBrowserCloseEnabled').checked;
+      const flexCloseDate = document.getElementById('browserFlexCloseDate').value;
+      const flexCloseHour = document.getElementById('browserFlexCloseHour').value;
+      const flexCloseEnabled = document.getElementById('browserFlexCloseEnabled').checked;
 
       const checkedDays = [];
       const checkboxes = document.querySelectorAll('.day-checkbox');
@@ -2817,7 +2883,10 @@ const DASHBOARD_HTML = `
             endHour,
             days: checkedDays,
             browserCloseHour,
-            browserCloseEnabled
+            browserCloseEnabled,
+            flexCloseDate,
+            flexCloseHour,
+            flexCloseEnabled
           })
         });
         const data = await response.json();
@@ -3203,6 +3272,34 @@ setInterval(async () => {
       }
     } else if (nowTotalMins < closeTotalMins) {
       lastAutoCierreMinute = null; // resetear para el proximo dia
+    }
+  }
+
+  // 1.B. Auto-cierre Flex por fecha y hora específica
+  if (browserFlexCloseEnabled && browserFlexCloseDate && browserFlexCloseHour) {
+    const YYYY = now.getFullYear();
+    const MM = String(now.getMonth() + 1).padStart(2, '0');
+    const DD = String(now.getDate()).padStart(2, '0');
+    const todayDateString = `${YYYY}-${MM}-${DD}`;
+    const minuteKey = `${todayDateString} ${HH}:${mm}`;
+
+    if (todayDateString === browserFlexCloseDate && currentTimeString >= browserFlexCloseHour && lastFlexCierreMinute !== minuteKey) {
+      const [closeHH, closeMM] = browserFlexCloseHour.split(':').map(Number);
+      const nowTotalMins = now.getHours() * 60 + now.getMinutes();
+      const closeTotalMins = closeHH * 60 + closeMM;
+      const diffMins = nowTotalMins - closeTotalMins;
+
+      if (diffMins <= 1) {
+        lastFlexCierreMinute = minuteKey;
+        browserFlexCloseEnabled = false;
+        saveSimulationState();
+
+        if (browserBrowserContext || browserBrowserAbierto) {
+          log(`Cron Horario: Cierre Flex del navegador ejecutado para la fecha ${browserFlexCloseDate} a las ${browserFlexCloseHour} (ahora ${currentTimeString}).`);
+          await cleanupBrowserSession();
+        }
+        exec('taskkill /f /im emulator.exe & taskkill /f /im qemu-system-x86_64.exe', (error) => {});
+      }
     }
   }
 
