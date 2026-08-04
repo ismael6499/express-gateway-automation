@@ -13,6 +13,13 @@ const API_KEY = process.env.API_KEY;
 // Middleware para parsear JSON
 app.use(express.json());
 
+// Middleware para omitir advertencia de navegador ngrok y cabeceras CORS
+app.use((req, res, next) => {
+  res.setHeader('ngrok-skip-browser-warning', 'true');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, ngrok-skip-browser-warning');
+  next();
+});
+
 // Helper para logs formateados con timestamp [HH:MM:SS]
 const logFile = path.join(__dirname, 'gateway_server.log');
 function log(message) {
@@ -2487,6 +2494,21 @@ const DASHBOARD_HTML = `
   <div class="toast-container" id="toastContainer"></div>
 
   <script>
+    // Interceptor global para incluir siempre la cabecera 'ngrok-skip-browser-warning' en las peticiones fetch
+    const originalFetch = window.fetch;
+    window.fetch = function(url, options = {}) {
+      options = options || {};
+      options.headers = options.headers || {};
+      if (options.headers instanceof Headers) {
+        options.headers.set('ngrok-skip-browser-warning', 'true');
+      } else if (Array.isArray(options.headers)) {
+        options.headers.push(['ngrok-skip-browser-warning', 'true']);
+      } else {
+        options.headers['ngrok-skip-browser-warning'] = 'true';
+      }
+      return originalFetch(url, options);
+    };
+
     let currentBrowserInterval = 4.0;
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -3336,7 +3358,8 @@ app.listen(PORT, async () => {
         log('Iniciando túnel seguro ngrok...');
         const forwardOpts = {
           addr: PORT,
-          authtoken: token
+          authtoken: token,
+          request_header_add: ['ngrok-skip-browser-warning: true']
         };
         
         const domain = process.env.NGROK_DOMAIN;
