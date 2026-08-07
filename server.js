@@ -69,6 +69,45 @@ let browserBrowserCloseEnabled = true;
 let browserFlexCloseDate = '';
 let browserFlexCloseHour = '';
 let browserFlexCloseEnabled = false;
+let browserPausaTemporalUntil = null;
+let browserPausaTemporalTimeoutId = null;
+
+function iniciarPausaTemporal(minutos) {
+  if (browserPausaTemporalTimeoutId) {
+    clearTimeout(browserPausaTemporalTimeoutId);
+    browserPausaTemporalTimeoutId = null;
+  }
+  const ms = minutos * 60000;
+  browserPausaTemporalUntil = Date.now() + ms;
+
+  const pad = (n) => String(n).padStart(2, '0');
+  const endDate = new Date(browserPausaTemporalUntil);
+  const endTimeStr = `${pad(endDate.getHours())}:${pad(endDate.getMinutes())}:${pad(endDate.getSeconds())}`;
+  log(`Pausa temporal de simulación activada por ${minutos} minutos (hasta las ${endTimeStr}).`);
+
+  browserPausaTemporalTimeoutId = setTimeout(() => {
+    log('La pausa temporal de simulación ha finalizado.');
+    browserPausaTemporalUntil = null;
+    browserPausaTemporalTimeoutId = null;
+    if (browserPresenciaActiva) {
+      log('Reanudando simulación de presencia tras finalizar pausa temporal.');
+      runBrowserActivityLoop().catch((err) => {
+        log(`Error en simulación al finalizar pausa temporal: ${err.message}`);
+      });
+    }
+  }, ms);
+}
+
+function cancelarPausaTemporal() {
+  if (browserPausaTemporalTimeoutId) {
+    clearTimeout(browserPausaTemporalTimeoutId);
+    browserPausaTemporalTimeoutId = null;
+  }
+  if (browserPausaTemporalUntil) {
+    log('Pausa temporal de simulación cancelada.');
+    browserPausaTemporalUntil = null;
+  }
+}
 
 function isSimulationInSchedule() {
   const now = new Date();
@@ -530,6 +569,16 @@ app.get('/gateway/status', (req, res) => {
       lastActivityFormatted = formatSecondsAgo(lastActivitySecondsAgo);
     }
 
+    let browserPausaTemporalRemainingMs = 0;
+    if (browserPausaTemporalUntil) {
+      const diff = browserPausaTemporalUntil - Date.now();
+      if (diff > 0) {
+        browserPausaTemporalRemainingMs = diff;
+      } else {
+        browserPausaTemporalUntil = null;
+      }
+    }
+
     res.json({
       browserBrowserAbierto,
       browserPresenciaActiva,
@@ -542,6 +591,8 @@ app.get('/gateway/status', (req, res) => {
       browserFlexCloseDate,
       browserFlexCloseHour,
       browserFlexCloseEnabled,
+      browserPausaTemporalUntil,
+      browserPausaTemporalRemainingMs,
       ngrokUrl: ngrokUrl || 'Inactivo',
       hasEmulatorPath: !!process.env.EMULATOR_BAT_PATH,
       audioVolume: audioData.volume,
@@ -852,10 +903,10 @@ app.post('/browser/programacion', (req, res) => {
 app.post('/browser/presencia', (req, res) => {
   const { accion, intervaloMs } = req.body;
 
-  if (accion !== 'iniciar' && accion !== 'pausar') {
+  if (accion !== 'iniciar' && accion !== 'pausar' && accion !== 'pausa_temporal') {
     return res.status(400).json({
       error: 'Bad Request',
-      message: "La 'accion' de presencia debe ser 'iniciar' o 'pausar'."
+      message: "La 'accion' de presencia debe ser 'iniciar', 'pausar' o 'pausa_temporal'."
     });
   }
 
@@ -868,6 +919,7 @@ app.post('/browser/presencia', (req, res) => {
   }
 
   if (accion === 'iniciar') {
+    cancelarPausaTemporal();
     let yaEstabaActiva = false;
     let tiempoActivaFormatted = '';
 
@@ -901,11 +953,11 @@ app.post('/browser/presencia', (req, res) => {
       return res.status(200).json({
         status: 'ok',
         message: tiempoActivaFormatted 
-          ? `La simulación de presencia ya estaba activa (desde hace ${tiempoActivaFormatted}).`
-          : 'La simulación de presencia ya estaba activa.',
+          ? `La simulación de presencia reanudada (estaba activa desde hace ${tiempoActivaFormatted}).`
+          : 'La simulación de presencia reanudada normalmente.',
         msg: tiempoActivaFormatted 
-          ? `Ya activa hace ${tiempoActivaFormatted}`
-          : 'Ya estaba activa',
+          ? `Reanudada (activa hace ${tiempoActivaFormatted})`
+          : 'Simulación reanudada',
         config: { browserIntervalMs }
       });
     }
@@ -916,13 +968,40 @@ app.post('/browser/presencia', (req, res) => {
       msg: 'Simulación activa',
       config: { browserIntervalMs }
     });
+  } else if (accion === 'pausa_temporal') {
+    let duracionMins = Number(req.body.duracionMins || req.body.minutos || 20);
+    if (isNaN(duracionMins) || duracionMins < 1) duracionMins = 20;
+    if (duracionMins > 1440) duracionMins = 1440;
+
+    if (!browserIntervalId) {
+      setupBrowserInterval();
+    }
+    browserPresenciaActiva = true;
+    if (!browserPresenciaActiveSince) {
+      browserPresenciaActiveSince = new Date();
+    }
+
+    iniciarPausaTemporal(duracionMins);
+    saveSimulationState();
+
+    const pad = (n) => String(n).padStart(2, '0');
+    const endDate = new Date(browserPausaTemporalUntil);
+    const endTimeStr = `${pad(endDate.getHours())}:${pad(endDate.getMinutes())}`;
+
+    return res.status(200).json({
+      status: 'ok',
+      message: `Simulación de actividad pausada temporalmente por ${duracionMins} minutos (hasta ${endTimeStr}).`,
+      msg: `Pausa de ${duracionMins}m activada`,
+      config: { browserIntervalMs, browserPausaTemporalUntil }
+    });
   } else {
+    cancelarPausaTemporal();
     const yaEstabaPausada = !browserPresenciaActiva && !browserIntervalId;
 
     if (browserIntervalId) {
       clearInterval(browserIntervalId);
       browserIntervalId = null;
-      log('Simulación de presencia pausada.');
+      log('Simulación de presencia pausada por completo.');
     }
     browserPresenciaActiva = false;
     browserPresenciaActiveSince = null;
@@ -946,6 +1025,21 @@ app.post('/browser/presencia', (req, res) => {
 
 async function runBrowserActivityLoop() {
   try {
+    if (browserPausaTemporalUntil) {
+      if (Date.now() < browserPausaTemporalUntil) {
+        const remainingSecs = Math.ceil((browserPausaTemporalUntil - Date.now()) / 1000);
+        const remainingMins = Math.ceil(remainingSecs / 60);
+        log(`Simulación de presencia omitida: Pausa temporal activa (${remainingMins} min restantes).`);
+        return;
+      } else {
+        browserPausaTemporalUntil = null;
+        if (browserPausaTemporalTimeoutId) {
+          clearTimeout(browserPausaTemporalTimeoutId);
+          browserPausaTemporalTimeoutId = null;
+        }
+      }
+    }
+
     if (!isSimulationInSchedule()) {
       log('Simulación de presencia omitida: Fuera de los días/horas programados.');
       return;
@@ -2136,6 +2230,108 @@ const DASHBOARD_HTML = `
     input:checked + .slider-toggle:before {
       transform: translateX(20px);
     }
+
+    /* Modal Pausa Temporal */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      z-index: 3000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      animation: fadeInModal 0.2s ease forwards;
+    }
+
+    .modal-card {
+      background: rgba(21, 23, 34, 0.95);
+      border: 1px solid var(--card-border);
+      border-radius: 24px;
+      padding: 26px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+      animation: scaleUpModal 0.2s ease forwards;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .modal-header h3 {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #f59e0b;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .modal-close-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1.5rem;
+      cursor: pointer;
+      line-height: 1;
+      transition: color 0.2s ease;
+    }
+
+    .modal-close-btn:hover {
+      color: var(--text);
+    }
+
+    .btn-preset {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      padding: 8px 0;
+      border-radius: 10px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+    }
+
+    .btn-preset:hover, .btn-preset.active {
+      background: rgba(245, 158, 11, 0.2);
+      border-color: #f59e0b;
+      color: #f59e0b;
+    }
+
+    .status-badge.warning {
+      color: #f59e0b;
+      border-color: rgba(245, 158, 11, 0.3);
+      background: rgba(245, 158, 11, 0.1);
+    }
+
+    .status-badge.warning .dot {
+      background: #f59e0b;
+      box-shadow: 0 0 8px #f59e0b;
+      animation: pulseWarning 1.5s infinite alternate;
+    }
+
+    @keyframes pulseWarning {
+      from { box-shadow: 0 0 4px rgba(245, 158, 11, 0.3); }
+      to { shadow: 0 0 12px rgba(245, 158, 11, 0.8); }
+    }
+
+    @keyframes fadeInModal {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes scaleUpModal {
+      from { transform: scale(0.92); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
   </style>
 </head>
 <body>
@@ -2207,15 +2403,27 @@ const DASHBOARD_HTML = `
         <input type="number" class="number-input" id="browserIntervalInput" min="1" max="9999" step="1" value="4" onchange="cambiarIntervaloEnCaliente(this.value)">
       </div>
 
-      <div class="btn-row">
-        <button class="btn btn-success" id="btnPresenciaPlay" onclick="controlPresencia('iniciar')">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-          Iniciar Simulación
+      <div class="btn-row" style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button class="btn btn-success" id="btnPresenciaPlay" onclick="controlPresencia('iniciar')" style="flex: 1 1 calc(33% - 6px); min-width: 100px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          Iniciar
         </button>
-        <button class="btn" id="btnPresenciaPause" onclick="controlPresencia('pausar')">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+        <button class="btn" id="btnPresenciaPausaTemporal" onclick="abrirModalPausaTemporal()" style="flex: 1 1 calc(33% - 6px); min-width: 110px; background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.4); color: #f59e0b;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          Pausa Temp
+        </button>
+        <button class="btn" id="btnPresenciaPause" onclick="controlPresencia('pausar')" style="flex: 1 1 calc(33% - 6px); min-width: 100px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
           Pausar
         </button>
+      </div>
+
+      <div id="pausaTemporalStatusBanner" style="display: none; margin-top: 12px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 12px; padding: 10px 14px; font-size: 0.8rem; color: #fbbf24; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          <span>Pausa temporal (Programada): <strong id="pausaTemporalCountdownText">20m 00s</strong></span>
+        </div>
+        <button onclick="controlPresencia('iniciar')" style="background: rgba(245, 158, 11, 0.25); border: 1px solid #f59e0b; color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer;">Reanudar Ya</button>
       </div>
 
 
@@ -2491,6 +2699,40 @@ const DASHBOARD_HTML = `
     </div>
   </main>
 
+  <!-- Modal Pausa Temporal -->
+  <div class="modal-overlay" id="modalPausaTemporal" style="display: none;" onclick="cerrarModalPausaTemporalSiBackground(event)">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          Pausa Temporal (Programada)
+        </h3>
+        <button class="modal-close-btn" onclick="cerrarModalPausaTemporal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px; line-height: 1.4;">
+          Ingresa la cantidad de minutos para pausar temporalmente los movimientos del navegador. Al terminar el tiempo, la simulación se reanudará automáticamente.
+        </p>
+        <div class="form-group">
+          <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">Minutos de Pausa</label>
+          <input type="number" id="pausaTemporalMinsInput" class="number-input" value="20" min="1" max="480" step="1" style="font-size: 1.15rem; font-weight: 600; text-align: center; margin-top: 6px;" onkeydown="if(event.key === 'Enter') confirmarPausaTemporal()">
+        </div>
+        
+        <div style="display: flex; gap: 6px; margin-bottom: 20px;">
+          <button class="btn-preset" onclick="setPresetPausa(10)">10m</button>
+          <button class="btn-preset active" onclick="setPresetPausa(20)">20m</button>
+          <button class="btn-preset" onclick="setPresetPausa(30)">30m</button>
+          <button class="btn-preset" onclick="setPresetPausa(45)">45m</button>
+          <button class="btn-preset" onclick="setPresetPausa(60)">60m</button>
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; gap: 10px;">
+        <button class="btn" onclick="cerrarModalPausaTemporal()" style="flex: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border);">Cancelar</button>
+        <button class="btn" onclick="confirmarPausaTemporal()" style="flex: 1; background: #f59e0b; border-color: #f59e0b; color: #fff; font-weight: 700; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);">Confirmar Pausa</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast-container" id="toastContainer"></div>
 
   <script>
@@ -2750,27 +2992,52 @@ const DASHBOARD_HTML = `
         const presenciaBadgeText = document.getElementById('presenciaBadgeText');
         const cardBrowser = document.getElementById('cardBrowser');
 
-        if (data.browserPresenciaActiva) {
-          presenciaBadge.className = 'status-badge active';
-          presenciaBadgeText.innerText = 'Mantener Activo: On';
-          cardBrowser.classList.add('active-state');
-        } else {
-          presenciaBadge.className = 'status-badge';
-          presenciaBadgeText.innerText = 'Mantener Activo: Off';
-          if (!data.browserBrowserAbierto) {
-            cardBrowser.classList.remove('active-state');
-          }
-        }
-
-        // Sincronizar estado de botones Iniciar/Pausar segun browserPresenciaActiva
         const btnPlay = document.getElementById('btnPresenciaPlay');
         const btnPause = document.getElementById('btnPresenciaPause');
-        if (data.browserPresenciaActiva) {
-          btnPlay.classList.add('btn-disabled');
-          btnPause.classList.remove('btn-disabled');
-        } else {
+        const btnPausaTemp = document.getElementById('btnPresenciaPausaTemporal');
+        const pausaBanner = document.getElementById('pausaTemporalStatusBanner');
+        const pausaCountdownText = document.getElementById('pausaTemporalCountdownText');
+
+        if (data.browserPausaTemporalRemainingMs && data.browserPausaTemporalRemainingMs > 0) {
+          const totalSecs = Math.ceil(data.browserPausaTemporalRemainingMs / 1000);
+          const mins = Math.floor(totalSecs / 60);
+          const secs = totalSecs % 60;
+          const formattedSecs = String(secs).padStart(2, '0');
+          const timeStr = mins + 'm ' + formattedSecs + 's';
+
+          presenciaBadge.className = 'status-badge warning';
+          presenciaBadgeText.innerText = 'Pausa Temp: ' + mins + 'm';
+          cardBrowser.classList.add('active-state');
+
+          if (pausaBanner) {
+            pausaBanner.style.display = 'flex';
+            if (pausaCountdownText) pausaCountdownText.innerText = timeStr;
+          }
+
+          // Si hay pausa temporal, el botón Iniciar (Play) debe estar disponible para reanudar la simulación e interrumpir la pausa
           btnPlay.classList.remove('btn-disabled');
-          btnPause.classList.add('btn-disabled');
+          btnPause.classList.remove('btn-disabled');
+          if (btnPausaTemp) btnPausaTemp.classList.remove('btn-disabled');
+        } else {
+          if (pausaBanner) pausaBanner.style.display = 'none';
+
+          if (data.browserPresenciaActiva) {
+            presenciaBadge.className = 'status-badge active';
+            presenciaBadgeText.innerText = 'Mantener Activo: On';
+            cardBrowser.classList.add('active-state');
+            btnPlay.classList.add('btn-disabled');
+            btnPause.classList.remove('btn-disabled');
+            if (btnPausaTemp) btnPausaTemp.classList.remove('btn-disabled');
+          } else {
+            presenciaBadge.className = 'status-badge';
+            presenciaBadgeText.innerText = 'Mantener Activo: Off';
+            if (!data.browserBrowserAbierto) {
+              cardBrowser.classList.remove('active-state');
+            }
+            btnPlay.classList.remove('btn-disabled');
+            btnPause.classList.add('btn-disabled');
+            if (btnPausaTemp) btnPausaTemp.classList.remove('btn-disabled');
+          }
         }
 
         if (document.activeElement !== document.getElementById('browserIntervalInput')) {
@@ -2944,6 +3211,69 @@ const DASHBOARD_HTML = `
           pollGatewayStatus();
         } else {
           showToast(data.message || 'Error en la petición', 'error');
+        }
+      } catch (error) {
+        showToast('Error de conexión con el servidor', 'error');
+      }
+    }
+
+    function abrirModalPausaTemporal() {
+      document.getElementById('pausaTemporalMinsInput').value = '20';
+      setPresetPausa(20);
+      document.getElementById('modalPausaTemporal').style.display = 'flex';
+      setTimeout(() => {
+        const input = document.getElementById('pausaTemporalMinsInput');
+        if (input) {
+          input.focus();
+          input.select();
+        }
+      }, 50);
+    }
+
+    function cerrarModalPausaTemporal() {
+      const modal = document.getElementById('modalPausaTemporal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function cerrarModalPausaTemporalSiBackground(e) {
+      if (e.target && e.target.id === 'modalPausaTemporal') {
+        cerrarModalPausaTemporal();
+      }
+    }
+
+    function setPresetPausa(mins) {
+      document.getElementById('pausaTemporalMinsInput').value = mins;
+      const buttons = document.querySelectorAll('.btn-preset');
+      buttons.forEach(btn => {
+        if (btn.innerText === mins + 'm') {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+    }
+
+    async function confirmarPausaTemporal() {
+      const inputEl = document.getElementById('pausaTemporalMinsInput');
+      let mins = parseInt(inputEl.value);
+      if (isNaN(mins) || mins < 1) mins = 20;
+      if (mins > 480) mins = 480;
+
+      cerrarModalPausaTemporal();
+      showToast('Activando pausa temporal de ' + mins + ' minutos...', 'info');
+
+      try {
+        const response = await fetch('/browser/presencia', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accion: 'pausa_temporal', duracionMins: mins })
+        });
+        const data = await response.json();
+        if (response.ok) {
+          showToast(data.message, 'success');
+          pollGatewayStatus();
+        } else {
+          showToast(data.message || 'Error al activar pausa temporal', 'error');
         }
       } catch (error) {
         showToast('Error de conexión con el servidor', 'error');
