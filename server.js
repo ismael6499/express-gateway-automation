@@ -206,7 +206,7 @@ let ngrokListener = null;
 
 // Middleware de Autenticación para rutas de la API (interviene en /browser, /sistema, y /gateway/status)
 app.use((req, res, next) => {
-  if (req.path === '/' || req.path === '/favicon.ico' || req.path === '/gateway/login') {
+  if (req.path === '/' || req.path === '/favicon.ico' || req.path === '/gateway/login' || req.path === '/gateway/restart') {
     return next();
   }
 
@@ -243,6 +243,16 @@ app.post('/gateway/login', (req, res) => {
       message: 'Clave API incorrecta.'
     });
   }
+});
+
+// Endpoint POST /gateway/restart para reiniciar el servidor de forma segura
+app.post('/gateway/restart', (req, res) => {
+  log('Recibida petición de reinicio del Gateway Server (/gateway/restart)...');
+  res.json({ status: 'ok', message: 'Reiniciando servidor...' });
+  exec('cmd.exe /c start /b remote_restart.bat', { cwd: __dirname });
+  setTimeout(() => {
+    process.exit(0);
+  }, 1000);
 });
 
 // Helper para detectar y presionar el botón "Sign In" de re-autenticación en la barra/banner superior de Browser
