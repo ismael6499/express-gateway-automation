@@ -230,7 +230,10 @@ app.post('/gateway/login', (req, res) => {
   const key = apiKey || req.headers['x-api-key'];
 
   if (key === API_KEY) {
-    res.setHeader('Set-Cookie', `api_key=${encodeURIComponent(key)}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`);
+    res.setHeader('Set-Cookie', [
+      `api_key=${encodeURIComponent(key)}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`,
+      `ngrok-skip-browser-warning=true; Path=/; Max-Age=31536000; SameSite=Lax; Secure`
+    ]);
     log('Autenticación exitosa en /gateway/login. Cookie de sesión establecida.');
     return res.json({
       status: 'ok',
@@ -3615,10 +3618,14 @@ app.get('/', (req, res) => {
   let cookieKey = getApiKeyFromCookie(req.headers.cookie);
   const queryKey = req.query.key || req.query.api_key;
 
+  const cookies = ['ngrok-skip-browser-warning=true; Path=/; Max-Age=31536000; SameSite=Lax; Secure'];
+
   if (queryKey === API_KEY) {
-    res.setHeader('Set-Cookie', `api_key=${encodeURIComponent(queryKey)}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`);
+    cookies.push(`api_key=${encodeURIComponent(queryKey)}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`);
     cookieKey = queryKey;
   }
+
+  res.setHeader('Set-Cookie', cookies);
 
   if (cookieKey === API_KEY) {
     res.send(DASHBOARD_HTML);
