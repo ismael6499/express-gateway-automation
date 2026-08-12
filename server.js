@@ -206,7 +206,7 @@ let ngrokListener = null;
 
 // Middleware de Autenticación para rutas de la API (interviene en /browser, /sistema, y /gateway/status)
 app.use((req, res, next) => {
-  if (req.path === '/' || req.path === '/favicon.ico') {
+  if (req.path === '/' || req.path === '/favicon.ico' || req.path === '/gateway/login') {
     return next();
   }
 
@@ -222,6 +222,27 @@ app.use((req, res, next) => {
   }
 
   next();
+});
+
+// Endpoint POST /gateway/login para autenticación web segura con Set-Cookie de servidor
+app.post('/gateway/login', (req, res) => {
+  const { apiKey } = req.body || {};
+  const key = apiKey || req.headers['x-api-key'];
+
+  if (key === API_KEY) {
+    res.setHeader('Set-Cookie', `api_key=${encodeURIComponent(key)}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`);
+    log('Autenticación exitosa en /gateway/login. Cookie de sesión establecida.');
+    return res.json({
+      status: 'ok',
+      message: 'Autenticación exitosa.'
+    });
+  } else {
+    log('Intento de login fallido en /gateway/login: API Key incorrecta.');
+    return res.status(403).json({
+      error: 'Forbidden',
+      message: 'Clave API incorrecta.'
+    });
+  }
 });
 
 // Helper para detectar y presionar el botón "Sign In" de re-autenticación en la barra/banner superior de Browser
@@ -1732,11 +1753,13 @@ const LOGIN_HTML = `
       const savedKey = localStorage.getItem('X-API-KEY');
       if (savedKey) {
         document.getElementById('apiKeyInput').value = savedKey;
-        login();
+        if (!sessionStorage.getItem('auto_login_failed')) {
+          login(true);
+        }
       }
     });
 
-    async function login() {
+    async function login(isAutoLogin = false) {
       const key = document.getElementById('apiKeyInput').value.trim();
       const errorDiv = document.getElementById('errorMsg');
       
@@ -1749,21 +1772,28 @@ const LOGIN_HTML = `
       errorDiv.style.display = 'none';
 
       try {
-        const response = await fetch('/gateway/status', {
-          headers: { 'X-API-KEY': key }
+        const response = await fetch('/gateway/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiKey: key })
         });
 
         if (response.ok) {
-          // Guardar en cookie para la sesión de navegación GET /
-          document.cookie = "api_key=" + encodeURIComponent(key) + "; path=/; max-age=" + (365*24*60*60) + "; SameSite=Lax";
-          // Guardar en localStorage para migrar/mantener sesiones guardadas y auto-login
+          document.cookie = "api_key=" + encodeURIComponent(key) + "; path=/; max-age=" + (365*24*60*60) + "; SameSite=Lax; Secure";
           localStorage.setItem('X-API-KEY', key);
-          window.location.reload();
+          sessionStorage.removeItem('auto_login_failed');
+          window.location.href = '/';
         } else {
+          if (isAutoLogin) {
+            sessionStorage.setItem('auto_login_failed', 'true');
+          }
           errorDiv.innerText = 'Clave API incorrecta o rechazada por el servidor.';
           errorDiv.style.display = 'block';
         }
       } catch (err) {
+        if (isAutoLogin) {
+          sessionStorage.setItem('auto_login_failed', 'true');
+        }
         errorDiv.innerText = 'Error al comunicar con el servidor.';
         errorDiv.style.display = 'block';
       }
@@ -2800,8 +2830,10 @@ const DASHBOARD_HTML = `
     }
 
     function logout() {
-      document.cookie = "api_key=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
-      window.location.reload();
+      document.cookie = "api_key=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; Secure; SameSite=Lax";
+      localStorage.removeItem('X-API-KEY');
+      sessionStorage.setItem('auto_login_failed', 'true');
+      window.location.href = '/';
     }
 
 
@@ -3570,7 +3602,14 @@ const DASHBOARD_HTML = `
 
 // Ruta principal GET /
 app.get('/', (req, res) => {
-  const cookieKey = getApiKeyFromCookie(req.headers.cookie);
+  let cookieKey = getApiKeyFromCookie(req.headers.cookie);
+  const queryKey = req.query.key || req.query.api_key;
+
+  if (queryKey === API_KEY) {
+    res.setHeader('Set-Cookie', `api_key=${encodeURIComponent(queryKey)}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`);
+    cookieKey = queryKey;
+  }
+
   if (cookieKey === API_KEY) {
     res.send(DASHBOARD_HTML);
   } else {
