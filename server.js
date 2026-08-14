@@ -71,6 +71,22 @@ let browserFlexCloseHour = '';
 let browserFlexCloseEnabled = false;
 let browserPausaTemporalUntil = null;
 let browserPausaTemporalTimeoutId = null;
+let browserMealPauseDate = '';
+let browserMealPauseCount = 0;
+
+function getTodayDateStr() {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+function getMealPauseDefaultMins() {
+  const today = getTodayDateStr();
+  if (browserMealPauseDate !== today) {
+    return 25;
+  }
+  return browserMealPauseCount === 0 ? 25 : 15;
+}
 
 function iniciarPausaTemporal(minutos) {
   if (browserPausaTemporalTimeoutId) {
@@ -152,7 +168,9 @@ function saveSimulationState() {
       browserBrowserCloseEnabled,
       browserFlexCloseDate,
       browserFlexCloseHour,
-      browserFlexCloseEnabled
+      browserFlexCloseEnabled,
+      browserMealPauseDate,
+      browserMealPauseCount
     }, null, 2));
   } catch (err) {
     log(`Error al guardar estado de simulación: ${err.message}`);
@@ -192,6 +210,12 @@ function loadSimulationState() {
       }
       if (data.browserFlexCloseEnabled !== undefined) {
         browserFlexCloseEnabled = data.browserFlexCloseEnabled;
+      }
+      if (data.browserMealPauseDate !== undefined) {
+        browserMealPauseDate = data.browserMealPauseDate;
+      }
+      if (data.browserMealPauseCount !== undefined) {
+        browserMealPauseCount = data.browserMealPauseCount;
       }
       log(`Estado de simulación cargado: Habilitada=${browserPresenciaActiva}, Intervalo=${browserIntervalMs}ms, Horario=${browserSimulacionStartHour}-${browserSimulacionEndHour}, Cierre=${browserBrowserCloseHour} (Activo=${browserBrowserCloseEnabled}), FlexCierre=${browserFlexCloseDate} ${browserFlexCloseHour} (Activo=${browserFlexCloseEnabled})`);
     }
@@ -627,6 +651,9 @@ app.get('/gateway/status', (req, res) => {
       browserFlexCloseEnabled,
       browserPausaTemporalUntil,
       browserPausaTemporalRemainingMs,
+      browserMealPauseDefaultMins: getMealPauseDefaultMins(),
+      browserMealPauseDate,
+      browserMealPauseCount: (browserMealPauseDate === getTodayDateStr() ? browserMealPauseCount : 0),
       ngrokUrl: ngrokUrl || 'Inactivo',
       hasEmulatorPath: !!process.env.EMULATOR_BAT_PATH,
       audioVolume: audioData.volume,
@@ -1003,9 +1030,18 @@ app.post('/browser/presencia', (req, res) => {
       config: { browserIntervalMs }
     });
   } else if (accion === 'pausa_temporal') {
-    let duracionMins = Number(req.body.duracionMins || req.body.minutos || 20);
-    if (isNaN(duracionMins) || duracionMins < 1) duracionMins = 20;
+    let defaultMins = getMealPauseDefaultMins();
+    let duracionMins = Number(req.body.duracionMins || req.body.minutos || defaultMins);
+    if (isNaN(duracionMins) || duracionMins < 1) duracionMins = defaultMins;
     if (duracionMins > 1440) duracionMins = 1440;
+
+    const today = getTodayDateStr();
+    if (browserMealPauseDate !== today) {
+      browserMealPauseDate = today;
+      browserMealPauseCount = 1;
+    } else {
+      browserMealPauseCount++;
+    }
 
     if (!browserIntervalId) {
       setupBrowserInterval();
@@ -2758,15 +2794,16 @@ const DASHBOARD_HTML = `
         </p>
         <div class="form-group">
           <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">Minutos de Pausa</label>
-          <input type="number" id="pausaTemporalMinsInput" class="number-input" value="20" min="1" max="480" step="1" style="font-size: 1.15rem; font-weight: 600; text-align: center; margin-top: 6px;" onkeydown="if(event.key === 'Enter') confirmarPausaTemporal()">
+          <input type="number" id="pausaTemporalMinsInput" class="number-input" value="25" min="1" max="480" step="1" style="font-size: 1.15rem; font-weight: 600; text-align: center; margin-top: 6px;" onkeydown="if(event.key === 'Enter') confirmarPausaTemporal()">
         </div>
         
-        <div style="display: flex; gap: 6px; margin-bottom: 20px;">
+        <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 20px;">
           <button class="btn-preset" onclick="setPresetPausa(10)">10m</button>
-          <button class="btn-preset active" onclick="setPresetPausa(20)">20m</button>
+          <button class="btn-preset" onclick="setPresetPausa(15)">15m</button>
+          <button class="btn-preset" onclick="setPresetPausa(20)">20m</button>
+          <button class="btn-preset" onclick="setPresetPausa(25)">25m</button>
           <button class="btn-preset" onclick="setPresetPausa(30)">30m</button>
-          <button class="btn-preset" onclick="setPresetPausa(45)">45m</button>
-          <button class="btn-preset" onclick="setPresetPausa(60)">60m</button>
+          <button class="btn-preset" onclick="setPresetPausa(40)">40m</button>
         </div>
       </div>
       <div class="modal-footer" style="display: flex; gap: 10px;">
@@ -2990,6 +3027,7 @@ const DASHBOARD_HTML = `
         }
 
         const data = await response.json();
+        window.lastStatusData = data;
         
         // Sincronizar UI de Navegador Browser
         const browserBadge = document.getElementById('browserBadge');
@@ -3263,8 +3301,9 @@ const DASHBOARD_HTML = `
     }
 
     function abrirModalPausaTemporal() {
-      document.getElementById('pausaTemporalMinsInput').value = '20';
-      setPresetPausa(20);
+      const defaultMins = (window.lastStatusData && window.lastStatusData.browserMealPauseDefaultMins) || 25;
+      document.getElementById('pausaTemporalMinsInput').value = defaultMins;
+      setPresetPausa(defaultMins);
       document.getElementById('modalPausaTemporal').style.display = 'flex';
       setTimeout(() => {
         const input = document.getElementById('pausaTemporalMinsInput');
