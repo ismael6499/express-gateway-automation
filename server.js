@@ -71,21 +71,18 @@ let browserFlexCloseHour = '';
 let browserFlexCloseEnabled = false;
 let browserPausaTemporalUntil = null;
 let browserPausaTemporalTimeoutId = null;
-let browserMealPauseDate = '';
-let browserMealPauseCount = 0;
-
-function getTodayDateStr() {
-  const now = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
+let browserMealPauseCutoffHour = '15:15';
 
 function getMealPauseDefaultMins() {
-  const today = getTodayDateStr();
-  if (browserMealPauseDate !== today) {
-    return 25;
+  const now = new Date();
+  const [cutoffH, cutoffM] = (browserMealPauseCutoffHour || '15:15').split(':').map(Number);
+  const curH = now.getHours();
+  const curM = now.getMinutes();
+
+  if (curH > cutoffH || (curH === cutoffH && curM >= cutoffM)) {
+    return 15;
   }
-  return browserMealPauseCount === 0 ? 25 : 15;
+  return 25;
 }
 
 function iniciarPausaTemporal(minutos) {
@@ -169,8 +166,7 @@ function saveSimulationState() {
       browserFlexCloseDate,
       browserFlexCloseHour,
       browserFlexCloseEnabled,
-      browserMealPauseDate,
-      browserMealPauseCount
+      browserMealPauseCutoffHour
     }, null, 2));
   } catch (err) {
     log(`Error al guardar estado de simulación: ${err.message}`);
@@ -211,11 +207,8 @@ function loadSimulationState() {
       if (data.browserFlexCloseEnabled !== undefined) {
         browserFlexCloseEnabled = data.browserFlexCloseEnabled;
       }
-      if (data.browserMealPauseDate !== undefined) {
-        browserMealPauseDate = data.browserMealPauseDate;
-      }
-      if (data.browserMealPauseCount !== undefined) {
-        browserMealPauseCount = data.browserMealPauseCount;
+      if (data.browserMealPauseCutoffHour !== undefined) {
+        browserMealPauseCutoffHour = data.browserMealPauseCutoffHour;
       }
       log(`Estado de simulación cargado: Habilitada=${browserPresenciaActiva}, Intervalo=${browserIntervalMs}ms, Horario=${browserSimulacionStartHour}-${browserSimulacionEndHour}, Cierre=${browserBrowserCloseHour} (Activo=${browserBrowserCloseEnabled}), FlexCierre=${browserFlexCloseDate} ${browserFlexCloseHour} (Activo=${browserFlexCloseEnabled})`);
     }
@@ -652,8 +645,7 @@ app.get('/gateway/status', (req, res) => {
       browserPausaTemporalUntil,
       browserPausaTemporalRemainingMs,
       browserMealPauseDefaultMins: getMealPauseDefaultMins(),
-      browserMealPauseDate,
-      browserMealPauseCount: (browserMealPauseDate === getTodayDateStr() ? browserMealPauseCount : 0),
+      browserMealPauseCutoffHour,
       ngrokUrl: ngrokUrl || 'Inactivo',
       hasEmulatorPath: !!process.env.EMULATOR_BAT_PATH,
       audioVolume: audioData.volume,
@@ -916,7 +908,7 @@ app.post('/browser/browser', async (req, res) => {
 
 // Endpoint POST /browser/programacion - Actualizar horario y días de la simulación
 app.post('/browser/programacion', (req, res) => {
-  const { startHour, endHour, days, browserCloseHour, browserCloseEnabled, flexCloseDate, flexCloseHour, flexCloseEnabled } = req.body;
+  const { startHour, endHour, days, browserCloseHour, browserCloseEnabled, flexCloseDate, flexCloseHour, flexCloseEnabled, mealPauseCutoffHour } = req.body;
 
   if (startHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(startHour)) {
     browserSimulacionStartHour = startHour;
@@ -942,9 +934,12 @@ app.post('/browser/programacion', (req, res) => {
   if (flexCloseEnabled !== undefined) {
     browserFlexCloseEnabled = !!flexCloseEnabled;
   }
+  if (mealPauseCutoffHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(mealPauseCutoffHour)) {
+    browserMealPauseCutoffHour = mealPauseCutoffHour;
+  }
 
   saveSimulationState();
-  log(`Programación actualizada: Rango: ${browserSimulacionStartHour}-${browserSimulacionEndHour}, Días: ${browserSimulacionDays.join(',')}, Cierre: ${browserBrowserCloseHour} (Activo=${browserBrowserCloseEnabled}), Flex: ${browserFlexCloseDate} ${browserFlexCloseHour} (Activo=${browserFlexCloseEnabled})`);
+  log(`Programación actualizada: Rango: ${browserSimulacionStartHour}-${browserSimulacionEndHour}, Días: ${browserSimulacionDays.join(',')}, Cierre: ${browserBrowserCloseHour} (Activo=${browserBrowserCloseEnabled}), Flex: ${browserFlexCloseDate} ${browserFlexCloseHour} (Activo=${browserFlexCloseEnabled}), CutoffComida: ${browserMealPauseCutoffHour}`);
 
   res.json({
     status: 'ok',
@@ -956,7 +951,8 @@ app.post('/browser/programacion', (req, res) => {
     browserBrowserCloseEnabled,
     browserFlexCloseDate,
     browserFlexCloseHour,
-    browserFlexCloseEnabled
+    browserFlexCloseEnabled,
+    browserMealPauseCutoffHour
   });
 });
 
@@ -1034,14 +1030,6 @@ app.post('/browser/presencia', (req, res) => {
     let duracionMins = Number(req.body.duracionMins || req.body.minutos || defaultMins);
     if (isNaN(duracionMins) || duracionMins < 1) duracionMins = defaultMins;
     if (duracionMins > 1440) duracionMins = 1440;
-
-    const today = getTodayDateStr();
-    if (browserMealPauseDate !== today) {
-      browserMealPauseDate = today;
-      browserMealPauseCount = 1;
-    } else {
-      browserMealPauseCount++;
-    }
 
     if (!browserIntervalId) {
       setupBrowserInterval();
@@ -2797,7 +2785,7 @@ const DASHBOARD_HTML = `
           <input type="number" id="pausaTemporalMinsInput" class="number-input" value="25" min="1" max="480" step="1" style="font-size: 1.15rem; font-weight: 600; text-align: center; margin-top: 6px;" onkeydown="if(event.key === 'Enter') confirmarPausaTemporal()">
         </div>
         
-        <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 20px;">
+        <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 15px;">
           <button class="btn-preset" onclick="setPresetPausa(10)">10m</button>
           <button class="btn-preset" onclick="setPresetPausa(15)">15m</button>
           <button class="btn-preset" onclick="setPresetPausa(20)">20m</button>
@@ -2805,6 +2793,14 @@ const DASHBOARD_HTML = `
           <button class="btn-preset" onclick="setPresetPausa(30)">30m</button>
           <button class="btn-preset" onclick="setPresetPausa(40)">40m</button>
         </div>
+
+        <details style="margin-bottom: 15px; font-size: 0.75rem; color: var(--text-muted);">
+          <summary style="cursor: pointer; user-select: none; font-weight: 500; opacity: 0.8;">⚙️ Configurar hora de corte (Default 15m)</summary>
+          <div style="margin-top: 8px; display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.03); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--card-border);">
+            <span>Hora para cambiar default a 15m:</span>
+            <input type="time" id="pausaCutoffHourInput" value="15:15" style="background: rgba(0,0,0,0.3); border: 1px solid var(--card-border); color: #fff; border-radius: 6px; padding: 3px 6px; font-size: 0.8rem; width: 95px; text-align: center;" onchange="guardarCutoffHour(this.value)">
+          </div>
+        </details>
       </div>
       <div class="modal-footer" style="display: flex; gap: 10px;">
         <button class="btn" onclick="cerrarModalPausaTemporal()" style="flex: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border);">Cancelar</button>
@@ -3304,6 +3300,10 @@ const DASHBOARD_HTML = `
       const defaultMins = (window.lastStatusData && window.lastStatusData.browserMealPauseDefaultMins) || 25;
       document.getElementById('pausaTemporalMinsInput').value = defaultMins;
       setPresetPausa(defaultMins);
+      if (window.lastStatusData && window.lastStatusData.browserMealPauseCutoffHour) {
+        const cutoffInput = document.getElementById('pausaCutoffHourInput');
+        if (cutoffInput) cutoffInput.value = window.lastStatusData.browserMealPauseCutoffHour;
+      }
       document.getElementById('modalPausaTemporal').style.display = 'flex';
       setTimeout(() => {
         const input = document.getElementById('pausaTemporalMinsInput');
@@ -3312,6 +3312,26 @@ const DASHBOARD_HTML = `
           input.select();
         }
       }, 50);
+    }
+
+    async function guardarCutoffHour(val) {
+      if (!val) return;
+      try {
+        const response = await fetch('/browser/programacion', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mealPauseCutoffHour: val })
+        });
+        const data = await response.json();
+        if (response.ok) {
+          showToast('Hora de corte actualizada a ' + val, 'success');
+          pollGatewayStatus();
+        } else {
+          showToast(data.message || 'Error al actualizar hora de corte', 'error');
+        }
+      } catch (error) {
+        showToast('Error de conexión con el servidor', 'error');
+      }
     }
 
     function cerrarModalPausaTemporal() {
