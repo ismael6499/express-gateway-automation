@@ -3883,7 +3883,7 @@ const DASHBOARD_HTML = `
       const tunnelBar = document.getElementById('tunnelBar');
 
       // Añadir la barra de edición a cada tarjeta
-      DEFAULT_CARD_ORDER.forEach(cardId => {
+      DEFAULT_CARD_ORDER.forEach(function(cardId) {
         const card = document.getElementById(cardId);
         if (!card) return;
 
@@ -3891,21 +3891,45 @@ const DASHBOARD_HTML = `
         if (!card.querySelector('.card-edit-bar')) {
           const editBar = document.createElement('div');
           editBar.className = 'card-edit-bar';
-          editBar.innerHTML = 
-            '<div class="card-edit-left">' +
-              '<div class="card-drag-handle" title="Arrastrar para mover">' +
-                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>' +
-                '<span>Mover</span>' +
-              '</div>' +
-              '<div class="card-edit-arrows">' +
-                '<button class="btn-arrow" onclick="moveCard(\'' + cardId + '\', \'up\')" title="Mover arriba">▲</button>' +
-                '<button class="btn-arrow" onclick="moveCard(\'' + cardId + '\', \'down\')" title="Mover abajo">▼</button>' +
-              '</div>' +
-            '</div>' +
-            '<button class="btn-toggle-vis is-visible" id="btnVis_' + cardId + '" onclick="toggleCardVisibility(\'' + cardId + '\')" title="Ocultar o mostrar">' +
-              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>' +
-              '<span>Visible</span>' +
-            '</button>';
+
+          const editLeft = document.createElement('div');
+          editLeft.className = 'card-edit-left';
+
+          const dragHandle = document.createElement('div');
+          dragHandle.className = 'card-drag-handle';
+          dragHandle.title = 'Arrastrar para mover';
+          dragHandle.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg><span>Mover</span>';
+
+          const arrowsDiv = document.createElement('div');
+          arrowsDiv.className = 'card-edit-arrows';
+
+          const btnUp = document.createElement('button');
+          btnUp.className = 'btn-arrow';
+          btnUp.title = 'Mover arriba';
+          btnUp.textContent = '▲';
+          btnUp.onclick = function() { moveCard(cardId, 'up'); };
+
+          const btnDown = document.createElement('button');
+          btnDown.className = 'btn-arrow';
+          btnDown.title = 'Mover abajo';
+          btnDown.textContent = '▼';
+          btnDown.onclick = function() { moveCard(cardId, 'down'); };
+
+          arrowsDiv.appendChild(btnUp);
+          arrowsDiv.appendChild(btnDown);
+          editLeft.appendChild(dragHandle);
+          editLeft.appendChild(arrowsDiv);
+
+          const btnVis = document.createElement('button');
+          btnVis.className = 'btn-toggle-vis is-visible';
+          btnVis.id = 'btnVis_' + cardId;
+          btnVis.title = 'Ocultar o mostrar';
+          btnVis.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>Visible</span>';
+          btnVis.onclick = function() { toggleCardVisibility(cardId); };
+
+          editBar.appendChild(editLeft);
+          editBar.appendChild(btnVis);
+
           card.insertBefore(editBar, card.firstChild);
         }
 
@@ -3914,28 +3938,28 @@ const DASHBOARD_HTML = `
 
         const handle = card.querySelector('.card-drag-handle');
         if (handle) {
-          handle.addEventListener('mousedown', () => {
+          handle.addEventListener('mousedown', function() {
             card.setAttribute('draggable', 'true');
           });
-          handle.addEventListener('mouseup', () => {
+          handle.addEventListener('mouseup', function() {
             card.setAttribute('draggable', 'false');
           });
 
           // Soporte Touch para móviles
-          handle.addEventListener('touchstart', (e) => handleTouchStart(e, card), { passive: false });
-          handle.addEventListener('touchmove', (e) => handleTouchMove(e, card), { passive: false });
-          handle.addEventListener('touchend', (e) => handleTouchEnd(e, card));
+          handle.addEventListener('touchstart', function(e) { handleTouchStart(e, card); }, { passive: false });
+          handle.addEventListener('touchmove', function(e) { handleTouchMove(e, card); }, { passive: false });
+          handle.addEventListener('touchend', function(e) { handleTouchEnd(e, card); });
         }
 
         // Listeners Desktop Drag & Drop
-        card.addEventListener('dragstart', (e) => handleDragStart(e, card));
-        card.addEventListener('dragover', (e) => handleDragOver(e, card));
-        card.addEventListener('dragend', (e) => handleDragEnd(e, card));
+        card.addEventListener('dragstart', function(e) { handleDragStart(e, card); });
+        card.addEventListener('dragover', function(e) { handleDragOver(e, card); });
+        card.addEventListener('dragend', function(e) { handleDragEnd(e, card); });
       });
 
       // Aplicar orden guardado
       const order = Array.isArray(config.order) ? config.order : DEFAULT_CARD_ORDER;
-      order.forEach(cardId => {
+      order.forEach(function(cardId) {
         const card = document.getElementById(cardId);
         if (card && mainEl) {
           if (tunnelBar) {
@@ -3948,7 +3972,7 @@ const DASHBOARD_HTML = `
 
       // Aplicar visibilidad guardada
       const hiddenMap = config.hidden || {};
-      DEFAULT_CARD_ORDER.forEach(cardId => {
+      DEFAULT_CARD_ORDER.forEach(function(cardId) {
         const card = document.getElementById(cardId);
         const isHidden = !!hiddenMap[cardId];
         if (card) {
