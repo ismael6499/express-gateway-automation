@@ -2399,6 +2399,181 @@ const DASHBOARD_HTML = `
       from { transform: scale(0.92); opacity: 0; }
       to { transform: scale(1); opacity: 1; }
     }
+
+    /* Header Edit Button */
+    .btn-icon.active {
+      background: rgba(99, 102, 241, 0.25);
+      border-color: var(--primary);
+      color: #818cf8;
+    }
+
+    /* Edit Mode Banner */
+    .edit-mode-banner {
+      display: none;
+      background: linear-gradient(135deg, rgba(79, 70, 229, 0.18), rgba(124, 58, 237, 0.18));
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      border-radius: 16px;
+      padding: 12px 18px;
+      margin-bottom: 15px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      animation: fadeInModal 0.2s ease forwards;
+      backdrop-filter: blur(10px);
+    }
+    .edit-mode-banner.active {
+      display: flex;
+    }
+    .edit-banner-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.85rem;
+      color: var(--text);
+    }
+    .edit-banner-info svg {
+      color: #818cf8;
+      flex-shrink: 0;
+    }
+    .edit-banner-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-sm {
+      padding: 6px 12px !important;
+      font-size: 0.75rem !important;
+      border-radius: 8px !important;
+      margin-top: 0 !important;
+      cursor: pointer;
+    }
+    .btn-outline {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+    }
+    .btn-outline:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text);
+    }
+
+    /* Card Edit Toolbar */
+    .card-edit-bar {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 6px 10px;
+      margin-bottom: 12px;
+      gap: 8px;
+    }
+    body.is-edit-mode .card-edit-bar {
+      display: flex;
+    }
+    .card-edit-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .card-drag-handle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #cbd5e1;
+      cursor: grab;
+      user-select: none;
+      touch-action: none;
+      transition: all 0.2s ease;
+    }
+    .card-drag-handle:hover {
+      background: rgba(99, 102, 241, 0.2);
+      border-color: rgba(99, 102, 241, 0.4);
+      color: #818cf8;
+    }
+    .card-drag-handle:active {
+      cursor: grabbing;
+      background: rgba(99, 102, 241, 0.3);
+    }
+    .card-edit-arrows {
+      display: flex;
+      gap: 4px;
+    }
+    .btn-arrow {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      color: var(--text-muted);
+      width: 26px;
+      height: 26px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 0.75rem;
+      padding: 0;
+      transition: all 0.2s;
+    }
+    .btn-arrow:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: #fff;
+    }
+    .btn-toggle-vis {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 1px solid transparent;
+    }
+    .btn-toggle-vis.is-visible {
+      background: rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.3);
+      color: #34d399;
+    }
+    .btn-toggle-vis.is-visible:hover {
+      background: rgba(16, 185, 129, 0.2);
+    }
+    .btn-toggle-vis.is-hidden {
+      background: rgba(239, 68, 68, 0.12);
+      border-color: rgba(239, 68, 68, 0.3);
+      color: #f87171;
+    }
+    .btn-toggle-vis.is-hidden:hover {
+      background: rgba(239, 68, 68, 0.2);
+    }
+
+    /* Ocultar sección */
+    .card.is-hidden-card {
+      display: none !important;
+    }
+    body.is-edit-mode .card.is-hidden-card {
+      display: block !important;
+      opacity: 0.45;
+      border: 1px dashed rgba(239, 68, 68, 0.45) !important;
+      background: rgba(239, 68, 68, 0.03) !important;
+    }
+    body.is-edit-mode .card.is-hidden-card:hover {
+      opacity: 0.8;
+    }
+
+    /* Animación y Feedback de Drag */
+    .card.is-dragging {
+      opacity: 0.3 !important;
+      transform: scale(0.98);
+      border: 2px dashed var(--primary) !important;
+    }
   </style>
 </head>
 <body>
@@ -2409,6 +2584,9 @@ const DASHBOARD_HTML = `
       <p>API Gateway & Automatizaciones</p>
     </div>
     <div class="header-buttons">
+      <button class="btn-icon" id="btnToggleEditMode" onclick="toggleEditMode()" title="Editar y ordenar secciones">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      </button>
       <button class="btn-icon" onclick="logout()" title="Cerrar Sesión">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
       </button>
@@ -2416,6 +2594,17 @@ const DASHBOARD_HTML = `
   </header>
 
   <main>
+    <!-- BANNER MODO EDICIÓN -->
+    <div id="editModeBanner" class="edit-mode-banner">
+      <div class="edit-banner-info">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 9.5-9.5z"/></svg>
+        <span><strong>Modo Edición:</strong> Arrastra ⠿ para mover o usa 👁️ para ocultar/mostrar.</span>
+      </div>
+      <div class="edit-banner-actions">
+        <button class="btn btn-sm btn-outline" onclick="resetDashboardLayout()">Restablecer</button>
+        <button class="btn btn-sm btn-primary" onclick="toggleEditMode()">Listo</button>
+      </div>
+    </div>
     <!-- CARD 1: MICROSOFT TEAMS -->
     <div class="card" id="cardBrowser">
       <div class="card-header">
@@ -2830,6 +3019,7 @@ const DASHBOARD_HTML = `
     let currentBrowserInterval = 4.0;
 
     document.addEventListener('DOMContentLoaded', () => {
+      initDashboardCustomizer();
       pollGatewayStatus();
       setInterval(pollGatewayStatus, 5000);
       probarPing();
@@ -3654,6 +3844,286 @@ const DASHBOARD_HTML = `
       
       // Empezar a sondear después de un pequeño delay de 3 segundos
       setTimeout(pollServerBackOnline, 3000);
+    }
+
+    // === GESTIÓN DE PERSONALIZACIÓN, ORDEN Y VISIBILIDAD DE SECCIONES ===
+    const DEFAULT_CARD_ORDER = ['cardBrowser', 'cardSistema', 'cardReiniciar', 'cardMultimedia', 'cardEnergia'];
+    const CARD_TITLES = {
+      'cardBrowser': 'Presencia en Browser',
+      'cardSistema': 'Acciones de Sistema',
+      'cardReiniciar': 'Reiniciar Servidor',
+      'cardMultimedia': 'Controles Multimedia, Brillo & Voz',
+      'cardEnergia': 'Energía y Sesión de PC'
+    };
+
+    let isEditModeActive = false;
+    let draggedCard = null;
+    let touchActiveCard = null;
+
+    function getDashboardConfig() {
+      try {
+        const saved = localStorage.getItem('gateway_dashboard_custom_v1');
+        if (saved) return JSON.parse(saved);
+      } catch (e) {}
+      return {
+        order: [...DEFAULT_CARD_ORDER],
+        hidden: {}
+      };
+    }
+
+    function saveDashboardConfig(config) {
+      try {
+        localStorage.setItem('gateway_dashboard_custom_v1', JSON.stringify(config));
+      } catch (e) {}
+    }
+
+    function initDashboardCustomizer() {
+      const config = getDashboardConfig();
+      const mainEl = document.querySelector('main');
+      const tunnelBar = document.getElementById('tunnelBar');
+
+      // Añadir la barra de edición a cada tarjeta
+      DEFAULT_CARD_ORDER.forEach(cardId => {
+        const card = document.getElementById(cardId);
+        if (!card) return;
+
+        // Evitar duplicar la barra de edición
+        if (!card.querySelector('.card-edit-bar')) {
+          const editBar = document.createElement('div');
+          editBar.className = 'card-edit-bar';
+          editBar.innerHTML = 
+            '<div class="card-edit-left">' +
+              '<div class="card-drag-handle" title="Arrastrar para mover">' +
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>' +
+                '<span>Mover</span>' +
+              '</div>' +
+              '<div class="card-edit-arrows">' +
+                '<button class="btn-arrow" onclick="moveCard(\'' + cardId + '\', \'up\')" title="Mover arriba">▲</button>' +
+                '<button class="btn-arrow" onclick="moveCard(\'' + cardId + '\', \'down\')" title="Mover abajo">▼</button>' +
+              '</div>' +
+            '</div>' +
+            '<button class="btn-toggle-vis is-visible" id="btnVis_' + cardId + '" onclick="toggleCardVisibility(\'' + cardId + '\')" title="Ocultar o mostrar">' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>' +
+              '<span>Visible</span>' +
+            '</button>';
+          card.insertBefore(editBar, card.firstChild);
+        }
+
+        // Configurar atributos drag & drop para desktop
+        card.setAttribute('draggable', 'false');
+
+        const handle = card.querySelector('.card-drag-handle');
+        if (handle) {
+          handle.addEventListener('mousedown', () => {
+            card.setAttribute('draggable', 'true');
+          });
+          handle.addEventListener('mouseup', () => {
+            card.setAttribute('draggable', 'false');
+          });
+
+          // Soporte Touch para móviles
+          handle.addEventListener('touchstart', (e) => handleTouchStart(e, card), { passive: false });
+          handle.addEventListener('touchmove', (e) => handleTouchMove(e, card), { passive: false });
+          handle.addEventListener('touchend', (e) => handleTouchEnd(e, card));
+        }
+
+        // Listeners Desktop Drag & Drop
+        card.addEventListener('dragstart', (e) => handleDragStart(e, card));
+        card.addEventListener('dragover', (e) => handleDragOver(e, card));
+        card.addEventListener('dragend', (e) => handleDragEnd(e, card));
+      });
+
+      // Aplicar orden guardado
+      const order = Array.isArray(config.order) ? config.order : DEFAULT_CARD_ORDER;
+      order.forEach(cardId => {
+        const card = document.getElementById(cardId);
+        if (card && mainEl) {
+          if (tunnelBar) {
+            mainEl.insertBefore(card, tunnelBar);
+          } else {
+            mainEl.appendChild(card);
+          }
+        }
+      });
+
+      // Aplicar visibilidad guardada
+      const hiddenMap = config.hidden || {};
+      DEFAULT_CARD_ORDER.forEach(cardId => {
+        const card = document.getElementById(cardId);
+        const isHidden = !!hiddenMap[cardId];
+        if (card) {
+          if (isHidden) {
+            card.classList.add('is-hidden-card');
+          } else {
+            card.classList.remove('is-hidden-card');
+          }
+          updateVisibilityBtnUI(cardId, !isHidden);
+        }
+      });
+    }
+
+    function toggleEditMode() {
+      isEditModeActive = !isEditModeActive;
+      document.body.classList.toggle('is-edit-mode', isEditModeActive);
+      
+      const banner = document.getElementById('editModeBanner');
+      if (banner) banner.classList.toggle('active', isEditModeActive);
+
+      const btnToggle = document.getElementById('btnToggleEditMode');
+      if (btnToggle) btnToggle.classList.toggle('active', isEditModeActive);
+
+      if (isEditModeActive) {
+        showToast('Modo edición activado. Arrastra las secciones o usa los controles.', 'info');
+      } else {
+        saveCurrentDOMState();
+        showToast('Cambios guardados correctamente.', 'success');
+      }
+    }
+
+    function updateVisibilityBtnUI(cardId, isVisible) {
+      const btn = document.getElementById('btnVis_' + cardId);
+      if (!btn) return;
+      if (isVisible) {
+        btn.className = 'btn-toggle-vis is-visible';
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>Visible</span>';
+      } else {
+        btn.className = 'btn-toggle-vis is-hidden';
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg><span>Oculto</span>';
+      }
+    }
+
+    function toggleCardVisibility(cardId) {
+      const card = document.getElementById(cardId);
+      if (!card) return;
+      const willBeHidden = !card.classList.contains('is-hidden-card');
+      if (willBeHidden) {
+        card.classList.add('is-hidden-card');
+      } else {
+        card.classList.remove('is-hidden-card');
+      }
+      updateVisibilityBtnUI(cardId, !willBeHidden);
+      saveCurrentDOMState();
+      showToast((CARD_TITLES[cardId] || 'Sección') + ': ' + (willBeHidden ? 'Ocultada' : 'Visible'), 'info');
+    }
+
+    function moveCard(cardId, direction) {
+      const card = document.getElementById(cardId);
+      if (!card) return;
+      const mainEl = document.querySelector('main');
+      const cards = Array.from(mainEl.querySelectorAll('.card'));
+      const currentIndex = cards.indexOf(card);
+
+      if (direction === 'up' && currentIndex > 0) {
+        mainEl.insertBefore(card, cards[currentIndex - 1]);
+        saveCurrentDOMState();
+      } else if (direction === 'down' && currentIndex < cards.length - 1) {
+        mainEl.insertBefore(cards[currentIndex + 1], card);
+        saveCurrentDOMState();
+      }
+    }
+
+    function saveCurrentDOMState() {
+      const mainEl = document.querySelector('main');
+      const cards = Array.from(mainEl.querySelectorAll('.card'));
+      const order = [];
+      const hidden = {};
+
+      cards.forEach(card => {
+        const id = card.id;
+        if (id) {
+          order.push(id);
+          hidden[id] = card.classList.contains('is-hidden-card');
+        }
+      });
+
+      saveDashboardConfig({ order, hidden });
+    }
+
+    function resetDashboardLayout() {
+      const mainEl = document.querySelector('main');
+      const tunnelBar = document.getElementById('tunnelBar');
+
+      DEFAULT_CARD_ORDER.forEach(cardId => {
+        const card = document.getElementById(cardId);
+        if (card) {
+          card.classList.remove('is-hidden-card');
+          updateVisibilityBtnUI(cardId, true);
+          if (tunnelBar) {
+            mainEl.insertBefore(card, tunnelBar);
+          } else {
+            mainEl.appendChild(card);
+          }
+        }
+      });
+
+      saveDashboardConfig({
+        order: [...DEFAULT_CARD_ORDER],
+        hidden: {}
+      });
+
+      showToast('Secciones y orden restablecidos por defecto.', 'success');
+    }
+
+    // Drag & Drop Desktop
+    function handleDragStart(e, card) {
+      if (!isEditModeActive) {
+        e.preventDefault();
+        return;
+      }
+      draggedCard = card;
+      card.classList.add('is-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', card.id);
+    }
+
+    function handleDragOver(e, targetCard) {
+      if (!isEditModeActive || !draggedCard || draggedCard === targetCard) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+
+      const mainEl = document.querySelector('main');
+      const rect = targetCard.getBoundingClientRect();
+      const next = (e.clientY - rect.top) / (rect.bottom - rect.top) > 0.5;
+      mainEl.insertBefore(draggedCard, next ? targetCard.nextSibling : targetCard);
+    }
+
+    function handleDragEnd(e, card) {
+      if (card) card.classList.remove('is-dragging');
+      card.setAttribute('draggable', 'false');
+      draggedCard = null;
+      saveCurrentDOMState();
+    }
+
+    // Touch Drag para Móviles
+    function handleTouchStart(e, card) {
+      if (!isEditModeActive) return;
+      touchActiveCard = card;
+      card.classList.add('is-dragging');
+      if (navigator.vibrate) navigator.vibrate(20);
+    }
+
+    function handleTouchMove(e, card) {
+      if (!isEditModeActive || !touchActiveCard) return;
+      e.preventDefault();
+      const touchY = e.touches[0].clientY;
+      const touchX = e.touches[0].clientX;
+      const elemBelow = document.elementFromPoint(touchX, touchY);
+      if (!elemBelow) return;
+
+      const targetCard = elemBelow.closest('.card');
+      if (targetCard && targetCard !== touchActiveCard) {
+        const mainEl = document.querySelector('main');
+        const rect = targetCard.getBoundingClientRect();
+        const next = (touchY - rect.top) / (rect.bottom - rect.top) > 0.5;
+        mainEl.insertBefore(touchActiveCard, next ? targetCard.nextSibling : targetCard);
+      }
+    }
+
+    function handleTouchEnd(e, card) {
+      if (!isEditModeActive || !touchActiveCard) return;
+      touchActiveCard.classList.remove('is-dragging');
+      touchActiveCard = null;
+      saveCurrentDOMState();
     }
   </script>
   <div id="restartOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(10, 10, 12, 0.9); z-index: 9999; align-items: center; justify-content: center; flex-direction: column; color: #fff; text-align: center; padding: 20px; box-sizing: border-box;">

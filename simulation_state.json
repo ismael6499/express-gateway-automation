@@ -2,7 +2,7 @@
   "browserPresenciaActiva": true,
   "browserIntervalMs": 240000,
   "browserSimulacionStartHour": "09:00",
-  "browserSimulacionEndHour": "18:05",
+  "browserSimulacionEndHour": "18:06",
   "browserSimulacionDays": [
     1,
     2,
@@ -10,9 +10,10 @@
     4,
     5
   ],
-  "browserBrowserCloseHour": "18:04",
+  "browserBrowserCloseHour": "18:05",
   "browserBrowserCloseEnabled": true,
-  "browserFlexCloseDate": "2026-08-21",
+  "browserFlexCloseDate": "2026-08-28",
   "browserFlexCloseHour": "13:01",
-  "browserFlexCloseEnabled": true
+  "browserFlexCloseEnabled": true,
+  "browserMealPauseCutoffHour": "15:00"
 }
