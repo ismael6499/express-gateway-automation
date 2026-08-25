@@ -15,5 +15,17 @@
   "browserFlexCloseDate": "2026-08-28",
   "browserFlexCloseHour": "13:01",
   "browserFlexCloseEnabled": true,
-  "browserMealPauseCutoffHour": "15:00"
+  "browserMealPauseCutoffHour": "15:00",
+  "browserMealPauseIntervals": [
+    {
+      "start": "00:00",
+      "end": "15:15",
+      "mins": 25
+    },
+    {
+      "start": "15:15",
+      "end": "23:59",
+      "mins": 15
+    }
+  ]
 }

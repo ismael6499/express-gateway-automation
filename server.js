@@ -72,9 +72,35 @@ let browserFlexCloseEnabled = false;
 let browserPausaTemporalUntil = null;
 let browserPausaTemporalTimeoutId = null;
 let browserMealPauseCutoffHour = '15:15';
+let browserMealPauseIntervals = [
+  { start: '00:00', end: '15:15', mins: 25 },
+  { start: '15:15', end: '23:59', mins: 15 }
+];
 
 function getMealPauseDefaultMins() {
   const now = new Date();
+  const curMinutes = now.getHours() * 60 + now.getMinutes();
+
+  if (Array.isArray(browserMealPauseIntervals) && browserMealPauseIntervals.length > 0) {
+    for (const item of browserMealPauseIntervals) {
+      if (!item.start || !item.end) continue;
+      const [sH, sM] = item.start.split(':').map(Number);
+      const [eH, eM] = item.end.split(':').map(Number);
+      const startMin = sH * 60 + sM;
+      const endMin = eH * 60 + eM;
+
+      if (startMin <= endMin) {
+        if (curMinutes >= startMin && curMinutes <= endMin) {
+          return Number(item.mins) || 20;
+        }
+      } else {
+        if (curMinutes >= startMin || curMinutes <= endMin) {
+          return Number(item.mins) || 20;
+        }
+      }
+    }
+  }
+
   const [cutoffH, cutoffM] = (browserMealPauseCutoffHour || '15:15').split(':').map(Number);
   const curH = now.getHours();
   const curM = now.getMinutes();
@@ -166,7 +192,8 @@ function saveSimulationState() {
       browserFlexCloseDate,
       browserFlexCloseHour,
       browserFlexCloseEnabled,
-      browserMealPauseCutoffHour
+      browserMealPauseCutoffHour,
+      browserMealPauseIntervals
     }, null, 2));
   } catch (err) {
     log(`Error al guardar estado de simulación: ${err.message}`);
@@ -209,6 +236,9 @@ function loadSimulationState() {
       }
       if (data.browserMealPauseCutoffHour !== undefined) {
         browserMealPauseCutoffHour = data.browserMealPauseCutoffHour;
+      }
+      if (Array.isArray(data.browserMealPauseIntervals) && data.browserMealPauseIntervals.length > 0) {
+        browserMealPauseIntervals = data.browserMealPauseIntervals;
       }
       log(`Estado de simulación cargado: Habilitada=${browserPresenciaActiva}, Intervalo=${browserIntervalMs}ms, Horario=${browserSimulacionStartHour}-${browserSimulacionEndHour}, Cierre=${browserBrowserCloseHour} (Activo=${browserBrowserCloseEnabled}), FlexCierre=${browserFlexCloseDate} ${browserFlexCloseHour} (Activo=${browserFlexCloseEnabled})`);
     }
@@ -646,6 +676,7 @@ app.get('/gateway/status', (req, res) => {
       browserPausaTemporalRemainingMs,
       browserMealPauseDefaultMins: getMealPauseDefaultMins(),
       browserMealPauseCutoffHour,
+      browserMealPauseIntervals,
       ngrokUrl: ngrokUrl || 'Inactivo',
       hasEmulatorPath: !!process.env.EMULATOR_BAT_PATH,
       audioVolume: audioData.volume,
@@ -908,7 +939,7 @@ app.post('/browser/browser', async (req, res) => {
 
 // Endpoint POST /browser/programacion - Actualizar horario y días de la simulación
 app.post('/browser/programacion', (req, res) => {
-  const { startHour, endHour, days, browserCloseHour, browserCloseEnabled, flexCloseDate, flexCloseHour, flexCloseEnabled, mealPauseCutoffHour } = req.body;
+  const { startHour, endHour, days, browserCloseHour, browserCloseEnabled, flexCloseDate, flexCloseHour, flexCloseEnabled, mealPauseCutoffHour, mealPauseIntervals } = req.body;
 
   if (startHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(startHour)) {
     browserSimulacionStartHour = startHour;
@@ -937,9 +968,21 @@ app.post('/browser/programacion', (req, res) => {
   if (mealPauseCutoffHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(mealPauseCutoffHour)) {
     browserMealPauseCutoffHour = mealPauseCutoffHour;
   }
+  if (Array.isArray(mealPauseIntervals)) {
+    const validIntervals = mealPauseIntervals.slice(0, 4).filter(item => {
+      return item && typeof item.start === 'string' && typeof item.end === 'string' && !isNaN(Number(item.mins));
+    }).map(item => ({
+      start: item.start,
+      end: item.end,
+      mins: Math.max(1, Math.min(480, Number(item.mins) || 20))
+    }));
+    if (validIntervals.length > 0) {
+      browserMealPauseIntervals = validIntervals;
+    }
+  }
 
   saveSimulationState();
-  log(`Programación actualizada: Rango: ${browserSimulacionStartHour}-${browserSimulacionEndHour}, Días: ${browserSimulacionDays.join(',')}, Cierre: ${browserBrowserCloseHour} (Activo=${browserBrowserCloseEnabled}), Flex: ${browserFlexCloseDate} ${browserFlexCloseHour} (Activo=${browserFlexCloseEnabled}), CutoffComida: ${browserMealPauseCutoffHour}`);
+  log(`Programación actualizada: Rango: ${browserSimulacionStartHour}-${browserSimulacionEndHour}, Días: ${browserSimulacionDays.join(',')}, Cierre: ${browserBrowserCloseHour} (Activo=${browserBrowserCloseEnabled}), Flex: ${browserFlexCloseDate} ${browserFlexCloseHour} (Activo=${browserFlexCloseEnabled}), IntervalosPausa: ${JSON.stringify(browserMealPauseIntervals)}`);
 
   res.json({
     status: 'ok',
@@ -952,7 +995,8 @@ app.post('/browser/programacion', (req, res) => {
     browserFlexCloseDate,
     browserFlexCloseHour,
     browserFlexCloseEnabled,
-    browserMealPauseCutoffHour
+    browserMealPauseCutoffHour,
+    browserMealPauseIntervals
   });
 });
 
@@ -3092,11 +3136,21 @@ const DASHBOARD_HTML = `
           <button class="btn-preset" onclick="setPresetPausa(40)">40m</button>
         </div>
 
-        <details style="margin-bottom: 15px; font-size: 0.75rem; color: var(--text-muted);">
-          <summary style="cursor: pointer; user-select: none; font-weight: 500; opacity: 0.8;">⚙️ Configurar hora de corte (Default 15m)</summary>
-          <div style="margin-top: 8px; display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.03); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--card-border);">
-            <span>Hora para cambiar default a 15m:</span>
-            <input type="time" id="pausaCutoffHourInput" value="15:15" style="background: rgba(0,0,0,0.3); border: 1px solid var(--card-border); color: #fff; border-radius: 6px; padding: 3px 6px; font-size: 0.8rem; width: 95px; text-align: center;" onchange="guardarCutoffHour(this.value)">
+        <details style="margin-bottom: 15px; font-size: 0.75rem; color: var(--text-muted);" id="detailsPauseIntervals">
+          <summary style="cursor: pointer; user-select: none; font-weight: 500; opacity: 0.85; margin-bottom: 8px;">⚙️ Configurar intervalos por hora (Hasta 4)</summary>
+          <div style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 10px; border: 1px solid var(--card-border);">
+            <div id="pauseIntervalsList" style="display: flex; flex-direction: column; gap: 8px;">
+              <!-- Filas generadas dinámicamente -->
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 8px;">
+              <button type="button" id="btnAddPauseInterval" class="btn btn-sm btn-outline" onclick="agregarFilaIntervaloPausa()" style="font-size: 0.72rem; padding: 5px 8px; display: inline-flex; align-items: center; gap: 4px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                + Intervalo
+              </button>
+              <button type="button" class="btn btn-sm btn-primary" onclick="guardarIntervalosPausa()" style="font-size: 0.72rem; padding: 5px 12px; background: #f59e0b; border-color: #f59e0b; color: #fff;">
+                Guardar Horarios
+              </button>
+            </div>
           </div>
         </details>
       </div>
@@ -3595,14 +3649,230 @@ const DASHBOARD_HTML = `
       }
     }
 
+    function calcularDefaultMinsSegunIntervalos(intervals) {
+      if (!Array.isArray(intervals) || intervals.length === 0) return 25;
+      const now = new Date();
+      const curMinutes = now.getHours() * 60 + now.getMinutes();
+
+      for (let i = 0; i < intervals.length; i++) {
+        const item = intervals[i];
+        if (!item || !item.start || !item.end) continue;
+        const [sH, sM] = item.start.split(':').map(Number);
+        const [eH, eM] = item.end.split(':').map(Number);
+        const startMin = sH * 60 + sM;
+        const endMin = eH * 60 + eM;
+
+        if (startMin <= endMin) {
+          if (curMinutes >= startMin && curMinutes <= endMin) {
+            return Number(item.mins) || 20;
+          }
+        } else {
+          if (curMinutes >= startMin || curMinutes <= endMin) {
+            return Number(item.mins) || 20;
+          }
+        }
+      }
+      return Number(intervals[0].mins) || 25;
+    }
+
+    function renderizarIntervalosPausa(intervals) {
+      const container = document.getElementById('pauseIntervalsList');
+      if (!container) return;
+      container.innerHTML = '';
+
+      const list = Array.isArray(intervals) && intervals.length > 0 ? intervals : [
+        { start: '00:00', end: '15:15', mins: 25 },
+        { start: '15:15', end: '23:59', mins: 15 }
+      ];
+
+      list.slice(0, 4).forEach(function(item) {
+        agregarFilaDOMIntervaloPausa(item.start || '00:00', item.end || '23:59', item.mins || 20);
+      });
+      actualizarBotonAgregarIntervalo();
+    }
+
+    function agregarFilaDOMIntervaloPausa(startVal, endVal, minsVal) {
+      const container = document.getElementById('pauseIntervalsList');
+      if (!container) return;
+
+      const row = document.createElement('div');
+      row.className = 'pause-interval-row';
+      row.style.display = 'flex';
+      row.style.alignItems = 'center';
+      row.style.gap = '6px';
+      row.style.background = 'rgba(0,0,0,0.25)';
+      row.style.padding = '6px 8px';
+      row.style.borderRadius = '8px';
+      row.style.border = '1px solid rgba(255,255,255,0.06)';
+
+      const lblDe = document.createElement('span');
+      lblDe.style.fontSize = '0.7rem';
+      lblDe.style.color = 'var(--text-muted)';
+      lblDe.textContent = 'De';
+
+      const inStart = document.createElement('input');
+      inStart.type = 'time';
+      inStart.className = 'pause-interval-start';
+      inStart.value = startVal;
+      inStart.style.background = 'rgba(255,255,255,0.05)';
+      inStart.style.border = '1px solid var(--card-border)';
+      inStart.style.color = '#fff';
+      inStart.style.borderRadius = '6px';
+      inStart.style.padding = '3px 4px';
+      inStart.style.fontSize = '0.75rem';
+      inStart.style.width = '75px';
+      inStart.style.textAlign = 'center';
+
+      const lblA = document.createElement('span');
+      lblA.style.fontSize = '0.7rem';
+      lblA.style.color = 'var(--text-muted)';
+      lblA.textContent = 'a';
+
+      const inEnd = document.createElement('input');
+      inEnd.type = 'time';
+      inEnd.className = 'pause-interval-end';
+      inEnd.value = endVal;
+      inEnd.style.background = 'rgba(255,255,255,0.05)';
+      inEnd.style.border = '1px solid var(--card-border)';
+      inEnd.style.color = '#fff';
+      inEnd.style.borderRadius = '6px';
+      inEnd.style.padding = '3px 4px';
+      inEnd.style.fontSize = '0.75rem';
+      inEnd.style.width = '75px';
+      inEnd.style.textAlign = 'center';
+
+      const lblDef = document.createElement('span');
+      lblDef.style.fontSize = '0.7rem';
+      lblDef.style.color = 'var(--text-muted)';
+      lblDef.textContent = 'Default:';
+
+      const inMins = document.createElement('input');
+      inMins.type = 'number';
+      inMins.className = 'pause-interval-mins';
+      inMins.min = '1';
+      inMins.max = '480';
+      inMins.value = minsVal;
+      inMins.style.background = 'rgba(255,255,255,0.05)';
+      inMins.style.border = '1px solid var(--card-border)';
+      inMins.style.color = '#fff';
+      inMins.style.borderRadius = '6px';
+      inMins.style.padding = '3px 4px';
+      inMins.style.fontSize = '0.75rem';
+      inMins.style.width = '48px';
+      inMins.style.textAlign = 'center';
+
+      const lblM = document.createElement('span');
+      lblM.style.fontSize = '0.7rem';
+      lblM.style.color = 'var(--text-muted)';
+      lblM.textContent = 'm';
+
+      const btnDel = document.createElement('button');
+      btnDel.type = 'button';
+      btnDel.className = 'btn-del-interval';
+      btnDel.title = 'Eliminar intervalo';
+      btnDel.style.background = 'transparent';
+      btnDel.style.border = 'none';
+      btnDel.style.color = '#ef4444';
+      btnDel.style.cursor = 'pointer';
+      btnDel.style.padding = '2px';
+      btnDel.style.marginLeft = 'auto';
+      btnDel.style.display = 'flex';
+      btnDel.style.alignItems = 'center';
+      btnDel.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+      btnDel.onclick = function() {
+        row.remove();
+        actualizarBotonAgregarIntervalo();
+      };
+
+      row.appendChild(lblDe);
+      row.appendChild(inStart);
+      row.appendChild(lblA);
+      row.appendChild(inEnd);
+      row.appendChild(lblDef);
+      row.appendChild(inMins);
+      row.appendChild(lblM);
+      row.appendChild(btnDel);
+
+      container.appendChild(row);
+    }
+
+    function actualizarBotonAgregarIntervalo() {
+      const rows = document.querySelectorAll('.pause-interval-row');
+      const btnAdd = document.getElementById('btnAddPauseInterval');
+      if (btnAdd) {
+        btnAdd.style.display = rows.length >= 4 ? 'none' : 'inline-flex';
+      }
+      rows.forEach(function(row) {
+        const delBtn = row.querySelector('.btn-del-interval');
+        if (delBtn) {
+          delBtn.style.display = rows.length <= 1 ? 'none' : 'flex';
+        }
+      });
+    }
+
+    function agregarFilaIntervaloPausa() {
+      const rows = document.querySelectorAll('.pause-interval-row');
+      if (rows.length >= 4) {
+        showToast('Máximo 4 intervalos permitidos.', 'warning');
+        return;
+      }
+      let newStart = '18:00';
+      if (rows.length > 0) {
+        const lastRow = rows[rows.length - 1];
+        const lastEnd = lastRow.querySelector('.pause-interval-end').value;
+        if (lastEnd) newStart = lastEnd;
+      }
+      agregarFilaDOMIntervaloPausa(newStart, '23:59', 20);
+      actualizarBotonAgregarIntervalo();
+    }
+
+    async function guardarIntervalosPausa() {
+      const rows = document.querySelectorAll('.pause-interval-row');
+      const intervals = [];
+      rows.forEach(function(row) {
+        const start = row.querySelector('.pause-interval-start').value || '00:00';
+        const end = row.querySelector('.pause-interval-end').value || '23:59';
+        const mins = parseInt(row.querySelector('.pause-interval-mins').value) || 20;
+        intervals.push({ start: start, end: end, mins: mins });
+      });
+
+      if (intervals.length === 0) {
+        showToast('Debe haber al menos 1 intervalo configurado.', 'warning');
+        return;
+      }
+
+      try {
+        const response = await fetch('/browser/programacion', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mealPauseIntervals: intervals })
+        });
+        const data = await response.json();
+        if (response.ok) {
+          showToast('Intervalos de pausa actualizados con éxito.', 'success');
+          if (window.lastStatusData) {
+            window.lastStatusData.browserMealPauseIntervals = intervals;
+          }
+          const defaultMins = calcularDefaultMinsSegunIntervalos(intervals);
+          document.getElementById('pausaTemporalMinsInput').value = defaultMins;
+          setPresetPausa(defaultMins);
+        } else {
+          showToast(data.message || 'Error al actualizar intervalos', 'error');
+        }
+      } catch (error) {
+        showToast('Error de conexión con el servidor', 'error');
+      }
+    }
+
     function abrirModalPausaTemporal() {
-      const defaultMins = (window.lastStatusData && window.lastStatusData.browserMealPauseDefaultMins) || 25;
+      const intervals = (window.lastStatusData && window.lastStatusData.browserMealPauseIntervals) || [
+        { start: '00:00', end: '15:15', mins: 25 },
+        { start: '15:15', end: '23:59', mins: 15 }
+      ];
+      renderizarIntervalosPausa(intervals);
+      const defaultMins = calcularDefaultMinsSegunIntervalos(intervals);
       document.getElementById('pausaTemporalMinsInput').value = defaultMins;
       setPresetPausa(defaultMins);
-      if (window.lastStatusData && window.lastStatusData.browserMealPauseCutoffHour) {
-        const cutoffInput = document.getElementById('pausaCutoffHourInput');
-        if (cutoffInput) cutoffInput.value = window.lastStatusData.browserMealPauseCutoffHour;
-      }
       document.getElementById('modalPausaTemporal').style.display = 'flex';
       setTimeout(() => {
         const input = document.getElementById('pausaTemporalMinsInput');
@@ -3611,26 +3881,6 @@ const DASHBOARD_HTML = `
           input.select();
         }
       }, 50);
-    }
-
-    async function guardarCutoffHour(val) {
-      if (!val) return;
-      try {
-        const response = await fetch('/browser/programacion', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mealPauseCutoffHour: val })
-        });
-        const data = await response.json();
-        if (response.ok) {
-          showToast('Hora de corte actualizada a ' + val, 'success');
-          pollGatewayStatus();
-        } else {
-          showToast(data.message || 'Error al actualizar hora de corte', 'error');
-        }
-      } catch (error) {
-        showToast('Error de conexión con el servidor', 'error');
-      }
     }
 
     function cerrarModalPausaTemporal() {
