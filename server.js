@@ -2574,6 +2574,66 @@ const DASHBOARD_HTML = `
       transform: scale(0.98);
       border: 2px dashed var(--primary) !important;
     }
+
+    /* Sub-secciones individuales */
+    .sub-section {
+      position: relative;
+      transition: all 0.2s ease;
+    }
+    .sub-section.is-hidden-sub {
+      display: none !important;
+    }
+    body.is-edit-mode .sub-section.is-hidden-sub {
+      display: block !important;
+      opacity: 0.45;
+      border: 1px dashed rgba(239, 68, 68, 0.45) !important;
+      border-radius: 12px;
+      padding: 10px;
+      margin: 8px 0;
+      background: rgba(239, 68, 68, 0.03) !important;
+    }
+    body.is-edit-mode .sub-section.is-hidden-sub:hover {
+      opacity: 0.8;
+    }
+    .sub-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      margin-bottom: 6px;
+    }
+    .btn-sub-vis {
+      display: none;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+      margin-left: auto;
+    }
+    body.is-edit-mode .btn-sub-vis {
+      display: inline-flex;
+    }
+    .btn-sub-vis.is-visible {
+      background: rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.3);
+      color: #34d399;
+    }
+    .btn-sub-vis.is-visible:hover {
+      background: rgba(16, 185, 129, 0.2);
+    }
+    .btn-sub-vis.is-hidden {
+      background: rgba(239, 68, 68, 0.12);
+      border-color: rgba(239, 68, 68, 0.3);
+      color: #f87171;
+    }
+    .btn-sub-vis.is-hidden:hover {
+      background: rgba(239, 68, 68, 0.2);
+    }
   </style>
 </head>
 <body>
@@ -2625,164 +2685,182 @@ const DASHBOARD_HTML = `
       </div>
 
       <!-- SECCIÓN 1.A: NAVEGADOR -->
-      <div class="card-section-title">Ventana del Navegador</div>
-      <div class="btn-row" style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 8px;">
-        <button class="btn btn-primary" id="btnBrowserOpen" onclick="controlBrowser('abrir')" style="flex: 1 1 calc(50% - 4px); min-width: 120px; margin-top: 0;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-          Abrir Ventana
-        </button>
-        <button class="btn btn-danger" id="btnBrowserClose" onclick="controlBrowser('cerrar')" style="flex: 1 1 calc(50% - 4px); min-width: 120px; margin-top: 0;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="15"></line><line x1="15" y1="9" x2="9" y2="15"></line></svg>
-          Cerrar Ventana
-        </button>
-        <button class="btn" id="btnBrowserMinimize" onclick="controlBrowser('minimizar')" style="flex: 1 1 calc(50% - 4px); min-width: 120px; margin-top: 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text);">
-          Minimizar
-        </button>
-        <button class="btn" id="btnBrowserRestore" onclick="controlBrowser('restaurar')" style="flex: 1 1 calc(50% - 4px); min-width: 120px; margin-top: 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text);">
-          Restaurar/Ver
-        </button>
+      <div class="sub-section" id="sub_browser_browser" data-sub-title="Ventana del Navegador">
+        <div class="sub-section-header">
+          <div class="card-section-title" style="margin-bottom: 0;">Ventana del Navegador</div>
+        </div>
+        <div class="btn-row" style="margin-top: 8px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 8px;">
+          <button class="btn btn-primary" id="btnBrowserOpen" onclick="controlBrowser('abrir')" style="flex: 1 1 calc(50% - 4px); min-width: 120px; margin-top: 0;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+            Abrir Ventana
+          </button>
+          <button class="btn btn-danger" id="btnBrowserClose" onclick="controlBrowser('cerrar')" style="flex: 1 1 calc(50% - 4px); min-width: 120px; margin-top: 0;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="15"></line><line x1="15" y1="9" x2="9" y2="15"></line></svg>
+            Cerrar Ventana
+          </button>
+          <button class="btn" id="btnBrowserMinimize" onclick="controlBrowser('minimizar')" style="flex: 1 1 calc(50% - 4px); min-width: 120px; margin-top: 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text);">
+            Minimizar
+          </button>
+          <button class="btn" id="btnBrowserRestore" onclick="controlBrowser('restaurar')" style="flex: 1 1 calc(50% - 4px); min-width: 120px; margin-top: 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text);">
+            Restaurar/Ver
+          </button>
+        </div>
       </div>
-
-      <div class="divider"></div>
 
       <!-- SECCIÓN 1.B: AUTOMATIZACIÓN DE ACTIVIDAD -->
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-        <div class="card-section-title" style="margin-bottom: 0;">Mantener Activo (Presencia)</div>
-        <div id="lastActivityLabel" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500; letter-spacing: 0.3px;">Última: Sin actividad</div>
-      </div>
-      
-      <div class="form-group">
-        <div class="form-label-row">
-          <span>Intervalo de Simulación (minutos)</span>
-          <span id="browserIntervalVal">4 minutos</span>
+      <div class="sub-section" id="sub_browser_presencia" data-sub-title="Mantener Activo (Presencia)">
+        <div class="divider"></div>
+        <div class="sub-section-header" style="margin-bottom: 5px;">
+          <div class="card-section-title" style="margin-bottom: 0;">Mantener Activo (Presencia)</div>
+          <div id="lastActivityLabel" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500; letter-spacing: 0.3px;">Última: Sin actividad</div>
         </div>
-        <input type="number" class="number-input" id="browserIntervalInput" min="1" max="9999" step="1" value="4" onchange="cambiarIntervaloEnCaliente(this.value)">
-      </div>
-
-      <div class="btn-row" style="display: flex; gap: 8px; flex-wrap: wrap;">
-        <button class="btn btn-success" id="btnPresenciaPlay" onclick="controlPresencia('iniciar')" style="flex: 1 1 calc(33% - 6px); min-width: 100px;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-          Iniciar
-        </button>
-        <button class="btn" id="btnPresenciaPausaTemporal" onclick="abrirModalPausaTemporal()" style="flex: 1 1 calc(33% - 6px); min-width: 110px; background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.4); color: #f59e0b;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-          Pausa Temp
-        </button>
-        <button class="btn" id="btnPresenciaPause" onclick="controlPresencia('pausar')" style="flex: 1 1 calc(33% - 6px); min-width: 100px;">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
-          Pausar
-        </button>
-      </div>
-
-      <div id="pausaTemporalStatusBanner" style="display: none; margin-top: 12px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 12px; padding: 10px 14px; font-size: 0.8rem; color: #fbbf24; align-items: center; justify-content: space-between;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-          <span>Pausa temporal (Programada): <strong id="pausaTemporalCountdownText">20m 00s</strong></span>
+        
+        <div class="form-group">
+          <div class="form-label-row">
+            <span>Intervalo de Simulación (minutos)</span>
+            <span id="browserIntervalVal">4 minutos</span>
+          </div>
+          <input type="number" class="number-input" id="browserIntervalInput" min="1" max="9999" step="1" value="4" onchange="cambiarIntervaloEnCaliente(this.value)">
         </div>
-        <button onclick="controlPresencia('iniciar')" style="background: rgba(245, 158, 11, 0.25); border: 1px solid #f59e0b; color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer;">Reanudar Ya</button>
+
+        <div class="btn-row" style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button class="btn btn-success" id="btnPresenciaPlay" onclick="controlPresencia('iniciar')" style="flex: 1 1 calc(33% - 6px); min-width: 100px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            Iniciar
+          </button>
+          <button class="btn" id="btnPresenciaPausaTemporal" onclick="abrirModalPausaTemporal()" style="flex: 1 1 calc(33% - 6px); min-width: 110px; background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.4); color: #f59e0b;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            Pausa Temp
+          </button>
+          <button class="btn" id="btnPresenciaPause" onclick="controlPresencia('pausar')" style="flex: 1 1 calc(33% - 6px); min-width: 100px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+            Pausar
+          </button>
+        </div>
+
+        <div id="pausaTemporalStatusBanner" style="display: none; margin-top: 12px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 12px; padding: 10px 14px; font-size: 0.8rem; color: #fbbf24; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            <span>Pausa temporal (Programada): <strong id="pausaTemporalCountdownText">20m 00s</strong></span>
+          </div>
+          <button onclick="controlPresencia('iniciar')" style="background: rgba(245, 158, 11, 0.25); border: 1px solid #f59e0b; color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer;">Reanudar Ya</button>
+        </div>
       </div>
-
-
-      <div class="divider"></div>
 
       <!-- SECCIÓN 1.C: PLANIFICACIÓN Y CONTROL HORARIO -->
-      <div class="card-section-title">Programación de la Simulación</div>
-      <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 5px;">
-        <div style="display: flex; gap: 10px; width: 100%;">
-          <div style="flex: 1;">
-            <label style="font-size: 0.75rem; color: var(--text-muted);">Inicio Simulación</label>
-            <input type="time" id="browserStartHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
-          </div>
-          <div style="flex: 1;">
-            <label style="font-size: 0.75rem; color: var(--text-muted);">Fin Simulación</label>
-            <input type="time" id="browserEndHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
-          </div>
+      <div class="sub-section" id="sub_browser_schedule" data-sub-title="Programación Horaria">
+        <div class="divider"></div>
+        <div class="sub-section-header">
+          <div class="card-section-title" style="margin-bottom: 0;">Programación de la Simulación</div>
         </div>
-
-        <div>
-          <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 6px;">Días Permitidos</label>
-          <div style="display: flex; justify-content: space-between; gap: 4px;">
-            <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-0">
-              <input type="checkbox" class="day-checkbox" value="0" style="display:none;" onchange="updateSchedule()">D
-            </label>
-            <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-1">
-              <input type="checkbox" class="day-checkbox" value="1" style="display:none;" onchange="updateSchedule()">L
-            </label>
-            <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-2">
-              <input type="checkbox" class="day-checkbox" value="2" style="display:none;" onchange="updateSchedule()">M
-            </label>
-            <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-3">
-              <input type="checkbox" class="day-checkbox" value="3" style="display:none;" onchange="updateSchedule()">M
-            </label>
-            <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-4">
-              <input type="checkbox" class="day-checkbox" value="4" style="display:none;" onchange="updateSchedule()">J
-            </label>
-            <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-5">
-              <input type="checkbox" class="day-checkbox" value="5" style="display:none;" onchange="updateSchedule()">V
-            </label>
-            <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-6">
-              <input type="checkbox" class="day-checkbox" value="6" style="display:none;" onchange="updateSchedule()">S
-            </label>
+        <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 8px;">
+          <div style="display: flex; gap: 10px; width: 100%;">
+            <div style="flex: 1;">
+              <label style="font-size: 0.75rem; color: var(--text-muted);">Inicio Simulación</label>
+              <input type="time" id="browserStartHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
+            </div>
+            <div style="flex: 1;">
+              <label style="font-size: 0.75rem; color: var(--text-muted);">Fin Simulación</label>
+              <input type="time" id="browserEndHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
+            </div>
           </div>
-        </div>
-      </div>
 
-      <div style="border-top: 1px dashed rgba(255,255,255,0.15); margin: 20px 0 15px 0;"></div>
-
-      <div class="card-section-title">Auto-Cierre del Navegador</div>
-      <div style="display: flex; gap: 10px; width: 100%; align-items: center;">
-        <div style="flex: 1.2;">
-          <label style="font-size: 0.75rem; color: var(--text-muted);">Hora de Cierre</label>
-          <input type="time" id="browserBrowserCloseHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
-        </div>
-        <div style="flex: 0.8; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; margin-top: 14px;">
-          <div class="switch-container" style="margin-top: 0; justify-content: flex-end; gap: 10px;">
-            <span style="font-size: 0.85rem; color: var(--text-muted);">Auto-Cierre</span>
-            <label class="switch">
-              <input type="checkbox" id="browserBrowserCloseEnabled" onchange="updateSchedule()">
-              <span class="slider-toggle"></span>
-            </label>
+          <div>
+            <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 6px;">Días Permitidos</label>
+            <div style="display: flex; justify-content: space-between; gap: 4px;">
+              <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-0">
+                <input type="checkbox" class="day-checkbox" value="0" style="display:none;" onchange="updateSchedule()">D
+              </label>
+              <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-1">
+                <input type="checkbox" class="day-checkbox" value="1" style="display:none;" onchange="updateSchedule()">L
+              </label>
+              <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-2">
+                <input type="checkbox" class="day-checkbox" value="2" style="display:none;" onchange="updateSchedule()">M
+              </label>
+              <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-3">
+                <input type="checkbox" class="day-checkbox" value="3" style="display:none;" onchange="updateSchedule()">M
+              </label>
+              <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-4">
+                <input type="checkbox" class="day-checkbox" value="4" style="display:none;" onchange="updateSchedule()">J
+              </label>
+              <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-5">
+                <input type="checkbox" class="day-checkbox" value="5" style="display:none;" onchange="updateSchedule()">V
+              </label>
+              <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-6">
+                <input type="checkbox" class="day-checkbox" value="6" style="display:none;" onchange="updateSchedule()">S
+              </label>
+            </div>
           </div>
         </div>
       </div>
 
-      <div style="border-top: 1px dashed rgba(255,255,255,0.15); margin: 20px 0 15px 0;"></div>
-
-      <div class="card-section-title">Cierre Flex</div>
-      <div style="display: flex; gap: 10px; width: 100%; align-items: center; flex-wrap: wrap;">
-        <div style="flex: 1; min-width: 120px;">
-          <label style="font-size: 0.75rem; color: var(--text-muted);">Fecha</label>
-          <input type="date" id="browserFlexCloseDate" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
+      <!-- SUB 1.D: AUTO-CIERRE DEL NAVEGADOR -->
+      <div class="sub-section" id="sub_browser_autoclose" data-sub-title="Auto-Cierre del Navegador">
+        <div style="border-top: 1px dashed rgba(255,255,255,0.15); margin: 20px 0 15px 0;"></div>
+        <div class="sub-section-header">
+          <div class="card-section-title" style="margin-bottom: 0;">Auto-Cierre del Navegador</div>
         </div>
-        <div style="flex: 1; min-width: 100px;">
-          <label style="font-size: 0.75rem; color: var(--text-muted);">Hora de Cierre</label>
-          <input type="time" id="browserFlexCloseHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
-        </div>
-        <div style="flex: 0.8; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; margin-top: 14px; min-width: 120px;">
-          <div class="switch-container" style="margin-top: 0; justify-content: flex-end; gap: 10px;">
-            <span style="font-size: 0.85rem; color: var(--text-muted);">Cierre Flex</span>
-            <label class="switch">
-              <input type="checkbox" id="browserFlexCloseEnabled" onchange="updateSchedule()">
-              <span class="slider-toggle"></span>
-            </label>
+        <div style="display: flex; gap: 10px; width: 100%; align-items: center; margin-top: 8px;">
+          <div style="flex: 1.2;">
+            <label style="font-size: 0.75rem; color: var(--text-muted);">Hora de Cierre</label>
+            <input type="time" id="browserBrowserCloseHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
+          </div>
+          <div style="flex: 0.8; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; margin-top: 14px;">
+            <div class="switch-container" style="margin-top: 0; justify-content: flex-end; gap: 10px;">
+              <span style="font-size: 0.85rem; color: var(--text-muted);">Auto-Cierre</span>
+              <label class="switch">
+                <input type="checkbox" id="browserBrowserCloseEnabled" onchange="updateSchedule()">
+                <span class="slider-toggle"></span>
+              </label>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="divider"></div>
+      <!-- SUB 1.E: CIERRE FLEX -->
+      <div class="sub-section" id="sub_browser_flexclose" data-sub-title="Cierre Flex">
+        <div style="border-top: 1px dashed rgba(255,255,255,0.15); margin: 20px 0 15px 0;"></div>
+        <div class="sub-section-header">
+          <div class="card-section-title" style="margin-bottom: 0;">Cierre Flex</div>
+        </div>
+        <div style="display: flex; gap: 10px; width: 100%; align-items: center; flex-wrap: wrap; margin-top: 8px;">
+          <div style="flex: 1; min-width: 120px;">
+            <label style="font-size: 0.75rem; color: var(--text-muted);">Fecha</label>
+            <input type="date" id="browserFlexCloseDate" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
+          </div>
+          <div style="flex: 1; min-width: 100px;">
+            <label style="font-size: 0.75rem; color: var(--text-muted);">Hora de Cierre</label>
+            <input type="time" id="browserFlexCloseHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
+          </div>
+          <div style="flex: 0.8; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; margin-top: 14px; min-width: 120px;">
+            <div class="switch-container" style="margin-top: 0; justify-content: flex-end; gap: 10px;">
+              <span style="font-size: 0.85rem; color: var(--text-muted);">Cierre Flex</span>
+              <label class="switch">
+                <input type="checkbox" id="browserFlexCloseEnabled" onchange="updateSchedule()">
+                <span class="slider-toggle"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
 
-      <!-- SECCIÓN 1.C: PRUEBAS MANUALES EN CALIENTE -->
-      <div class="card-section-title">Pruebas Manuales (Acciones al Instante)</div>
-      <div class="btn-row" style="gap: 8px; margin-top: 10px;">
-        <button class="btn" id="btnTestMouse" onclick="enviarAccionPrueba('mover-mouse')" style="padding: 8px; font-size: 0.75rem;">
-          Mover Mouse
-        </button>
-        <button class="btn" id="btnTestTipeo" onclick="enviarAccionPrueba('tipear-buscador')" style="padding: 8px; font-size: 0.75rem;">
-          Tipear Buscador
-        </button>
-        <button class="btn" id="btnTestShift" onclick="enviarAccionPrueba('pulsar-shift')" style="padding: 8px; font-size: 0.75rem;">
-          Pulsar Shift
-        </button>
+      <!-- SECCIÓN 1.F: PRUEBAS MANUALES EN CALIENTE -->
+      <div class="sub-section" id="sub_browser_manualtests" data-sub-title="Pruebas Manuales">
+        <div class="divider"></div>
+        <div class="sub-section-header">
+          <div class="card-section-title" style="margin-bottom: 0;">Pruebas Manuales (Acciones al Instante)</div>
+        </div>
+        <div class="btn-row" style="gap: 8px; margin-top: 10px;">
+          <button class="btn" id="btnTestMouse" onclick="enviarAccionPrueba('mover-mouse')" style="padding: 8px; font-size: 0.75rem;">
+            Mover Mouse
+          </button>
+          <button class="btn" id="btnTestTipeo" onclick="enviarAccionPrueba('tipear-buscador')" style="padding: 8px; font-size: 0.75rem;">
+            Tipear Buscador
+          </button>
+          <button class="btn" id="btnTestShift" onclick="enviarAccionPrueba('pulsar-shift')" style="padding: 8px; font-size: 0.75rem;">
+            Pulsar Shift
+          </button>
+        </div>
       </div>
     </div>
 
@@ -2794,57 +2872,80 @@ const DASHBOARD_HTML = `
           <p>Ejecutar programas y scripts en la PC</p>
         </div>
       </div>
-      <div class="form-group" style="margin-bottom: 10px;">
-        <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.4;">
-          Permite iniciar el emulador configurado en el archivo <code>.env</code> desde tu celular.
-        </p>
-      </div>
-      <div style="display: flex; gap: 8px; margin-top: 5px; width: 100%;">
-        <button class="btn btn-primary" id="btnEmulador" style="flex: 1; margin-top: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="ejecutarPrograma('emulador')">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-          Iniciar
-        </button>
-        <button class="btn btn-danger" id="btnCerrarEmulador" style="flex: 1; margin-top: 0; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68); display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="cerrarPrograma('emulador')">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>
-          Cerrar
-        </button>
-      </div>
-      <div class="divider"></div>
-      <div class="card-section-title">Control de Pantalla (PC Físico)</div>
-      <div style="display: flex; gap: 8px; margin-top: 5px; width: 100%;">
-        <button class="btn btn-danger" style="flex: 1; margin-top: 0; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68); display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="controlarTeclado('apagar-pantalla')">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
-          Apagar (Alt+X)
-        </button>
-        <button class="btn btn-success" style="flex: 1; margin-top: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="controlarTeclado('encender-pantalla')">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
-          Encender (Ctrl)
-        </button>
+
+      <!-- SUB 2.A: EMULADOR -->
+      <div class="sub-section" id="sub_emulador" data-sub-title="Emulador Android">
+        <div class="sub-section-header">
+          <div class="card-section-title" style="margin-bottom: 0;">Emulador Android</div>
+        </div>
+        <div class="form-group" style="margin-bottom: 10px; margin-top: 6px;">
+          <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.4;">
+            Permite iniciar el emulador configurado en el archivo <code>.env</code> desde tu celular.
+          </p>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 5px; width: 100%;">
+          <button class="btn btn-primary" id="btnEmulador" style="flex: 1; margin-top: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="ejecutarPrograma('emulador')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            Iniciar
+          </button>
+          <button class="btn btn-danger" id="btnCerrarEmulador" style="flex: 1; margin-top: 0; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68); display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="cerrarPrograma('emulador')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>
+            Cerrar
+          </button>
+        </div>
       </div>
 
-      <div class="divider"></div>
-      <div class="card-section-title">Portapapeles de la PC</div>
-      <div style="display: flex; gap: 8px; margin-top: 5px;">
-        <input type="text" id="inputPortapapeles" placeholder="Texto para enviar a la PC..." style="flex: 2; padding: 10px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 0;">
-        <button class="btn" onclick="enviarPortapapeles()" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.75rem;">
-          Copiar a PC
-        </button>
-        <button class="btn" onclick="obtenerPortapapeles()" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.75rem;">
-          Leer de PC
-        </button>
+      <!-- SUB 2.B: CONTROL DE PANTALLA -->
+      <div class="sub-section" id="sub_pantalla" data-sub-title="Control de Pantalla">
+        <div class="divider"></div>
+        <div class="sub-section-header">
+          <div class="card-section-title" style="margin-bottom: 0;">Control de Pantalla (PC Físico)</div>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 5px; width: 100%;">
+          <button class="btn btn-danger" style="flex: 1; margin-top: 0; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68); display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="controlarTeclado('apagar-pantalla')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+            Apagar (Alt+X)
+          </button>
+          <button class="btn btn-success" style="flex: 1; margin-top: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="controlarTeclado('encender-pantalla')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
+            Encender (Ctrl)
+          </button>
+        </div>
       </div>
 
-      <div class="divider"></div>
-      <div class="card-section-title">Captura de Pantalla & Latencia</div>
-      <div style="display: flex; gap: 8px; margin-top: 5px;">
-        <button class="btn" onclick="tomarScreenshot()" style="flex: 1; padding: 10px 12px; font-size: 0.75rem; margin-top: 0;">
-          Capturar Pantalla
-        </button>
-        <button class="btn" onclick="probarPing()" style="flex: 1; padding: 10px 12px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px; justify-content: center; margin-top: 0;">
-          Test Ping: <span id="pingResultText" style="color: var(--success); font-weight: 700;">--</span>
-        </button>
+      <!-- SUB 2.C: PORTAPAPELES -->
+      <div class="sub-section" id="sub_portapapeles" data-sub-title="Portapapeles de la PC">
+        <div class="divider"></div>
+        <div class="sub-section-header">
+          <div class="card-section-title" style="margin-bottom: 0;">Portapapeles de la PC</div>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 5px;">
+          <input type="text" id="inputPortapapeles" placeholder="Texto para enviar a la PC..." style="flex: 2; padding: 10px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 0;">
+          <button class="btn" onclick="enviarPortapapeles()" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.75rem;">
+            Copiar a PC
+          </button>
+          <button class="btn" onclick="obtenerPortapapeles()" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.75rem;">
+            Leer de PC
+          </button>
+        </div>
       </div>
-      <img id="screenshotPreview" class="screenshot-preview" alt="Captura de Pantalla" style="width: 100%; border-radius: 10px; border: 1px solid var(--card-border); margin-top: 10px; display: none; cursor: pointer;" onclick="window.open(this.src, '_blank')">
+
+      <!-- SUB 2.D: CAPTURA & LATENCIA -->
+      <div class="sub-section" id="sub_captura" data-sub-title="Captura de Pantalla & Latencia">
+        <div class="divider"></div>
+        <div class="sub-section-header">
+          <div class="card-section-title" style="margin-bottom: 0;">Captura de Pantalla & Latencia</div>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 5px;">
+          <button class="btn" onclick="tomarScreenshot()" style="flex: 1; padding: 10px 12px; font-size: 0.75rem; margin-top: 0;">
+            Capturar Pantalla
+          </button>
+          <button class="btn" onclick="probarPing()" style="flex: 1; padding: 10px 12px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px; justify-content: center; margin-top: 0;">
+            Test Ping: <span id="pingResultText" style="color: var(--success); font-weight: 700;">--</span>
+          </button>
+        </div>
+        <img id="screenshotPreview" class="screenshot-preview" alt="Captura de Pantalla" style="width: 100%; border-radius: 10px; border: 1px solid var(--card-border); margin-top: 10px; display: none; cursor: pointer;" onclick="window.open(this.src, '_blank')">
+      </div>
     </div>
 
     <!-- CARD 3: REINICIAR GATEWAY -->
@@ -2861,8 +2962,6 @@ const DASHBOARD_HTML = `
       </div>
     </div>
 
-
-
     <!-- CARD 5: AUDIO, MULTIMEDIA, BRILLO & VOZ -->
     <div class="card" id="cardMultimedia" style="margin-top: 10px;">
       <div class="card-header" style="margin-bottom: 15px;">
@@ -2872,59 +2971,69 @@ const DASHBOARD_HTML = `
         </div>
       </div>
       
-      <!-- Controles de Audio y Pistas -->
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div class="card-section-title" style="margin-bottom: 0;">Control de Audio y Reproducción</div>
-        <div id="audioStatusText" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500; letter-spacing: 0.3px;">Volumen: --% | --</div>
-      </div>
-      <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 8px;">
-        <div style="display: flex; gap: 8px; width: 100%;">
-          <button class="btn" onclick="enviarMultimedia('vol-')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text);">
-            Vol -
-          </button>
-          <button class="btn" onclick="enviarMultimedia('mute')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68);">
-            Mute
-          </button>
-          <button class="btn" onclick="enviarMultimedia('vol+')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text);">
-            Vol +
-          </button>
+      <!-- SUB 5.A: AUDIO -->
+      <div class="sub-section" id="sub_media_audio" data-sub-title="Audio y Reproducción">
+        <div class="sub-section-header">
+          <div class="card-section-title" style="margin-bottom: 0;">Control de Audio y Reproducción</div>
+          <div id="audioStatusText" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500; letter-spacing: 0.3px; margin-right: 8px;">Volumen: --% | --</div>
         </div>
-        
-        <div style="display: flex; gap: 8px; width: 100%;">
-          <button class="btn" onclick="enviarMultimedia('prev')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
-            Atrás
-          </button>
-          <button class="btn" onclick="enviarMultimedia('play-pausa')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: var(--primary);">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-            Play/Pausa
-          </button>
-          <button class="btn" onclick="enviarMultimedia('next')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
-            Siguiente
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
-          </button>
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 8px;">
+          <div style="display: flex; gap: 8px; width: 100%;">
+            <button class="btn" onclick="enviarMultimedia('vol-')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text);">
+              Vol -
+            </button>
+            <button class="btn" onclick="enviarMultimedia('mute')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68);">
+              Mute
+            </button>
+            <button class="btn" onclick="enviarMultimedia('vol+')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text);">
+              Vol +
+            </button>
+          </div>
+          
+          <div style="display: flex; gap: 8px; width: 100%;">
+            <button class="btn" onclick="enviarMultimedia('prev')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
+              Atrás
+            </button>
+            <button class="btn" onclick="enviarMultimedia('play-pausa')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: var(--primary);">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              Play/Pausa
+            </button>
+            <button class="btn" onclick="enviarMultimedia('next')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
+              Siguiente
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
+            </button>
+          </div>
         </div>
-      </div>
-
-      <div style="border-top: 1px dashed rgba(255,255,255,0.15); margin: 15px 0 10px 0;"></div>
-
-      <div class="form-group" style="margin-bottom: 5px;">
-        <div class="form-label-row">
-          <span>Brillo de Pantalla</span>
-          <span id="brilloVal">--%</span>
-        </div>
-        <input type="range" class="slider" id="brilloSlider" min="0" max="100" step="5" value="50" oninput="updateBrilloLabel(this.value)" onchange="cambiarBrillo(this.value)">
       </div>
 
-      <div class="divider"></div>
+      <!-- SUB 5.B: BRILLO -->
+      <div class="sub-section" id="sub_media_brillo" data-sub-title="Brillo de Pantalla">
+        <div style="border-top: 1px dashed rgba(255,255,255,0.15); margin: 15px 0 10px 0;"></div>
+        <div class="sub-section-header">
+          <div class="card-section-title" style="margin-bottom: 0;">Brillo de Pantalla</div>
+        </div>
+        <div class="form-group" style="margin-bottom: 5px; margin-top: 8px;">
+          <div class="form-label-row">
+            <span>Nivel de Brillo</span>
+            <span id="brilloVal">--%</span>
+          </div>
+          <input type="range" class="slider" id="brilloSlider" min="0" max="100" step="5" value="50" oninput="updateBrilloLabel(this.value)" onchange="cambiarBrillo(this.value)">
+        </div>
+      </div>
 
-      <!-- Lector de Voz (TTS) -->
-      <div class="card-section-title">Lector de Voz Remoto (TTS)</div>
-      <div style="display: flex; gap: 8px; margin-top: 8px;">
-        <input type="text" id="inputTTS" placeholder="Texto para reproducir con voz..." style="flex: 2; padding: 10px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 0;" onkeydown="checkTTSEnter(event)">
-        <button class="btn" onclick="enviarTTS()" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.75rem;">
-          Hablar
-        </button>
+      <!-- SUB 5.C: TTS -->
+      <div class="sub-section" id="sub_media_tts" data-sub-title="Lector de Voz (TTS)">
+        <div class="divider"></div>
+        <div class="sub-section-header">
+          <div class="card-section-title" style="margin-bottom: 0;">Lector de Voz Remoto (TTS)</div>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 8px;">
+          <input type="text" id="inputTTS" placeholder="Texto para reproducir con voz..." style="flex: 2; padding: 10px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 0;" onkeydown="checkTTSEnter(event)">
+          <button class="btn" onclick="enviarTTS()" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.75rem;">
+            Hablar
+          </button>
+        </div>
       </div>
     </div>
 
@@ -3867,7 +3976,8 @@ const DASHBOARD_HTML = `
       } catch (e) {}
       return {
         order: [...DEFAULT_CARD_ORDER],
-        hidden: {}
+        hidden: {},
+        subHidden: {}
       };
     }
 
@@ -3882,7 +3992,7 @@ const DASHBOARD_HTML = `
       const mainEl = document.querySelector('main');
       const tunnelBar = document.getElementById('tunnelBar');
 
-      // Añadir la barra de edición a cada tarjeta
+      // Añadir la barra de edición a cada tarjeta principal
       DEFAULT_CARD_ORDER.forEach(function(cardId) {
         const card = document.getElementById(cardId);
         if (!card) return;
@@ -3957,6 +4067,37 @@ const DASHBOARD_HTML = `
         card.addEventListener('dragend', function(e) { handleDragEnd(e, card); });
       });
 
+      // Añadir botón de visibilidad a cada sub-sección
+      const allSubSections = document.querySelectorAll('.sub-section');
+      allSubSections.forEach(function(subEl) {
+        const subId = subEl.id;
+        if (!subId) return;
+
+        const headerEl = subEl.querySelector('.sub-section-header');
+        if (headerEl && !headerEl.querySelector('.btn-sub-vis')) {
+          const btnSubVis = document.createElement('button');
+          btnSubVis.className = 'btn-sub-vis is-visible';
+          btnSubVis.id = 'btnSubVis_' + subId;
+          btnSubVis.title = 'Ocultar o mostrar este bloque';
+          btnSubVis.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>Visible</span>';
+          btnSubVis.onclick = function(e) {
+            e.stopPropagation();
+            toggleSubSectionVisibility(subId);
+          };
+          headerEl.appendChild(btnSubVis);
+        }
+
+        // Aplicar estado guardado de sub-secciones
+        const subHiddenMap = config.subHidden || {};
+        const isSubHidden = !!subHiddenMap[subId];
+        if (isSubHidden) {
+          subEl.classList.add('is-hidden-sub');
+        } else {
+          subEl.classList.remove('is-hidden-sub');
+        }
+        updateSubVisibilityBtnUI(subId, !isSubHidden);
+      });
+
       // Aplicar orden guardado
       const order = Array.isArray(config.order) ? config.order : DEFAULT_CARD_ORDER;
       order.forEach(function(cardId) {
@@ -3997,7 +4138,7 @@ const DASHBOARD_HTML = `
       if (btnToggle) btnToggle.classList.toggle('active', isEditModeActive);
 
       if (isEditModeActive) {
-        showToast('Modo edición activado. Arrastra las secciones o usa los controles.', 'info');
+        showToast('Modo edición activado. Arrastra las tarjetas u oculta bloques específicos.', 'info');
       } else {
         saveCurrentDOMState();
         showToast('Cambios guardados correctamente.', 'success');
@@ -4016,6 +4157,18 @@ const DASHBOARD_HTML = `
       }
     }
 
+    function updateSubVisibilityBtnUI(subId, isVisible) {
+      const btn = document.getElementById('btnSubVis_' + subId);
+      if (!btn) return;
+      if (isVisible) {
+        btn.className = 'btn-sub-vis is-visible';
+        btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>Visible</span>';
+      } else {
+        btn.className = 'btn-sub-vis is-hidden';
+        btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg><span>Oculto</span>';
+      }
+    }
+
     function toggleCardVisibility(cardId) {
       const card = document.getElementById(cardId);
       if (!card) return;
@@ -4028,6 +4181,21 @@ const DASHBOARD_HTML = `
       updateVisibilityBtnUI(cardId, !willBeHidden);
       saveCurrentDOMState();
       showToast((CARD_TITLES[cardId] || 'Sección') + ': ' + (willBeHidden ? 'Ocultada' : 'Visible'), 'info');
+    }
+
+    function toggleSubSectionVisibility(subId) {
+      const subEl = document.getElementById(subId);
+      if (!subEl) return;
+      const willBeHidden = !subEl.classList.contains('is-hidden-sub');
+      if (willBeHidden) {
+        subEl.classList.add('is-hidden-sub');
+      } else {
+        subEl.classList.remove('is-hidden-sub');
+      }
+      updateSubVisibilityBtnUI(subId, !willBeHidden);
+      saveCurrentDOMState();
+      const title = subEl.getAttribute('data-sub-title') || 'Bloque';
+      showToast(title + ': ' + (willBeHidden ? 'Ocultado' : 'Visible'), 'info');
     }
 
     function moveCard(cardId, direction) {
@@ -4051,8 +4219,9 @@ const DASHBOARD_HTML = `
       const cards = Array.from(mainEl.querySelectorAll('.card'));
       const order = [];
       const hidden = {};
+      const subHidden = {};
 
-      cards.forEach(card => {
+      cards.forEach(function(card) {
         const id = card.id;
         if (id) {
           order.push(id);
@@ -4060,14 +4229,20 @@ const DASHBOARD_HTML = `
         }
       });
 
-      saveDashboardConfig({ order, hidden });
+      document.querySelectorAll('.sub-section').forEach(function(subEl) {
+        if (subEl.id) {
+          subHidden[subEl.id] = subEl.classList.contains('is-hidden-sub');
+        }
+      });
+
+      saveDashboardConfig({ order: order, hidden: hidden, subHidden: subHidden });
     }
 
     function resetDashboardLayout() {
       const mainEl = document.querySelector('main');
       const tunnelBar = document.getElementById('tunnelBar');
 
-      DEFAULT_CARD_ORDER.forEach(cardId => {
+      DEFAULT_CARD_ORDER.forEach(function(cardId) {
         const card = document.getElementById(cardId);
         if (card) {
           card.classList.remove('is-hidden-card');
@@ -4080,9 +4255,15 @@ const DASHBOARD_HTML = `
         }
       });
 
+      document.querySelectorAll('.sub-section').forEach(function(subEl) {
+        subEl.classList.remove('is-hidden-sub');
+        if (subEl.id) updateSubVisibilityBtnUI(subEl.id, true);
+      });
+
       saveDashboardConfig({
         order: [...DEFAULT_CARD_ORDER],
-        hidden: {}
+        hidden: {},
+        subHidden: {}
       });
 
       showToast('Secciones y orden restablecidos por defecto.', 'success');
