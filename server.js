@@ -2312,42 +2312,61 @@ const DASHBOARD_HTML = `
 
     .toast-container {
       position: fixed;
-      bottom: 20px;
-      right: 20px;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
       display: flex;
       flex-direction: column;
-      gap: 10px;
-      z-index: 2000;
+      align-items: center;
+      gap: 8px;
+      z-index: 9999;
+      pointer-events: none;
+      width: calc(100% - 32px);
+      max-width: 420px;
     }
 
     .toast {
-      background: rgba(17, 19, 28, 0.9);
+      pointer-events: auto;
+      background: rgba(18, 22, 34, 0.95);
       border-left: 4px solid var(--primary);
       border-top: 1px solid var(--card-border);
       border-bottom: 1px solid var(--card-border);
       border-right: 1px solid var(--card-border);
-      padding: 16px 24px;
-      border-radius: 8px;
-      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+      padding: 12px 18px;
+      border-radius: 10px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
       display: flex;
       align-items: center;
       gap: 12px;
-      min-width: 250px;
-      animation: slideInRight 0.3s ease forwards;
-      backdrop-filter: blur(10px);
+      width: 100%;
+      box-sizing: border-box;
+      animation: slideInDown 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      font-size: 0.88rem;
+      color: #f3f4f6;
+      user-select: none;
+      cursor: pointer;
     }
 
     .toast.success { border-left-color: var(--success); }
     .toast.error { border-left-color: var(--danger); }
+    .toast.warning { border-left-color: #f59e0b; }
+    .toast.info { border-left-color: var(--primary); }
 
     @keyframes pulse {
       from { box-shadow: 0 0 4px rgba(16, 185, 129, 0.3); }
       to { box-shadow: 0 0 12px rgba(16, 185, 129, 0.7); }
     }
 
-    @keyframes slideInRight {
-      from { transform: translateX(120%); opacity: 0; }
-      to { transform: translateX(0); opacity: 1; }
+    @keyframes slideInDown {
+      from { transform: translateY(-120%); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    @keyframes slideOutUp {
+      from { transform: translateY(0); opacity: 1; }
+      to { transform: translateY(-120%); opacity: 0; }
     }
 
     @media (max-width: 480px) {
@@ -3323,8 +3342,6 @@ const DASHBOARD_HTML = `
         return;
       }
 
-      showToast('Enviando texto a voz...', 'info');
-
       try {
         const response = await fetch('/sistema/tts', {
           method: 'POST',
@@ -3368,74 +3385,96 @@ const DASHBOARD_HTML = `
       }
     }
 
+    function dismissToast(el) {
+      if (!el || !el.parentNode || el._isDismissing) return;
+      el._isDismissing = true;
+      el.style.animation = 'slideOutUp 0.2s ease forwards';
+      setTimeout(() => {
+        if (el.parentNode) el.remove();
+      }, 200);
+    }
+
     function showToast(message, type = 'info') {
       const container = document.getElementById('toastContainer');
+      if (!container) return;
+
+      // Si ya hay un toast mostrando exactamente el mismo mensaje, no duplicar: reiniciar temporizador
+      const existing = Array.from(container.children).find(t => t._toastMsg === message);
+      if (existing) {
+        if (existing._timer) clearTimeout(existing._timer);
+        const duration = type === 'error' ? 3500 : (type === 'warning' ? 3000 : 2200);
+        existing._timer = setTimeout(() => dismissToast(existing), duration);
+        return;
+      }
+
+      // Limitar a máximo 1 notificación visible a la vez para no saturar la pantalla
+      while (container.children.length >= 1) {
+        dismissToast(container.children[0]);
+      }
+
       const toast = document.createElement('div');
       toast.className = 'toast ' + type;
+      toast._toastMsg = message;
       
       let icon = '';
       if (type === 'success') {
-        icon = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>';
+        icon = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>';
       } else if (type === 'error') {
-        icon = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>';
+        icon = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>';
+      } else if (type === 'warning') {
+        icon = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
       } else {
-        icon = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
+        icon = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
       }
 
-      toast.innerHTML = icon + ' <span>' + message + '</span>';
+      toast.innerHTML = icon + ' <span style="flex: 1; word-break: break-word;">' + message + '</span>';
       
-      toast.onclick = () => {
-        toast.style.animation = 'slideInRight 0.3s ease reverse forwards';
-        setTimeout(() => { if (toast.parentNode) toast.remove(); }, 300);
-      };
+      toast.onclick = () => dismissToast(toast);
 
-      // Descartar por swipe lateral (táctil)
-      let startX = 0;
-      let currentX = 0;
+      // Descartar por swipe hacia arriba o lateral
+      let startX = 0, startY = 0;
       let isSwiping = false;
 
       toast.addEventListener('touchstart', (e) => {
         startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
         toast.style.transition = 'none';
         isSwiping = true;
-      }, { passive: false });
+      }, { passive: true });
 
       toast.addEventListener('touchmove', (e) => {
         if (!isSwiping) return;
-        currentX = e.touches[0].clientX;
-        const diffX = currentX - startX;
-        if (diffX > 0) {
-          // Prevenir el scroll y overscroll del navegador para que no mueva la página
-          if (e.cancelable) e.preventDefault();
-          e.stopPropagation();
+        const diffX = e.touches[0].clientX - startX;
+        const diffY = e.touches[0].clientY - startY;
+        if (diffY < 0) {
+          toast.style.transform = 'translateY(' + diffY + 'px)';
+          toast.style.opacity = Math.max(0, 1 - Math.abs(diffY) / 100);
+        } else if (Math.abs(diffX) > 20) {
           toast.style.transform = 'translateX(' + diffX + 'px)';
-          toast.style.opacity = 1 - (diffX / 300);
+          toast.style.opacity = Math.max(0, 1 - Math.abs(diffX) / 200);
         }
-      }, { passive: false });
+      }, { passive: true });
 
-      toast.addEventListener('touchend', () => {
+      toast.addEventListener('touchend', (e) => {
         if (!isSwiping) return;
         isSwiping = false;
-        const diffX = currentX - startX;
-        toast.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
-        if (diffX > 60) {
-          toast.style.transform = 'translateX(100%)';
-          toast.style.opacity = '0';
-          setTimeout(() => { if (toast.parentNode) toast.remove(); }, 200);
+        const endY = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientY : startY;
+        const endX = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientX : startX;
+        const diffY = endY - startY;
+        const diffX = endX - startX;
+        if (diffY < -25 || Math.abs(diffX) > 60) {
+          dismissToast(toast);
         } else {
-          toast.style.transform = 'translateX(0)';
+          toast.style.transition = 'transform 0.2s ease, opacity 0.2s ease';
+          toast.style.transform = '';
           toast.style.opacity = '1';
         }
-      }, { passive: false });
+      }, { passive: true });
 
       container.appendChild(toast);
       
-      setTimeout(() => {
-        if (toast.parentNode) {
-          toast.style.animation = 'slideInRight 0.3s ease reverse forwards';
-          setTimeout(() => { if (toast.parentNode) toast.remove(); }, 300);
-        }
-      }, 4000);
+      const duration = type === 'error' ? 3500 : (type === 'warning' ? 3000 : 2200);
+      toast._timer = setTimeout(() => dismissToast(toast), duration);
     }
 
     async function pollGatewayStatus() {
@@ -3719,14 +3758,6 @@ const DASHBOARD_HTML = `
     }
 
     async function controlBrowser(accion) {
-      const msgs = {
-        'abrir': 'Iniciando navegador...',
-        'cerrar': 'Cerrando navegador...',
-        'minimizar': 'Minimizando ventana...',
-        'restaurar': 'Restaurando ventana...'
-      };
-      showToast(msgs[accion] || 'Procesando...', 'info');
-
       try {
         const response = await fetch('/browser/browser', {
           method: 'POST',
@@ -4010,7 +4041,6 @@ const DASHBOARD_HTML = `
       if (mins > 480) mins = 480;
 
       cerrarModalPausaTemporal();
-      showToast('Activando pausa temporal de ' + mins + ' minutos...', 'info');
 
       try {
         const response = await fetch('/browser/presencia', {
@@ -4040,7 +4070,6 @@ const DASHBOARD_HTML = `
       document.getElementById('browserIntervalInput').value = mins;
       updateBrowserSliderLabel(mins);
       const ms = mins * 60000;
-      showToast(accion === 'iniciar' ? 'Activando simulación...' : 'Pausando simulación...', 'info');
       try {
         const response = await fetch('/browser/presencia', {
           method: 'POST',
@@ -4095,8 +4124,6 @@ const DASHBOARD_HTML = `
     }
 
     async function enviarAccionPrueba(accion) {
-      showToast('Enviando acción de prueba...', 'info');
-
       try {
         const response = await fetch('/browser/simular-accion', {
           method: 'POST',
@@ -4121,8 +4148,6 @@ const DASHBOARD_HTML = `
       };
       const conf = confirm(msgs[programa] || '¿Deseas iniciar este programa?');
       if (!conf) return;
-
-      showToast('Enviando señal de ejecución...', 'info');
 
       try {
         const response = await fetch('/sistema/ejecutar', {
@@ -4149,8 +4174,6 @@ const DASHBOARD_HTML = `
       const conf = confirm(msgs[programa] || '¿Deseas cerrar este programa?');
       if (!conf) return;
 
-      showToast('Cerrando programa...', 'info');
-
       try {
         const response = await fetch('/sistema/cerrar', {
           method: 'POST',
@@ -4170,12 +4193,6 @@ const DASHBOARD_HTML = `
     }
 
     async function controlarTeclado(accion) {
-      const msg = accion === 'apagar-guardia'
-        ? 'Activando Guardián de pantalla...'
-        : accion === 'encender-pantalla'
-        ? 'Enviando comando para encender pantalla...'
-        : 'Enviando atajo de teclado...';
-      showToast(msg, 'info');
       try {
         const response = await fetch('/sistema/teclado', {
           method: 'POST',
@@ -4185,7 +4202,7 @@ const DASHBOARD_HTML = `
         const data = await response.json();
         showToast(data.message, response.ok ? 'success' : 'error');
         if (response.ok) {
-          setTimeout(fetchStatus, 300);
+          setTimeout(pollGatewayStatus, 300);
         }
       } catch (error) {
         showToast('Error al conectar con la PC', 'error');
@@ -4209,7 +4226,6 @@ const DASHBOARD_HTML = `
         return;
       }
 
-      showToast('Enviando comando de energía...', 'info');
       try {
         const response = await fetch('/sistema/energia', {
           method: 'POST',
@@ -4229,7 +4245,6 @@ const DASHBOARD_HTML = `
         showToast('Por favor escribe algún texto para enviar.', 'warning');
         return;
       }
-      showToast('Enviando al portapapeles de la PC...', 'info');
       try {
         const response = await fetch('/sistema/portapapeles', {
           method: 'POST',
@@ -4244,7 +4259,6 @@ const DASHBOARD_HTML = `
     }
 
     async function obtenerPortapapeles() {
-      showToast('Leyendo portapapeles de la PC...', 'info');
       try {
         const response = await fetch('/sistema/portapapeles');
         const data = await response.json();
@@ -4260,11 +4274,12 @@ const DASHBOARD_HTML = `
     }
 
     function tomarScreenshot() {
-      showToast('Actualizando captura de pantalla...', 'info');
       const preview = document.getElementById('screenshotPreview');
+      preview.onload = () => {
+        showToast('Captura de pantalla actualizada.', 'success');
+      };
       preview.src = '/sistema/screenshot?t=' + Date.now();
       preview.style.display = 'block';
-      showToast('Captura cargada.', 'success');
     }
 
     async function probarPing() {
