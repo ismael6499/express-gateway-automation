@@ -110,8 +110,7 @@ namespace ScreenGuard {
         private static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
 
         [DllImport("user32.dll")]
-        private static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, UIntPtr dwExtraInfo);
-        private const uint MOUSEEVENTF_MOVE = 0x0001;
+        private static extern bool SetCursorPos(int X, int Y);
 
         [DllImport("user32.dll")]
         private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, uint dwExtraInfo);
@@ -127,10 +126,9 @@ namespace ScreenGuard {
         private static IntPtr _powerNotify2 = IntPtr.Zero;
 
         private static bool _isGuarding = false;
-        private static int _startMouseX = -1;
-        private static int _startMouseY = -1;
+        private static int _lastPhysX = -1;
+        private static int _lastPhysY = -1;
         private static DateTime _guardStartTime = DateTime.MinValue;
-        private static DateTime _lastInjectedOffCall = DateTime.MinValue;
         private static string _stateFile = "";
 
         private class HiddenMessageWindow : Form {
@@ -139,11 +137,8 @@ namespace ScreenGuard {
                 this.ShowInTaskbar = false;
                 this.WindowState = FormWindowState.Minimized;
                 this.FormBorderStyle = FormBorderStyle.None;
-                this.Size = new Size(0, 0);
-            }
-
-            protected override void SetVisibleCore(bool value) {
-                base.SetVisibleCore(false);
+                this.Size = new Size(1, 1);
+                this.Opacity = 0;
             }
 
             protected override void WndProc(ref Message m) {
@@ -160,7 +155,7 @@ namespace ScreenGuard {
                         if (ps.Data != 0 && _isGuarding) {
                             double elapsedMs = (DateTime.Now - _guardStartTime).TotalMilliseconds;
                             if (elapsedMs > 500) {
-                                Log("Pantalla intentó encenderse por notificación o sistema sin interacción física. Forzando reposo...");
+                                Log("Pantalla intentó encenderse por notificación o sistema sin interacción física. Re-apagando...");
                                 ForceMonitorOff();
                             }
                         }
@@ -207,13 +202,11 @@ namespace ScreenGuard {
                 return;
             }
 
-            // Ocultar ventana de consola inmediatamente si se inició como proceso ejecutable
             IntPtr consoleWnd = GetConsoleWindow();
             if (consoleWnd != IntPtr.Zero) {
                 ShowWindow(consoleWnd, SW_HIDE);
             }
 
-            // Modo "start"
             bool createdNew;
             using (Mutex mutex = new Mutex(true, "Global\\ScreenGuard_Unique_Mutex", out createdNew)) {
                 if (!createdNew) {
@@ -235,8 +228,8 @@ namespace ScreenGuard {
             _isGuarding = true;
 
             Point curPos = Cursor.Position;
-            _startMouseX = curPos.X;
-            _startMouseY = curPos.Y;
+            _lastPhysX = curPos.X;
+            _lastPhysY = curPos.Y;
 
             UpdateStateFile(true, "Protección activa");
 
@@ -270,13 +263,10 @@ namespace ScreenGuard {
                 bool isInjected = (kb.flags & LLKHF_INJECTED) != 0 || (kb.flags & LLKHF_LOWER_IL_INJECTED) != 0;
 
                 if (isInjected) {
-                    // Entrada inyectada por escritorio remoto (ScreenConnect) o software
-                    // Permitir el paso del evento para que ScreenConnect funcione normalmente,
-                    // pero asegurar que el monitor físico de la habitación no se encienda
-                    if ((DateTime.Now - _lastInjectedOffCall).TotalMilliseconds > 800) {
-                        _lastInjectedOffCall = DateTime.Now;
-                        ForceMonitorOff();
-                    }
+                    // Teclado remoto (Google Remote Desktop / ScreenConnect)
+                    // Permitir el paso para que se pueda escribir en las aplicaciones,
+                    // pero asegurar inmediatamente que el monitor físico de la habitación no se encienda
+                    ForceMonitorOff();
                     return CallNextHookEx(_kbdHook, nCode, wParam, lParam);
                 } else {
                     // TECLA FÍSICA REAL PULSADA EN LA COMPUTADORA
@@ -298,32 +288,35 @@ namespace ScreenGuard {
                 bool isInjected = (ms.flags & LLMHF_INJECTED) != 0 || (ms.flags & LLMHF_LOWER_IL_INJECTED) != 0;
 
                 if (isInjected) {
-                    // Mouse inyectado por escritorio remoto (ScreenConnect)
-                    // Permitir que el escritorio remoto mueva el cursor y haga clicks libremente,
-                    // pero mantener el monitor físico apagado
-                    if ((DateTime.Now - _lastInjectedOffCall).TotalMilliseconds > 800) {
-                        _lastInjectedOffCall = DateTime.Now;
+                    // MOUSE REMOTO (Google Remote Desktop / ScreenConnect / AnyDesk)
+                    int msg = wParam.ToInt32();
+                    if (msg == WM_MOUSEMOVE) {
+                        // Mover la posición del cursor directamente para que el escritorio remoto funcione,
+                        // pero tragar (return 1) el evento MOUSEMOVE para que Windows NO despierte el monitor físico!
+                        SetCursorPos(ms.pt.x, ms.pt.y);
+                        return new IntPtr(1);
+                    } else {
+                        // Click remoto: permitirlo pero re-apagar monitor si Windows intentara encenderlo
                         ForceMonitorOff();
+                        return CallNextHookEx(_mouseHook, nCode, wParam, lParam);
                     }
-                    return CallNextHookEx(_mouseHook, nCode, wParam, lParam);
                 } else {
-                    // MOUSE FÍSICO REAL
+                    // MOUSE FÍSICO REAL EN LA COMPUTADORA
                     int msg = wParam.ToInt32();
                     double elapsedMs = (DateTime.Now - _guardStartTime).TotalMilliseconds;
-                    if (elapsedMs > 600) {
+                    if (elapsedMs > 500) {
                         if (msg == WM_LBUTTONDOWN || msg == WM_RBUTTONDOWN || msg == WM_MBUTTONDOWN) {
                             WakeUpAndExit("Click de mouse físico detectado");
                         } else if (msg == WM_MOUSEMOVE) {
-                            if (_startMouseX >= 0 && _startMouseY >= 0) {
-                                int dx = Math.Abs(ms.pt.x - _startMouseX);
-                                int dy = Math.Abs(ms.pt.y - _startMouseY);
-                                if (dx > 18 || dy > 18) {
-                                    WakeUpAndExit(string.Format("Movimiento de mouse físico detectado (dx:{0}, dy:{1})", dx, dy));
+                            if (_lastPhysX != -1 && _lastPhysY != -1) {
+                                int dist = Math.Abs(ms.pt.x - _lastPhysX) + Math.Abs(ms.pt.y - _lastPhysY);
+                                // Umbral de 12px para descartar vibraciones del sensor óptico
+                                if (dist > 12) {
+                                    WakeUpAndExit(string.Format("Movimiento de mouse físico detectado ({0}px)", dist));
                                 }
-                            } else {
-                                _startMouseX = ms.pt.x;
-                                _startMouseY = ms.pt.y;
                             }
+                            _lastPhysX = ms.pt.x;
+                            _lastPhysY = ms.pt.y;
                         }
                     }
                 }
@@ -332,11 +325,11 @@ namespace ScreenGuard {
         }
 
         private static void ForceMonitorOff() {
-            SendMessage(HWND_BROADCAST, (uint)WM_SYSCOMMAND, (IntPtr)SC_MONITORPOWER, (IntPtr)2);
+            PostMessage(HWND_BROADCAST, (uint)WM_SYSCOMMAND, (IntPtr)SC_MONITORPOWER, (IntPtr)2);
         }
 
         private static void WakeMonitorDirect() {
-            SendMessage(HWND_BROADCAST, (uint)WM_SYSCOMMAND, (IntPtr)SC_MONITORPOWER, (IntPtr)(-1));
+            PostMessage(HWND_BROADCAST, (uint)WM_SYSCOMMAND, (IntPtr)SC_MONITORPOWER, (IntPtr)(-1));
             keybd_event(VK_LCONTROL, 0, 0, 0);
             keybd_event(VK_LCONTROL, 0, KEYEVENTF_KEYUP, 0);
         }
