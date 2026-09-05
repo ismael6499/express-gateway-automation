@@ -81,3 +81,32 @@ Ejecuta el ciclo de reinicio de 20 segundos para 'Agustin Air Conditioner'. Envi
 curl -X POST http://localhost:3000/aire/reiniciar \
   -H "X-API-KEY: tu-clave-api-segura"
 ```
+
+### 4. Control de Pantalla y Guardián Inteligente: `POST /sistema/teclado`
+
+Permite apagar la pantalla física protegiéndola contra despertares espurios provocados por notificaciones de Windows o sesiones de escritorio remoto (ScreenConnect).
+
+- **Activar Guardián (Apagar y Proteger)**:
+  ```bash
+  curl -X POST http://localhost:3000/sistema/teclado \
+    -H "Content-Type: application/json" \
+    -H "X-API-KEY: tu-clave-api-segura" \
+    -d '{"accion": "apagar-guardia"}'
+  ```
+
+- **Encender Pantalla / Desactivar Guardián**:
+  ```bash
+  curl -X POST http://localhost:3000/sistema/teclado \
+    -H "Content-Type: application/json" \
+    -H "X-API-KEY: tu-clave-api-segura" \
+    -d '{"accion": "encender-pantalla"}'
+  ```
+
+- **Consultar Estado del Guardián**:
+  ```bash
+  curl -X POST http://localhost:3000/sistema/teclado \
+    -H "Content-Type: application/json" \
+    -H "X-API-KEY: tu-clave-api-segura" \
+    -d '{"accion": "estado-guardia"}'
+  ```
+
