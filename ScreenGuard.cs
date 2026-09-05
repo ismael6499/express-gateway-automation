@@ -36,6 +36,8 @@ namespace ScreenGuard {
         private const int WM_STOP_GUARD = WM_USER + 100;
         private const int WM_QUERY_STATUS = WM_USER + 101;
 
+        private const int REMOTE_IDLE_TIMEOUT_SECONDS = 12;
+
         private static Guid GUID_CONSOLE_DISPLAY_STATE = new Guid("6FE69556-704A-47A0-8F24-C28D936F080C");
         private static Guid GUID_MONITOR_POWER_ON = new Guid("02731015-4510-4526-99E6-9598FE1E34B0");
 
@@ -110,9 +112,6 @@ namespace ScreenGuard {
         private static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
 
         [DllImport("user32.dll")]
-        private static extern bool SetCursorPos(int X, int Y);
-
-        [DllImport("user32.dll")]
         private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, uint dwExtraInfo);
         private const uint KEYEVENTF_KEYUP = 0x0002;
         private const byte VK_LCONTROL = 0xA2;
@@ -129,6 +128,9 @@ namespace ScreenGuard {
         private static int _lastPhysX = -1;
         private static int _lastPhysY = -1;
         private static DateTime _guardStartTime = DateTime.MinValue;
+        private static DateTime _lastRemoteInputTime = DateTime.MinValue;
+        private static bool _remoteActivityActive = false;
+        private static System.Windows.Forms.Timer _watchdogTimer;
         private static string _stateFile = "";
 
         private class HiddenMessageWindow : Form {
@@ -155,8 +157,11 @@ namespace ScreenGuard {
                         if (ps.Data != 0 && _isGuarding) {
                             double elapsedMs = (DateTime.Now - _guardStartTime).TotalMilliseconds;
                             if (elapsedMs > 500) {
-                                Log("Pantalla intentó encenderse por notificación o sistema sin interacción física. Re-apagando...");
-                                ForceMonitorOff();
+                                bool isRecentRemote = _remoteActivityActive && (DateTime.Now - _lastRemoteInputTime).TotalSeconds < REMOTE_IDLE_TIMEOUT_SECONDS;
+                                if (!isRecentRemote) {
+                                    Log("Pantalla intentó encenderse por notificación o evento del sistema sin interacción. Re-apagando...");
+                                    ForceMonitorOff();
+                                }
                             }
                         }
                     }
@@ -226,6 +231,7 @@ namespace ScreenGuard {
             Log("Iniciando ScreenGuard. Activando protección de pantalla...");
             _guardStartTime = DateTime.Now;
             _isGuarding = true;
+            _remoteActivityActive = false;
 
             Point curPos = Cursor.Position;
             _lastPhysX = curPos.X;
@@ -249,6 +255,23 @@ namespace ScreenGuard {
                 _mouseHook = SetWindowsHookEx(WH_MOUSE_LL, _mouseProcDelegate, hMod, 0);
             }
 
+            // Watchdog cada 1 segundo para auto-reapagar tras inactividad remota
+            _watchdogTimer = new System.Windows.Forms.Timer();
+            _watchdogTimer.Interval = 1000;
+            _watchdogTimer.Tick += (s, e) => {
+                if (!_isGuarding) return;
+
+                if (_remoteActivityActive) {
+                    double idleSec = (DateTime.Now - _lastRemoteInputTime).TotalSeconds;
+                    if (idleSec >= REMOTE_IDLE_TIMEOUT_SECONDS) {
+                        Log(string.Format("Inactividad remota detectada ({0}s). Re-apagando pantalla física automáticamente...", (int)idleSec));
+                        _remoteActivityActive = false;
+                        ForceMonitorOff();
+                    }
+                }
+            };
+            _watchdogTimer.Start();
+
             ForceMonitorOff();
             Console.WriteLine("{{\"status\":\"ok\",\"message\":\"ScreenGuard iniciado con éxito. PID: {0}\"}}", Process.GetCurrentProcess().Id);
 
@@ -263,13 +286,12 @@ namespace ScreenGuard {
                 bool isInjected = (kb.flags & LLKHF_INJECTED) != 0 || (kb.flags & LLKHF_LOWER_IL_INJECTED) != 0;
 
                 if (isInjected) {
-                    // Teclado remoto (Google Remote Desktop / ScreenConnect)
-                    // Permitir el paso para que se pueda escribir en las aplicaciones,
-                    // pero asegurar inmediatamente que el monitor físico de la habitación no se encienda
-                    ForceMonitorOff();
+                    // Entrada remota (Google Remote Desktop / ScreenConnect)
+                    _lastRemoteInputTime = DateTime.Now;
+                    _remoteActivityActive = true;
                     return CallNextHookEx(_kbdHook, nCode, wParam, lParam);
                 } else {
-                    // TECLA FÍSICA REAL PULSADA EN LA COMPUTADORA
+                    // TECLA FÍSICA REAL EN LA COMPUTADORA -> DESACTIVA EL GUARDIÁN Y DESPIERTA PANTALLA
                     int msg = wParam.ToInt32();
                     if (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN) {
                         double elapsedMs = (DateTime.Now - _guardStartTime).TotalMilliseconds;
@@ -289,19 +311,11 @@ namespace ScreenGuard {
 
                 if (isInjected) {
                     // MOUSE REMOTO (Google Remote Desktop / ScreenConnect / AnyDesk)
-                    int msg = wParam.ToInt32();
-                    if (msg == WM_MOUSEMOVE) {
-                        // Mover la posición del cursor directamente para que el escritorio remoto funcione,
-                        // pero tragar (return 1) el evento MOUSEMOVE para que Windows NO despierte el monitor físico!
-                        SetCursorPos(ms.pt.x, ms.pt.y);
-                        return new IntPtr(1);
-                    } else {
-                        // Click remoto: permitirlo pero re-apagar monitor si Windows intentara encenderlo
-                        ForceMonitorOff();
-                        return CallNextHookEx(_mouseHook, nCode, wParam, lParam);
-                    }
+                    _lastRemoteInputTime = DateTime.Now;
+                    _remoteActivityActive = true;
+                    return CallNextHookEx(_mouseHook, nCode, wParam, lParam);
                 } else {
-                    // MOUSE FÍSICO REAL EN LA COMPUTADORA
+                    // MOUSE FÍSICO REAL EN LA COMPUTADORA -> DESACTIVA EL GUARDIÁN Y DESPIERTA PANTALLA
                     int msg = wParam.ToInt32();
                     double elapsedMs = (DateTime.Now - _guardStartTime).TotalMilliseconds;
                     if (elapsedMs > 500) {
@@ -310,7 +324,6 @@ namespace ScreenGuard {
                         } else if (msg == WM_MOUSEMOVE) {
                             if (_lastPhysX != -1 && _lastPhysY != -1) {
                                 int dist = Math.Abs(ms.pt.x - _lastPhysX) + Math.Abs(ms.pt.y - _lastPhysY);
-                                // Umbral de 12px para descartar vibraciones del sensor óptico
                                 if (dist > 12) {
                                     WakeUpAndExit(string.Format("Movimiento de mouse físico detectado ({0}px)", dist));
                                 }
@@ -337,7 +350,7 @@ namespace ScreenGuard {
         private static void WakeUpAndExit(string reason) {
             if (!_isGuarding) return;
             _isGuarding = false;
-            Log(string.Format("Despertando pantalla. Motivo: {0}", reason));
+            Log(string.Format("Despertando pantalla y desactivando Guardián. Motivo: {0}", reason));
 
             UnhookHooks();
             WakeMonitorDirect();
@@ -351,6 +364,11 @@ namespace ScreenGuard {
         }
 
         private static void UnhookHooks() {
+            if (_watchdogTimer != null) {
+                _watchdogTimer.Stop();
+                _watchdogTimer.Dispose();
+                _watchdogTimer = null;
+            }
             if (_kbdHook != IntPtr.Zero) {
                 UnhookWindowsHookEx(_kbdHook);
                 _kbdHook = IntPtr.Zero;
