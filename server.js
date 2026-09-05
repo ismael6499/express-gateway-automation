@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
 const path = require('path');
 const ngrok = require('@ngrok/ngrok');
 const fs = require('fs');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -299,7 +299,12 @@ app.post('/gateway/login', (req, res) => {
 app.post('/gateway/restart', (req, res) => {
   log('Recibida petición de reinicio del Gateway Server (/gateway/restart)...');
   res.json({ status: 'ok', message: 'Reiniciando servidor...' });
-  exec('cmd.exe /c start /b remote_restart.bat', { cwd: __dirname });
+  const vbsPath = path.join(__dirname, 'remote_restart.vbs');
+  const child = spawn('wscript.exe', [vbsPath], {
+    detached: true,
+    stdio: 'ignore'
+  });
+  child.unref();
   setTimeout(() => {
     process.exit(0);
   }, 1000);
@@ -660,6 +665,22 @@ app.get('/gateway/status', (req, res) => {
       }
     }
 
+    let screenGuardActive = false;
+    try {
+      const statePath = path.join(__dirname, 'screenguard_state.json');
+      if (fs.existsSync(statePath)) {
+        const raw = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+        if (raw && raw.active && raw.pid) {
+          try {
+            process.kill(raw.pid, 0);
+            screenGuardActive = true;
+          } catch (e) {
+            screenGuardActive = false;
+          }
+        }
+      }
+    } catch (e) {}
+
     res.json({
       browserBrowserAbierto,
       browserPresenciaActiva,
@@ -684,7 +705,8 @@ app.get('/gateway/status', (req, res) => {
       audioPlaying: audioData.playing,
       lastActivityFormatted,
       lastActivitySecondsAgo,
-      lastActivityTimeStr
+      lastActivityTimeStr,
+      screenGuardActive
     });
   });
 });
@@ -1354,21 +1376,37 @@ app.post('/browser/status', async (req, res) => {
   }
 });
 
-// Endpoint POST /sistema/teclado para enviar atajos al sistema operativo (Alt+X o Ctrl)
+// Endpoint POST /sistema/teclado para enviar atajos al sistema operativo (Alt+X, Ctrl o Guardián de Pantalla)
 app.post('/sistema/teclado', (req, res) => {
   const { accion } = req.body;
 
-  if (accion !== 'apagar-pantalla' && accion !== 'encender-pantalla') {
+  if (accion !== 'apagar-pantalla' && accion !== 'encender-pantalla' && accion !== 'apagar-guardia' && accion !== 'estado-guardia') {
     return res.status(400).json({
       error: 'Bad Request',
-      message: "La 'accion' de teclado debe ser 'apagar-pantalla' o 'encender-pantalla'."
+      message: "La 'accion' de teclado debe ser 'apagar-pantalla', 'encender-pantalla', 'apagar-guardia' o 'estado-guardia'."
     });
   }
 
   try {
-    if (accion === 'apagar-pantalla') {
+    const screenGuardExe = path.join(__dirname, 'ScreenGuard.exe');
+
+    if (accion === 'apagar-guardia') {
+      log('Iniciando ScreenGuard en segundo plano (pantalla protegida anti-notificaciones y anti-remoto)...');
+      const child = spawn(screenGuardExe, ['start'], {
+        detached: true,
+        stdio: 'ignore',
+        windowsHide: true
+      });
+      child.unref();
+
+      return res.status(200).json({
+        status: 'ok',
+        message: 'Guardián activado: pantalla apagada y protegida.',
+        msg: 'Guardián activado'
+      });
+    } else if (accion === 'apagar-pantalla') {
       log('Simulando doble pulsación de la tecla Windows y Alt + X para apagar pantalla...');
-      const psCommand = 'powershell -Command "$sig = \'[DllImport(\\"user32.dll\\")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, uint dwExtraInfo);\'; $win = Add-Type -MemberDefinition $sig -Name \\"WinAPI1\\" -Namespace \\"Win32\\" -PassThru; $win::keybd_event(0x5B, 0, 0, 0); $win::keybd_event(0x5B, 0, 2, 0); Start-Sleep -Milliseconds 250; $win::keybd_event(0x5B, 0, 0, 0); $win::keybd_event(0x5B, 0, 2, 0); Start-Sleep -Milliseconds 200; $win::keybd_event(0x12, 0, 0, 0); $win::keybd_event(0x58, 0, 0, 0); $win::keybd_event(0x58, 0, 2, 0); $win::keybd_event(0x12, 0, 2, 0);"';
+      const psCommand = 'powershell -Command "$sig = \'[DllImport(\\"user32.dll\\")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, uint dwExtraInfo);\'; $win = Add-Type -MemberDefinition $sig -Name \\"WinAPI1\\" -Namespace \\"Win32\\" -PassThru; $win::keybd_event(0x5B, 0, 0, 0); $win::keybd_event(0x5B, 0, 2, 0); Start-Sleep -Milliseconds 250; $win::keybd_event(0x5B, 0, 0, 0); $win::keybd_event(0x5B, 0, 2, 0); Start-Sleep -Milliseconds 200; $win::keybd_event(0x12, 0, 0, 0); $win::keybd_event(0x58, 0, 0, 0); $win::keybd_event(0x58, 2, 0); $win::keybd_event(0x12, 0, 2, 0);"';
       exec(psCommand, (error) => {
         if (error) {
           log(`Error al simular Alt+X: ${error.message}`);
@@ -1379,8 +1417,14 @@ app.post('/sistema/teclado', (req, res) => {
         message: 'Comando de apagar pantalla (Alt+X) enviado.',
         msg: 'Pantalla apagada'
       });
-    } else {
-      log('Simulando pulsación de Control en Windows para encender pantalla...');
+    } else if (accion === 'encender-pantalla') {
+      log('Deteniendo ScreenGuard si estuviese activo y simulando Control para encender pantalla...');
+      exec(`"${screenGuardExe}" stop`, { timeout: 2000 }, (err) => {
+        if (err) {
+          log(`Aviso al detener ScreenGuard: ${err.message}`);
+        }
+      });
+
       const psCommand = 'powershell -Command "$sig = \'[DllImport(\\"user32.dll\\")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, uint dwExtraInfo);\'; $win = Add-Type -MemberDefinition $sig -Name \\"WinAPI2\\" -Namespace \\"Win32\\" -PassThru; $win::keybd_event(0xA2, 0, 0, 0); $win::keybd_event(0xA2, 0, 2, 0);"';
       exec(psCommand, (error) => {
         if (error) {
@@ -1389,9 +1433,26 @@ app.post('/sistema/teclado', (req, res) => {
       });
       return res.status(200).json({
         status: 'ok',
-        message: 'Comando de encender pantalla (Control) enviado.',
+        message: 'Comando de encender pantalla enviado y Guardián desactivado.',
         msg: 'Pantalla encendida'
       });
+    } else if (accion === 'estado-guardia') {
+      let active = false;
+      let details = '';
+      try {
+        const statePath = path.join(__dirname, 'screenguard_state.json');
+        if (fs.existsSync(statePath)) {
+          const raw = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+          if (raw && raw.active && raw.pid) {
+            try {
+              process.kill(raw.pid, 0);
+              active = true;
+              details = raw.details || '';
+            } catch (e) {}
+          }
+        }
+      } catch (e) {}
+      return res.status(200).json({ status: 'ok', active, details });
     }
   } catch (err) {
     log(`Error en simulación de teclado: ${err.message}`);
@@ -2942,18 +3003,29 @@ const DASHBOARD_HTML = `
       <!-- SUB 2.B: CONTROL DE PANTALLA -->
       <div class="sub-section" id="sub_pantalla" data-sub-title="Control de Pantalla">
         <div class="divider"></div>
-        <div class="sub-section-header">
+        <div class="sub-section-header" style="display: flex; align-items: center; justify-content: space-between;">
           <div class="card-section-title" style="margin-bottom: 0;">Control de Pantalla (PC Físico)</div>
+          <span class="status-badge" id="screenGuardBadge" style="font-size: 0.72rem; padding: 2px 8px;">
+            <span class="status-dot"></span> <span id="screenGuardBadgeText">Guardián Inactivo</span>
+          </span>
         </div>
-        <div style="display: flex; gap: 8px; margin-top: 5px; width: 100%;">
-          <button class="btn btn-danger" style="flex: 1; margin-top: 0; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68); display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="controlarTeclado('apagar-pantalla')">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
-            Apagar (Alt+X)
-          </button>
-          <button class="btn btn-success" style="flex: 1; margin-top: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="controlarTeclado('encender-pantalla')">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
-            Encender (Ctrl)
-          </button>
+        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px; width: 100%;">
+          <div style="display: flex; gap: 8px; width: 100%;">
+            <button class="btn" id="btnGuardiaToggle" style="flex: 1.2; margin-top: 0; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.4); color: rgb(216, 180, 254); display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="toggleGuardia()" title="Apaga la pantalla física y la mantiene apagada ante notificaciones o ScreenConnect. Despierta con teclado/mouse físico o tocando este botón.">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+              <span id="btnGuardiaToggleText">Apagar (Guardián)</span>
+            </button>
+            <button class="btn btn-success" style="flex: 1; margin-top: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="controlarTeclado('encender-pantalla')" title="Enciende la pantalla y desactiva el guardián">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
+              Encender (Ctrl)
+            </button>
+          </div>
+          <div style="display: flex; gap: 8px; width: 100%;">
+            <button class="btn btn-danger" style="flex: 1; margin-top: 0; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.25); color: rgb(248, 113, 113); display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.78rem; padding: 7px 10px;" onclick="controlarTeclado('apagar-pantalla')" title="Apagado tradicional mediante combinación Alt+X">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+              Apagar Tradicional (Alt+X)
+            </button>
+          </div>
         </div>
       </div>
 
@@ -3555,6 +3627,31 @@ const DASHBOARD_HTML = `
           }
         }
 
+        // Actualizar estado de Guardián de Pantalla
+        const screenGuardBadge = document.getElementById('screenGuardBadge');
+        const screenGuardBadgeText = document.getElementById('screenGuardBadgeText');
+        const btnGuardiaToggle = document.getElementById('btnGuardiaToggle');
+        const btnGuardiaToggleText = document.getElementById('btnGuardiaToggleText');
+        if (data.screenGuardActive) {
+          if (screenGuardBadge) screenGuardBadge.className = 'status-badge active';
+          if (screenGuardBadgeText) screenGuardBadgeText.innerText = 'Guardián Activo';
+          if (btnGuardiaToggle) {
+            btnGuardiaToggle.style.background = 'rgba(16, 185, 129, 0.2)';
+            btnGuardiaToggle.style.borderColor = '#10b981';
+            btnGuardiaToggle.style.color = '#10b981';
+          }
+          if (btnGuardiaToggleText) btnGuardiaToggleText.innerText = 'Desactivar Guardián (Encender)';
+        } else {
+          if (screenGuardBadge) screenGuardBadge.className = 'status-badge';
+          if (screenGuardBadgeText) screenGuardBadgeText.innerText = 'Guardián Inactivo';
+          if (btnGuardiaToggle) {
+            btnGuardiaToggle.style.background = 'rgba(168, 85, 247, 0.15)';
+            btnGuardiaToggle.style.borderColor = 'rgba(168, 85, 247, 0.4)';
+            btnGuardiaToggle.style.color = 'rgb(216, 180, 254)';
+          }
+          if (btnGuardiaToggleText) btnGuardiaToggleText.innerText = 'Apagar (Guardián)';
+        }
+
       } catch (err) {
         console.error('Error polling status:', err);
       }
@@ -4073,7 +4170,12 @@ const DASHBOARD_HTML = `
     }
 
     async function controlarTeclado(accion) {
-      showToast('Enviando atajo de teclado...', 'info');
+      const msg = accion === 'apagar-guardia'
+        ? 'Activando Guardián de pantalla...'
+        : accion === 'encender-pantalla'
+        ? 'Enviando comando para encender pantalla...'
+        : 'Enviando atajo de teclado...';
+      showToast(msg, 'info');
       try {
         const response = await fetch('/sistema/teclado', {
           method: 'POST',
@@ -4082,8 +4184,19 @@ const DASHBOARD_HTML = `
         });
         const data = await response.json();
         showToast(data.message, response.ok ? 'success' : 'error');
+        if (response.ok) {
+          setTimeout(fetchStatus, 300);
+        }
       } catch (error) {
         showToast('Error al conectar con la PC', 'error');
+      }
+    }
+
+    function toggleGuardia() {
+      if (window.lastStatusData && window.lastStatusData.screenGuardActive) {
+        controlarTeclado('encender-pantalla');
+      } else {
+        controlarTeclado('apagar-guardia');
       }
     }
 

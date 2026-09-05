@@ -8,3 +8,4 @@ find_profile.js
 find_all_keys.js
 inspect_preferences.js
 copy_profile.js
+screenguard_state.json
