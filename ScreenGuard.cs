@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Management;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows.Forms;
@@ -127,6 +128,7 @@ namespace ScreenGuard {
         private static bool _isGuarding = false;
         private static int _lastPhysX = -1;
         private static int _lastPhysY = -1;
+        private static int _savedBrightness = -1;
         private static DateTime _guardStartTime = DateTime.MinValue;
         private static DateTime _lastRemoteInputTime = DateTime.MinValue;
         private static bool _remoteActivityActive = false;
@@ -159,7 +161,7 @@ namespace ScreenGuard {
                             if (elapsedMs > 500) {
                                 bool isRecentRemote = _remoteActivityActive && (DateTime.Now - _lastRemoteInputTime).TotalSeconds < REMOTE_IDLE_TIMEOUT_SECONDS;
                                 if (!isRecentRemote) {
-                                    Log("Pantalla intentó encenderse por notificación o evento del sistema sin interacción. Re-apagando...");
+                                    Log("Pantalla intentó encenderse por notificación o sistema sin interacción. Re-apagando...");
                                     ForceMonitorOff();
                                 }
                             }
@@ -201,6 +203,7 @@ namespace ScreenGuard {
                     Console.WriteLine("{\"status\":\"ok\",\"message\":\"Señal de detención enviada a ScreenGuard.\"}");
                 } else {
                     WakeMonitorDirect();
+                    RestoreBrightnessFromFile();
                     Console.WriteLine("{\"status\":\"ok\",\"message\":\"ScreenGuard no estaba activo. Pantalla encendida directamente.\"}");
                 }
                 UpdateStateFile(false, "Detenido manualmente");
@@ -228,10 +231,17 @@ namespace ScreenGuard {
         }
 
         private static void RunGuard() {
-            Log("Iniciando ScreenGuard. Activando protección de pantalla...");
+            Log("Iniciando ScreenGuard. Guardando brillo y activando protección de pantalla...");
             _guardStartTime = DateTime.Now;
             _isGuarding = true;
             _remoteActivityActive = false;
+
+            // Leer y guardar el nivel de brillo actual antes de reducir a 0%
+            _savedBrightness = GetBrightness();
+            if (_savedBrightness > 0) {
+                Log(string.Format("Brillo original detectado: {0}%. Reduciendo brillo a 0% para penumbra física...", _savedBrightness));
+                SetBrightness(0);
+            }
 
             Point curPos = Cursor.Position;
             _lastPhysX = curPos.X;
@@ -353,6 +363,13 @@ namespace ScreenGuard {
             Log(string.Format("Despertando pantalla y desactivando Guardián. Motivo: {0}", reason));
 
             UnhookHooks();
+
+            // Restaurar brillo original si fue modificado
+            if (_savedBrightness >= 0) {
+                Log(string.Format("Restaurando brillo de pantalla a su nivel original: {0}%...", _savedBrightness));
+                SetBrightness(_savedBrightness);
+            }
+
             WakeMonitorDirect();
             UpdateStateFile(false, reason);
 
@@ -361,6 +378,55 @@ namespace ScreenGuard {
                     Application.ExitThread();
                 });
             }
+        }
+
+        private static int GetBrightness() {
+            try {
+                using (ManagementClass mc = new ManagementClass("root/WMI", "WmiMonitorBrightness", null))
+                using (ManagementObjectCollection moc = mc.GetInstances()) {
+                    foreach (ManagementObject mo in moc) {
+                        return Convert.ToInt32(mo["CurrentBrightness"]);
+                    }
+                }
+            } catch (Exception ex) {
+                Log("Aviso al obtener brillo WMI: " + ex.Message);
+            }
+            return -1;
+        }
+
+        private static void SetBrightness(int level) {
+            try {
+                if (level < 0) level = 0;
+                if (level > 100) level = 100;
+                using (ManagementClass mc = new ManagementClass("root/WMI", "WmiMonitorBrightnessMethods", null))
+                using (ManagementObjectCollection moc = mc.GetInstances()) {
+                    foreach (ManagementObject mo in moc) {
+                        mo.InvokeMethod("WmiSetBrightness", new object[] { 1, level });
+                        break;
+                    }
+                }
+            } catch (Exception ex) {
+                Log("Aviso al ajustar brillo WMI: " + ex.Message);
+            }
+        }
+
+        private static void RestoreBrightnessFromFile() {
+            try {
+                if (File.Exists(_stateFile)) {
+                    string content = File.ReadAllText(_stateFile);
+                    int idx = content.IndexOf("\"savedBrightness\":");
+                    if (idx != -1) {
+                        string sub = content.Substring(idx + 18);
+                        int end = sub.IndexOfAny(new char[] { ',', '}', ' ' });
+                        if (end != -1) {
+                            int b = int.Parse(sub.Substring(0, end).Trim());
+                            if (b >= 0) {
+                                SetBrightness(b);
+                            }
+                        }
+                    }
+                }
+            } catch {}
         }
 
         private static void UnhookHooks() {
@@ -395,9 +461,10 @@ namespace ScreenGuard {
         private static void UpdateStateFile(bool active, string details) {
             try {
                 string json = string.Format(
-                    "{{\"active\":{0},\"pid\":{1},\"details\":\"{2}\",\"updated\":\"{3}\"}}",
+                    "{{\"active\":{0},\"pid\":{1},\"savedBrightness\":{2},\"details\":\"{3}\",\"updated\":\"{4}\"}}",
                     active ? "true" : "false",
                     Process.GetCurrentProcess().Id,
+                    _savedBrightness,
                     details.Replace("\"", "'"),
                     DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss")
                 );
