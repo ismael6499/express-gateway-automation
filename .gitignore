@@ -17,9 +17,8 @@ gateway_server.log
 
 # Datos de sesión y perfiles de navegador
 browser_user_data/
-browser_user_data/
-browser_user_data/
-user_data/
+user_data*/
+*user_data*/
 
 # Archivos temporales y capturas
 desktop_screenshot.png

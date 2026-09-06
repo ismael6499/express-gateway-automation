@@ -11,10 +11,11 @@ const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.API_KEY;
 const TARGET_WEB_URL = process.env.TARGET_WEB_URL || 'https://example.com';
 const TARGET_ACCOUNT_EMAIL = process.env.TARGET_ACCOUNT_EMAIL || '';
-const USER_DATA_DIR = process.env.BROWSER_USER_DATA_DIR || 
-  (fs.existsSync(path.join(__dirname, 'browser_user_data')) ? path.join(__dirname, 'browser_user_data') :
-   fs.existsSync(path.join(__dirname, 'browser_user_data')) ? path.join(__dirname, 'browser_user_data') :
-   path.join(__dirname, 'browser_user_data'));
+const USER_DATA_DIR = process.env.BROWSER_USER_DATA_DIR || path.join(__dirname, 'browser_user_data');
+let targetHost = '';
+try {
+  targetHost = new URL(TARGET_WEB_URL).hostname;
+} catch (e) {}
 
 // Middleware para parsear JSON
 app.use(express.json());
@@ -495,7 +496,10 @@ async function autoLoginTargetSession(page) {
       }
 
       // Si la aplicación web ya ha cargado
-      if (url.includes('cloud.example.com') || url.includes('example.com')) {
+      const isAppLoadedUrl = (targetHost && url.includes(targetHost)) || 
+                             url.includes('.cloud.microsoft') ||
+                             (TARGET_WEB_URL && TARGET_WEB_URL.includes('browser') && url.includes('browser'));
+      if (isAppLoadedUrl) {
         // Verificar y presionar el botón de Sign In superior si aparece en la barra de re-autenticación
         await checkAndClickSignInBanner(page);
 
@@ -724,8 +728,8 @@ app.get('/gateway/status', (req, res) => {
   });
 });
 
-// Endpoint POST /browser/browser para controlar el ciclo del navegador Browser
-app.post(['/browser/browser', '/browser/browser'], async (req, res) => {
+// Endpoint POST /browser/browser para controlar el ciclo del navegador web
+app.post('/browser/browser', async (req, res) => {
   const { accion } = req.body;
 
   if (accion !== 'abrir' && accion !== 'cerrar' && accion !== 'minimizar' && accion !== 'restaurar') {
@@ -871,7 +875,9 @@ app.post(['/browser/browser', '/browser/browser'], async (req, res) => {
       try { targetHost = new URL(TARGET_WEB_URL).hostname; } catch (e) {}
       const restoredBrowserPage = pages.find(p => {
         const u = p.url();
-        return u.includes('example.com') || u.includes('cloud.example.com') || (targetHost && u.includes(targetHost));
+        return (targetHost && u.includes(targetHost)) || 
+               u.includes('.cloud.microsoft') ||
+               (TARGET_WEB_URL && TARGET_WEB_URL.includes('browser') && u.includes('browser'));
       });
 
       if (restoredBrowserPage) {
@@ -898,7 +904,7 @@ app.post(['/browser/browser', '/browser/browser'], async (req, res) => {
         });
       }
 
-      // Detectar si el usuario cierra la página de Browser directamente
+      // Detectar si el usuario cierra la página web directamente
       browserPage.on('close', async () => {
         log('Aviso: La página web fue cerrada manualmente por el usuario.');
         handleManualCloseCleanup();
@@ -977,8 +983,8 @@ app.post(['/browser/browser', '/browser/browser'], async (req, res) => {
   }
 });
 
-// Endpoint POST /browser/programacion - Actualizar horario y días de la simulación
-app.post(['/browser/programacion', '/browser/programacion'], (req, res) => {
+// Endpoint POST /browser/programacion - Actualizar horario y días de la automatización
+app.post('/browser/programacion', (req, res) => {
   const { startHour, endHour, days, browserCloseHour, browserCloseEnabled, flexCloseDate, flexCloseHour, flexCloseEnabled, mealPauseCutoffHour, mealPauseIntervals } = req.body;
 
   if (startHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(startHour)) {
@@ -1040,8 +1046,8 @@ app.post(['/browser/programacion', '/browser/programacion'], (req, res) => {
   });
 });
 
-// Endpoint POST /browser/presencia para controlar la simulación de actividad
-app.post(['/browser/presencia', '/browser/presencia'], (req, res) => {
+// Endpoint POST /browser/presencia para controlar la actividad web
+app.post('/browser/presencia', (req, res) => {
   const { accion, intervaloMs } = req.body;
 
   if (accion !== 'iniciar' && accion !== 'pausar' && accion !== 'pausa_temporal') {
@@ -1240,7 +1246,7 @@ function setupBrowserInterval() {
 }
 
 // 2.A Endpoint POST /browser/simular-accion para ejecutar acciones de test manuales e inmediatas
-app.post(['/browser/simular-accion', '/browser/simular-accion'], async (req, res) => {
+app.post('/browser/simular-accion', async (req, res) => {
   const { accion } = req.body;
 
   if (!browserContext || !browserPage || browserPage.isClosed()) {
@@ -1347,10 +1353,10 @@ app.post(['/browser/simular-accion', '/browser/simular-accion'], async (req, res
   }
 });
 
-// Endpoint POST /browser/status (Compatibilidad hacia atrás)
-app.post(['/browser/status', '/browser/status'], async (req, res) => {
+// Endpoint POST /browser/status
+app.post('/browser/status', async (req, res) => {
   const { estado, intervaloMs } = req.body;
-  log(`[Compatibilidad] POST /browser/status recibido con estado '${estado}'`);
+  log(`POST /browser/status recibido con estado '${estado}'`);
 
   if (intervaloMs) {
     browserIntervalMs = intervaloMs;
@@ -1657,8 +1663,8 @@ app.get('/sistema/ping', (req, res) => {
   });
 });
 
-// Endpoint GET /browser/ultima-actividad - Tiempo desde el ultimo movimiento simulado
-app.get(['/browser/ultima-actividad', '/browser/ultima-actividad'], (req, res) => {
+// Endpoint GET /browser/ultima-actividad - Tiempo desde la última actividad
+app.get('/browser/ultima-actividad', (req, res) => {
   if (!lastActivityTime) {
     return res.json({ lastActivityTime: null, formatted: 'Sin actividad registrada', secondsAgo: null, msg: 'Sin actividad' });
   }
@@ -4371,17 +4377,7 @@ const DASHBOARD_HTML = `
     function getDashboardConfig() {
       try {
         const saved = localStorage.getItem('gateway_dashboard_custom_v1');
-        if (saved) {
-          const cfg = JSON.parse(saved);
-          if (Array.isArray(cfg.order)) {
-            cfg.order = cfg.order.map(id => id === 'cardBrowser' ? 'cardBrowser' : id);
-          }
-          if (cfg.hidden && cfg.hidden.cardBrowser !== undefined) {
-            cfg.hidden.cardBrowser = cfg.hidden.cardBrowser;
-            delete cfg.hidden.cardBrowser;
-          }
-          return cfg;
-        }
+        if (saved) return JSON.parse(saved);
       } catch (e) {}
       return {
         order: [...DEFAULT_CARD_ORDER],
