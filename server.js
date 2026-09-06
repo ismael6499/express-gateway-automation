@@ -309,7 +309,9 @@ app.use((req, res, next) => {
   }
 
   const clientApiKey = req.headers['x-api-key'] || getApiKeyFromCookie(req.headers.cookie);
-  log(`Solicitud API interceptada: ${req.method} ${req.originalUrl}`);
+  if (req.path !== '/system/mouse' && req.path !== '/sistema/mouse' && req.path !== '/gateway/status' && req.path !== '/system/status') {
+    log(`Solicitud API interceptada: ${req.method} ${req.originalUrl}`);
+  }
 
   if (!clientApiKey || clientApiKey !== API_KEY) {
     log('Acceso denegado: API Key inválida o ausente.');
@@ -693,16 +695,29 @@ function formatSecondsAgo(seconds) {
   return `${hours}h ${remainingMinutes}m ${remainingSeconds}s`;
 }
 
-// Endpoint GET /gateway/status
-app.get(['/gateway/status', '/system/status'], (req, res) => {
+let lastAudioCheckTime = 0;
+let cachedAudioData = { volume: null, muted: null, playing: null };
+
+function getAudioStatusCached(callback) {
+  const now = Date.now();
+  if (now - lastAudioCheckTime < 3500) {
+    return callback(cachedAudioData);
+  }
   const helperPath = path.join(__dirname, 'AudioHelper.exe');
-  exec(`"${helperPath}"`, { timeout: 1500 }, (error, stdout) => {
-    let audioData = { volume: null, muted: null, playing: null };
+  exec(`"${helperPath}"`, { timeout: 1200 }, (error, stdout) => {
     if (!error && stdout) {
       try {
-        audioData = JSON.parse(stdout.trim());
+        cachedAudioData = JSON.parse(stdout.trim());
+        lastAudioCheckTime = Date.now();
       } catch (e) {}
     }
+    callback(cachedAudioData);
+  });
+}
+
+// Endpoint GET /gateway/status
+app.get(['/gateway/status', '/system/status'], (req, res) => {
+  getAudioStatusCached((audioData) => {
 
     let lastActivityFormatted = 'Sin actividad';
     let lastActivitySecondsAgo = null;
@@ -742,7 +757,7 @@ app.get(['/gateway/status', '/system/status'], (req, res) => {
       }
     } catch (e) {}
 
-    res.json({
+    return res.json({
       browserAbierto,
       browserPresenciaActiva,
       browserIntervalMs,
@@ -2132,382 +2147,11 @@ const LOGIN_HTML = `
         errorDiv.style.display = 'block';
       }
     }
-
-    // ==========================================
-    // INTERNATIONALIZATION (I18N) SYSTEM
-    // ==========================================
-    const I18N = {
-      en: {
-        appTitle: "Gateway Control Center",
-        appDesc: "API Gateway & Automation Server",
-        editModeBanner: "Edit Mode: Drag ⠿ to reorder or use 👁️ to hide/show.",
-        btnReset: "Reset",
-        btnDone: "Done",
-        trackpadTitle: "Virtual Trackpad & Mouse",
-        trackpadDesc: "Touchpad navigation, gestures, drag lock, and clicking",
-        trackpadSpeed: "Speed:",
-        touchpadHint: "Slide 1 finger to move • Tap for Left Click • 2 fingers for Right Click",
-        scrollStrip: "SCROLL",
-        btnLeftClick: "Left Click",
-        btnRightClick: "Right Click",
-        dragLock: "Drag Lock (Hold Down)",
-        dragLockActive: "Drag Lock (Active)",
-        doubleClick: "Double Click",
-        sensitivity: "Sensitivity:",
-        keyboardTitle: "Remote Keyboard & Keystrokes",
-        keyboardDesc: "Type phone text at PC cursor and send computer keys",
-        typePlaceholder: "Type or dictate text to send to PC...",
-        btnSendText: "Send",
-        sendOnEnter: "Send on Enter",
-        clearOnSend: "Clear after send",
-        specialKeys: "Special Computer Keys",
-        fnKeysSummary: "Function Keys (F1 - F12)",
-        browserCardTitle: "Active Browser Keepalive",
-        browserCardDesc: "Persistent session and display sleep prevention",
-        systemCardTitle: "System & Diagnostics",
-        systemCardDesc: "ScreenGuard and Windows native controls",
-        mediaCardTitle: "Media & Audio Controls",
-        mediaCardDesc: "Playback, master volume, and voice synthesis (TTS)",
-        powerCardTitle: "Power & Brightness",
-        powerCardDesc: "Display brightness and PC power states",
-        restartCardTitle: "Gateway Server",
-        restartCardDesc: "Safe decoupled server restart"
-      },
-      es: {
-        appTitle: "Gateway Control Center",
-        appDesc: "API Gateway & Automatizaciones",
-        editModeBanner: "Modo Edición: Arrastra ⠿ para mover o usa 👁️ para ocultar/mostrar.",
-        btnReset: "Restablecer",
-        btnDone: "Listo",
-        trackpadTitle: "Trackpad y Mouse Virtual",
-        trackpadDesc: "Navegación táctil, gestos, arrastre y clics",
-        trackpadSpeed: "Velocidad:",
-        touchpadHint: "Desliza 1 dedo para mover • 1 toque para Clic • 2 dedos para Clic Derecho",
-        scrollStrip: "SCROLL",
-        btnLeftClick: "Clic Izquierdo",
-        btnRightClick: "Clic Derecho",
-        dragLock: "Mantener Clic (Arrastrar)",
-        dragLockActive: "Clic Bloqueado (Activo)",
-        doubleClick: "Doble Clic",
-        sensitivity: "Sensibilidad:",
-        keyboardTitle: "Teclado y Escritura Remota",
-        keyboardDesc: "Escribe desde el móvil en el cursor de la PC y pulsa teclas",
-        typePlaceholder: "Escribe o dicta texto para enviar a la PC...",
-        btnSendText: "Enviar",
-        sendOnEnter: "Enviar con Enter",
-        clearOnSend: "Borrar al enviar",
-        specialKeys: "Teclas Especiales de PC",
-        fnKeysSummary: "Teclas de Función (F1 - F12)",
-        browserCardTitle: "Navegador Activo",
-        browserCardDesc: "Sesión persistente y prevención de inactividad de pantalla",
-        systemCardTitle: "Sistema & Diagnóstico",
-        systemCardDesc: "ScreenGuard y utilidades nativas de Windows",
-        mediaCardTitle: "Controles Multimedia & Audio",
-        mediaCardDesc: "Reproducción, volumen maestro y voz sintetizada (TTS)",
-        powerCardTitle: "Energía & Pantalla",
-        powerCardDesc: "Brillo del monitor y suspensión de la PC",
-        restartCardTitle: "Gateway Server",
-        restartCardDesc: "Reinicio seguro del proceso desacoplado"
-      }
-    };
-
-    let currentLang = localStorage.getItem('dashboard_lang') || 'en';
-
-    function setLanguage(lang) {
-      currentLang = lang || 'en';
-      localStorage.setItem('dashboard_lang', currentLang);
-      const dict = I18N[currentLang] || I18N.en;
-
-      document.querySelectorAll('[data-i18n]').forEach(el => {
-        const key = el.getAttribute('data-i18n');
-        if (dict[key]) {
-          if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
-            el.placeholder = dict[key];
-          } else {
-            el.innerText = dict[key];
-          }
-        }
-      });
-
-      const btn = document.getElementById('btnLangToggle');
-      if (btn) btn.innerText = currentLang === 'en' ? '🌐 EN' : '🌐 ES';
-
-      if (isEditModeActive) {
-        document.querySelectorAll('.card-edit-title').forEach(span => {
-          const card = span.closest('.card');
-          if (card && CARD_TITLES[card.id]) {
-            const titles = CARD_TITLES[card.id];
-            span.textContent = (titles && (titles[currentLang] || titles.en)) || card.id;
-          }
-        });
-      }
-    }
-
-    function toggleLanguage() {
-      setLanguage(currentLang === 'en' ? 'es' : 'en');
-    }
-
-    // ==========================================
-    // VIRTUAL TRACKPAD & MOUSE LOGIC
-    // ==========================================
-    let trackpadSensitivity = parseFloat(localStorage.getItem('trackpad_sensitivity') || '1.2');
-    let isDragLocked = false;
-    let touchStartX = 0;
-    let touchStartY = 0;
-    let touchStartTime = 0;
-    let lastTouchX = 0;
-    let lastTouchY = 0;
-    let touchMovedTotal = 0;
-    let moveAccumDx = 0;
-    let moveAccumDy = 0;
-    let moveFlushTimer = null;
-
-    function initTrackpad() {
-      const surface = document.getElementById('touchpadSurface');
-      const scrollStrip = document.getElementById('touchpadScrollStrip');
-      const slider = document.getElementById('sliderSensitivity');
-      const label = document.getElementById('trackpadSpeedLabel');
-
-      if (slider) slider.value = trackpadSensitivity;
-      if (label) label.innerText = trackpadSensitivity.toFixed(1) + 'x';
-
-      if (surface) {
-        surface.addEventListener('touchstart', handleTouchStart, { passive: false });
-        surface.addEventListener('touchmove', handleTouchMove, { passive: false });
-        surface.addEventListener('touchend', handleTouchEnd, { passive: false });
-        surface.addEventListener('touchcancel', handleTouchEnd, { passive: false });
-      }
-
-      if (scrollStrip) {
-        let scrollStartY = 0;
-        scrollStrip.addEventListener('touchstart', (e) => {
-          e.stopPropagation();
-          if (e.touches.length > 0) scrollStartY = e.touches[0].clientY;
-        }, { passive: true });
-
-        scrollStrip.addEventListener('touchmove', (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          if (e.touches.length > 0) {
-            const curY = e.touches[0].clientY;
-            const deltaY = scrollStartY - curY;
-            if (Math.abs(deltaY) > 8) {
-              sendMouseScroll(Math.round(deltaY * 5));
-              scrollStartY = curY;
-            }
-          }
-        }, { passive: false });
-      }
-    }
-
-    function changeTrackpadSensitivity(val) {
-      trackpadSensitivity = parseFloat(val) || 1.2;
-      localStorage.setItem('trackpad_sensitivity', trackpadSensitivity);
-      const label = document.getElementById('trackpadSpeedLabel');
-      if (label) label.innerText = trackpadSensitivity.toFixed(1) + 'x';
-    }
-
-    function handleTouchStart(e) {
-      e.preventDefault();
-      if (e.touches.length === 1) {
-        touchStartX = e.touches[0].clientX;
-        touchStartY = e.touches[0].clientY;
-        lastTouchX = touchStartX;
-        lastTouchY = touchStartY;
-        touchStartTime = Date.now();
-        touchMovedTotal = 0;
-      } else if (e.touches.length === 2) {
-        touchStartX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-        touchStartY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-        lastTouchX = touchStartX;
-        lastTouchY = touchStartY;
-        touchStartTime = Date.now();
-        touchMovedTotal = 0;
-      }
-    }
-
-    function handleTouchMove(e) {
-      e.preventDefault();
-      if (e.touches.length === 1) {
-        const curX = e.touches[0].clientX;
-        const curY = e.touches[0].clientY;
-        const dx = (curX - lastTouchX) * trackpadSensitivity;
-        const dy = (curY - lastTouchY) * trackpadSensitivity;
-        touchMovedTotal += Math.abs(curX - lastTouchX) + Math.abs(curY - lastTouchY);
-        lastTouchX = curX;
-        lastTouchY = curY;
-
-        moveAccumDx += dx;
-        moveAccumDy += dy;
-
-        if (!moveFlushTimer) {
-          moveFlushTimer = setTimeout(flushMouseMove, 22);
-        }
-      } else if (e.touches.length === 2) {
-        const curY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-        const deltaY = lastTouchY - curY;
-        touchMovedTotal += Math.abs(deltaY);
-        lastTouchY = curY;
-
-        if (Math.abs(deltaY) > 4) {
-          sendMouseScroll(Math.round(deltaY * 6));
-        }
-      }
-    }
-
-    function flushMouseMove() {
-      moveFlushTimer = null;
-      if (Math.abs(moveAccumDx) >= 0.5 || Math.abs(moveAccumDy) >= 0.5) {
-        const sendX = Math.round(moveAccumDx);
-        const sendY = Math.round(moveAccumDy);
-        moveAccumDx -= sendX;
-        moveAccumDy -= sendY;
-
-        fetch('/system/mouse', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'move', dx: sendX, dy: sendY })
-        }).catch(() => {});
-      }
-    }
-
-    function handleTouchEnd(e) {
-      e.preventDefault();
-      const elapsed = Date.now() - touchStartTime;
-
-      if (moveFlushTimer) {
-        clearTimeout(moveFlushTimer);
-        flushMouseMove();
-      }
-
-      if (elapsed < 240 && touchMovedTotal < 8) {
-        if (e.changedTouches.length === 1) {
-          sendMouseClick('left');
-        } else if (e.changedTouches.length === 2) {
-          sendMouseClick('right');
-        }
-      }
-    }
-
-    async function sendMouseClick(button) {
-      try {
-        await fetch('/system/mouse', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'click', button })
-        });
-      } catch (e) {}
-    }
-
-    async function sendMouseDoubleClick() {
-      try {
-        await fetch('/system/mouse', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'double-click', button: 'left' })
-        });
-      } catch (e) {}
-    }
-
-    async function sendMouseScroll(deltaY) {
-      try {
-        await fetch('/system/mouse', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'scroll', deltaY })
-        });
-      } catch (e) {}
-    }
-
-    async function toggleDragLock() {
-      isDragLocked = !isDragLocked;
-      const btn = document.getElementById('btnDragLock');
-      const icon = document.getElementById('dragLockIcon');
-      const text = document.getElementById('dragLockText');
-      const dict = I18N[currentLang] || I18N.en;
-
-      if (isDragLocked) {
-        if (btn) btn.style.background = 'rgba(245, 158, 11, 0.25)';
-        if (btn) btn.style.borderColor = '#f59e0b';
-        if (icon) icon.innerText = '🔒';
-        if (text) text.innerText = dict.dragLockActive || 'Drag Lock (Active)';
-        await fetch('/system/mouse', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'down', button: 'left' })
-        }).catch(() => {});
-        showToast(currentLang === 'es' ? 'Arrastre bloqueado: cursor presionado.' : 'Drag lock active: mouse held down.', 'info');
-      } else {
-        if (btn) btn.style.background = '';
-        if (btn) btn.style.borderColor = '';
-        if (icon) icon.innerText = '🔓';
-        if (text) text.innerText = dict.dragLock || 'Drag Lock (Hold Down)';
-        await fetch('/system/mouse', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'up', button: 'left' })
-        }).catch(() => {});
-        showToast(currentLang === 'es' ? 'Arrastre liberado.' : 'Drag lock released.', 'info');
-      }
-    }
-
-    // ==========================================
-    // REMOTE KEYBOARD & KEYSTROKES LOGIC
-    // ==========================================
-    async function sendRemoteText() {
-      const input = document.getElementById('inputRemoteText');
-      if (!input || !input.value) return;
-      const text = input.value;
-
-      try {
-        const res = await fetch('/system/keyboard/type', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text })
-        });
-        if (res.ok) {
-          const chkClear = document.getElementById('chkClearOnSend');
-          if (chkClear && chkClear.checked) {
-            input.value = '';
-          }
-          showToast(currentLang === 'es' ? 'Texto enviado a la PC.' : 'Text sent to PC.', 'success');
-        } else {
-          showToast(currentLang === 'es' ? 'Error al enviar texto.' : 'Error sending text.', 'error');
-        }
-      } catch (e) {
-        showToast(currentLang === 'es' ? 'Error de conexión.' : 'Connection error.', 'error');
-      }
-    }
-
-    function handleRemoteTextKeyDown(e) {
-      if (e.key === 'Enter') {
-        const chkSend = document.getElementById('chkSendOnEnter');
-        if (chkSend && chkSend.checked) {
-          e.preventDefault();
-          sendRemoteText();
-        }
-      }
-    }
-
-    async function sendKey(key) {
-      try {
-        const res = await fetch('/system/keyboard/key', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key })
-        });
-        if (res.ok) {
-          showToast(key.toUpperCase(), 'info');
-        }
-      } catch (e) {}
-    }
-
   </script>
 </body>
 </html>
 `;
 
-// HTML para el Dashboard de Control Premium
 const DASHBOARD_HTML = `
 <!DOCTYPE html>
 <html lang="es">
@@ -2519,6 +2163,25 @@ const DASHBOARD_HTML = `
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
+
+    .chip-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .chip-btn:hover {
+      background: rgba(255, 255, 255, 0.14);
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    .combo-mod-btn {
+      transition: all 0.15s ease;
+    }
     :root {
       --bg-gradient: linear-gradient(135deg, #0d0e15 0%, #151722 100%);
       --card-bg: rgba(255, 255, 255, 0.03);
@@ -3379,7 +3042,7 @@ const DASHBOARD_HTML = `
       <!-- SECCIÓN 1.A: NAVEGADOR -->
       <div class="sub-section" id="sub_browser_window" data-sub-title="Ventana del Navegador">
         <div class="sub-section-header">
-          <div class="card-section-title" style="margin-bottom: 0;">Ventana del Navegador</div>
+          <div class="card-section-title" style="margin-bottom: 0;" data-i18n="subBrowserWindow">Browser Window</div>
         </div>
         <div class="btn-row" style="margin-top: 8px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 8px;">
           <button class="btn btn-primary" id="btnBrowserOpen" onclick="controlBrowser('abrir')" style="flex: 1 1 calc(50% - 4px); min-width: 120px; margin-top: 0;">
@@ -3403,13 +3066,13 @@ const DASHBOARD_HTML = `
       <div class="sub-section" id="sub_browser_presencia" data-sub-title="Mantener Sesión Activa">
         <div class="divider"></div>
         <div class="sub-section-header" style="margin-bottom: 5px;">
-          <div class="card-section-title" style="margin-bottom: 0;">Mantener Sesión Activa</div>
+          <div class="card-section-title" style="margin-bottom: 0;" data-i18n="subKeepalive">Keep Active Session</div>
           <div id="lastActivityLabel" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500; letter-spacing: 0.3px;">Última: Sin actividad</div>
         </div>
         
         <div class="form-group">
           <div class="form-label-row">
-            <span>Intervalo de Actividad (minutos)</span>
+            <span data-i18n="activityIntervalLabel">Activity Interval (minutes)</span>
             <span id="browserIntervalVal">4 minutos</span>
           </div>
           <input type="number" class="number-input" id="browserIntervalInput" min="1" max="9999" step="1" value="4" onchange="cambiarIntervaloEnCaliente(this.value)">
@@ -3433,9 +3096,9 @@ const DASHBOARD_HTML = `
         <div id="pausaTemporalStatusBanner" style="display: none; margin-top: 12px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 12px; padding: 10px 14px; font-size: 0.8rem; color: #fbbf24; align-items: center; justify-content: space-between;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-            <span>Pausa temporal programada: <strong id="pausaTemporalCountdownText">20m 00s</strong></span>
+            <span data-i18n="tempPauseActiveText">Scheduled temporary pause:</span> <span> <strong id="pausaTemporalCountdownText">20m 00s</strong></span>
           </div>
-          <button onclick="controlPresencia('iniciar')" style="background: rgba(245, 158, 11, 0.25); border: 1px solid #f59e0b; color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer;">Reanudar Ya</button>
+          <button onclick="controlPresencia('iniciar')" style="background: rgba(245, 158, 11, 0.25); border: 1px solid #f59e0b; color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer;" data-i18n="btnResumeNow">Resume Now</button>
         </div>
       </div>
 
@@ -3443,22 +3106,22 @@ const DASHBOARD_HTML = `
       <div class="sub-section" id="sub_browser_schedule" data-sub-title="Programación Horaria">
         <div class="divider"></div>
         <div class="sub-section-header">
-          <div class="card-section-title" style="margin-bottom: 0;">Programación Horaria</div>
+          <div class="card-section-title" style="margin-bottom: 0;" data-i18n="subSchedule">Scheduled Hours</div>
         </div>
         <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 8px;">
           <div style="display: flex; gap: 10px; width: 100%;">
             <div style="flex: 1;">
-              <label style="font-size: 0.75rem; color: var(--text-muted);">Inicio Actividad</label>
+              <label style="font-size: 0.75rem; color: var(--text-muted);" data-i18n="lblStartHour">Start Activity</label>
               <input type="time" id="browserStartHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
             </div>
             <div style="flex: 1;">
-              <label style="font-size: 0.75rem; color: var(--text-muted);">Fin Actividad</label>
+              <label style="font-size: 0.75rem; color: var(--text-muted);" data-i18n="lblEndHour">End Activity</label>
               <input type="time" id="browserEndHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
             </div>
           </div>
 
           <div>
-            <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 6px;">Días Permitidos</label>
+            <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 6px;" data-i18n="lblAllowedDays">Allowed Days</label>
             <div style="display: flex; justify-content: space-between; gap: 4px;">
               <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-0">
                 <input type="checkbox" class="day-checkbox" value="0" style="display:none;" onchange="updateSchedule()">D
@@ -3490,16 +3153,16 @@ const DASHBOARD_HTML = `
       <div class="sub-section" id="sub_browser_autoclose" data-sub-title="Auto-Cierre del Navegador">
         <div style="border-top: 1px dashed rgba(255,255,255,0.15); margin: 20px 0 15px 0;"></div>
         <div class="sub-section-header">
-          <div class="card-section-title" style="margin-bottom: 0;">Auto-Cierre del Navegador</div>
+          <div class="card-section-title" style="margin-bottom: 0;" data-i18n="subAutoClose">Browser Auto-Close</div>
         </div>
         <div style="display: flex; gap: 10px; width: 100%; align-items: center; margin-top: 8px;">
           <div style="flex: 1.2;">
-            <label style="font-size: 0.75rem; color: var(--text-muted);">Hora de Cierre</label>
+            <label style="font-size: 0.75rem; color: var(--text-muted);" data-i18n="lblCloseHour">Close Hour</label>
             <input type="time" id="browserCloseHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
           </div>
           <div style="flex: 0.8; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; margin-top: 14px;">
             <div class="switch-container" style="margin-top: 0; justify-content: flex-end; gap: 10px;">
-              <span style="font-size: 0.85rem; color: var(--text-muted);">Auto-Cierre</span>
+              <span style="font-size: 0.85rem; color: var(--text-muted);" data-i18n="lblAutoClose">Auto-Close</span>
               <label class="switch">
                 <input type="checkbox" id="browserCloseEnabled" onchange="updateSchedule()">
                 <span class="slider-toggle"></span>
@@ -3513,15 +3176,15 @@ const DASHBOARD_HTML = `
       <div class="sub-section" id="sub_browser_flexclose" data-sub-title="Cierre Flex">
         <div style="border-top: 1px dashed rgba(255,255,255,0.15); margin: 20px 0 15px 0;"></div>
         <div class="sub-section-header">
-          <div class="card-section-title" style="margin-bottom: 0;">Cierre Flex</div>
+          <div class="card-section-title" style="margin-bottom: 0;" data-i18n="subFlexClose">Flex Close</div>
         </div>
         <div style="display: flex; gap: 10px; width: 100%; align-items: center; flex-wrap: wrap; margin-top: 8px;">
           <div style="flex: 1; min-width: 120px;">
-            <label style="font-size: 0.75rem; color: var(--text-muted);">Fecha</label>
+            <label style="font-size: 0.75rem; color: var(--text-muted);" data-i18n="lblDate">Date</label>
             <input type="date" id="browserFlexCloseDate" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
           </div>
           <div style="flex: 1; min-width: 100px;">
-            <label style="font-size: 0.75rem; color: var(--text-muted);">Hora de Cierre</label>
+            <label style="font-size: 0.75rem; color: var(--text-muted);" data-i18n="lblCloseHour">Close Hour</label>
             <input type="time" id="browserFlexCloseHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
           </div>
           <div style="flex: 0.8; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; margin-top: 14px; min-width: 120px;">
@@ -3540,7 +3203,7 @@ const DASHBOARD_HTML = `
       <div class="sub-section" id="sub_browser_manualtests" data-sub-title="Pruebas de Entrada">
         <div class="divider"></div>
         <div class="sub-section-header">
-          <div class="card-section-title" style="margin-bottom: 0;">Pruebas de Entrada (Acciones al Instante)</div>
+          <div class="card-section-title" style="margin-bottom: 0;" data-i18n="subInputTests">Input Tests (Instant Actions)</div>
         </div>
         <div class="btn-row" style="gap: 8px; margin-top: 10px;">
           <button class="btn" id="btnTestMouse" onclick="enviarAccionPrueba('mover-mouse')" style="padding: 8px; font-size: 0.75rem;">
@@ -3565,6 +3228,9 @@ const DASHBOARD_HTML = `
           <p data-i18n="trackpadDesc">Touchpad navigation, gestures, drag lock, and clicking</p>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
+          <button class="btn btn-sm btn-outline" onclick="enterTrackpadFullscreen()" style="padding: 4px 10px; font-size: 0.75rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" data-i18n="btnFullscreen">
+            ⛶ Fullscreen
+          </button>
           <span style="font-size: 0.72rem; color: var(--text-muted);" data-i18n="trackpadSpeed">Speed:</span>
           <span id="trackpadSpeedLabel" style="font-size: 0.75rem; font-weight: 600; color: var(--accent-primary);">1.2x</span>
         </div>
@@ -3574,7 +3240,7 @@ const DASHBOARD_HTML = `
       <div style="position: relative; width: 100%; height: 260px; background: rgba(15, 23, 42, 0.6); border: 1.5px solid rgba(255, 255, 255, 0.1); border-radius: 14px; overflow: hidden; margin-bottom: 12px; touch-action: none; user-select: none;" id="touchpadSurface">
         <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; opacity: 0.35;">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 8px;"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-          <span style="font-size: 0.8rem; font-weight: 500; text-align: center; max-width: 80%; line-height: 1.4;" data-i18n="touchpadHint">Slide 1 finger to move • Tap for Left Click • 2 fingers for Right Click</span>
+          <span style="font-size: 0.8rem; font-weight: 500; text-align: center; max-width: 80%; line-height: 1.4;" data-i18n="touchpadHint">Slide 1 finger to move • Tap for Left Click • Double-tap for 2x • 2 fingers for Right Click</span>
         </div>
         <!-- RIGHT EDGE SCROLL STRIP -->
         <div id="touchpadScrollStrip" style="position: absolute; right: 0; top: 0; bottom: 0; width: 44px; background: rgba(255, 255, 255, 0.03); border-left: 1px dashed rgba(255, 255, 255, 0.1); display: flex; flex-direction: column; align-items: center; justify-content: center; touch-action: none;">
@@ -3642,6 +3308,61 @@ const DASHBOARD_HTML = `
         </label>
       </div>
 
+      <!-- CUSTOM COMBINATIONS BUILDER -->
+      <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 12px; margin-bottom: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+          <span style="font-size: 0.78rem; font-weight: 600; color: var(--text);" data-i18n="customComboTitle">Custom Key Combinations</span>
+          <span style="font-size: 0.7rem; color: var(--text-muted);" data-i18n="customComboDesc">Combine modifiers with any key</span>
+        </div>
+
+        <!-- MODIFIERS SELECTOR -->
+        <div style="display: flex; gap: 6px; margin-bottom: 10px; margin-top: 8px;">
+          <button type="button" class="btn btn-outline btn-sm combo-mod-btn" id="modCtrl" onclick="toggleModifier('ctrl')" style="flex: 1; min-width: 50px; font-weight: 600;">Ctrl</button>
+          <button type="button" class="btn btn-outline btn-sm combo-mod-btn" id="modAlt" onclick="toggleModifier('alt')" style="flex: 1; min-width: 50px; font-weight: 600;">Alt</button>
+          <button type="button" class="btn btn-outline btn-sm combo-mod-btn" id="modShift" onclick="toggleModifier('shift')" style="flex: 1; min-width: 50px; font-weight: 600;">Shift</button>
+          <button type="button" class="btn btn-outline btn-sm combo-mod-btn" id="modWin" onclick="toggleModifier('win')" style="flex: 1; min-width: 50px; font-weight: 600;">Win</button>
+        </div>
+
+        <!-- KEY INPUT + SEND -->
+        <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+          <input type="text" id="inputCustomKey" placeholder="Key (e.g. Esc, Tab, F4, D, W, Enter)..." data-i18n="comboKeyPlaceholder" onkeydown="if(event.key==='Enter') sendCustomCombination()" style="flex: 1; padding: 10px 12px; font-size: 0.84rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; color: #fff; outline: none;">
+          <button class="btn btn-primary btn-sm" onclick="sendCustomCombination()" style="padding: 10px 14px; font-weight: 600; font-size: 0.82rem;" data-i18n="btnSendCombo">
+            🚀 Send Combo
+          </button>
+        </div>
+
+        <!-- QUICK CHIPS -->
+        <div style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center;">
+          <span style="font-size: 0.7rem; color: var(--text-muted); margin-right: 4px;" data-i18n="comboPresets">Suggestions:</span>
+          <button type="button" class="chip-btn" onclick="setCustomKey('Esc')">Esc</button>
+          <button type="button" class="chip-btn" onclick="setCustomKey('Tab')">Tab</button>
+          <button type="button" class="chip-btn" onclick="setCustomKey('Enter')">Enter</button>
+          <button type="button" class="chip-btn" onclick="setCustomKey('F4')">F4</button>
+          <button type="button" class="chip-btn" onclick="setCustomKey('D')">D</button>
+          <button type="button" class="chip-btn" onclick="setCustomKey('R')">R</button>
+          <button type="button" class="chip-btn" onclick="setCustomKey('E')">E</button>
+          <button type="button" class="chip-btn" onclick="setCustomKey('W')">W</button>
+          <button type="button" class="chip-btn" onclick="setCustomKey('T')">T</button>
+          <button type="button" class="chip-btn" onclick="setCustomKey('L')">L</button>
+          <button type="button" class="chip-btn" onclick="setCustomKey('V')">V</button>
+          <button type="button" class="chip-btn" onclick="setCustomKey('Delete')">Del</button>
+          <button type="button" class="chip-btn" onclick="setCustomKey('Space')">Space</button>
+        </div>
+
+        <!-- POPULAR PRESETS -->
+        <div style="border-top: 1px dashed rgba(255, 255, 255, 0.08); margin-top: 10px; padding-top: 8px; display: flex; gap: 5px; flex-wrap: wrap;">
+          <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('ctrl+shift+esc')" style="font-size: 0.72rem; padding: 5px 8px;">Ctrl+Shift+Esc</button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('alt+f4')" style="font-size: 0.72rem; padding: 5px 8px;">Alt+F4</button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('win+d')" style="font-size: 0.72rem; padding: 5px 8px;">Win+D</button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('win+r')" style="font-size: 0.72rem; padding: 5px 8px;">Win+R</button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('win+e')" style="font-size: 0.72rem; padding: 5px 8px;">Win+E</button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('win+l')" style="font-size: 0.72rem; padding: 5px 8px;">Win+L</button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('win+v')" style="font-size: 0.72rem; padding: 5px 8px;">Win+V</button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('ctrl+w')" style="font-size: 0.72rem; padding: 5px 8px;">Ctrl+W</button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('ctrl+t')" style="font-size: 0.72rem; padding: 5px 8px;">Ctrl+T</button>
+          <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('ctrl+r')" style="font-size: 0.72rem; padding: 5px 8px;">Ctrl+R</button>
+        </div>
+      </div>
       <!-- COMMON COMPUTER KEYS -->
       <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;" data-i18n="specialKeys">
         Special Computer Keys
@@ -3720,7 +3441,7 @@ const DASHBOARD_HTML = `
         </div>
         <div class="form-group" style="margin-bottom: 10px; margin-top: 6px;">
           <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.4;">
-            Permite iniciar el emulador configurado en el archivo <code>.env</code> desde tu celular.
+            <span data-i18n="emulatorDesc">Launch or stop the Android emulator configured in .env from your phone.</span>
           </p>
         </div>
         <div style="display: flex; gap: 8px; margin-top: 5px; width: 100%;">
@@ -3739,16 +3460,16 @@ const DASHBOARD_HTML = `
       <div class="sub-section" id="sub_pantalla" data-sub-title="Control de Pantalla">
         <div class="divider"></div>
         <div class="sub-section-header" style="display: flex; align-items: center; justify-content: space-between;">
-          <div class="card-section-title" style="margin-bottom: 0;">Control de Pantalla (PC Físico)</div>
+          <div class="card-section-title" style="margin-bottom: 0;" data-i18n="displayControlSub">Display Control (Physical PC)</div>
           <span class="status-badge" id="screenGuardBadge" style="font-size: 0.72rem; padding: 2px 8px;">
-            <span class="status-dot"></span> <span id="screenGuardBadgeText">Guardián Inactivo</span>
+            <span class="status-dot"></span> <span id="screenGuardBadgeText" data-i18n="screenGuardInactiveBadge">Guard Inactive</span>
           </span>
         </div>
         <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px; width: 100%;">
           <div style="display: flex; gap: 8px; width: 100%;">
             <button class="btn" id="btnGuardiaToggle" style="flex: 1.2; margin-top: 0; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.4); color: rgb(216, 180, 254); display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="toggleGuardia()" title="Apaga la pantalla física y la mantiene apagada ante notificaciones o ScreenConnect. Despierta con teclado/mouse físico o tocando este botón.">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-              <span id="btnGuardiaToggleText">Apagar (Guardián)</span>
+              <span id="btnGuardiaToggleText" data-i18n="btnGuardToggleOn">Turn Off (Guard)</span>
             </button>
             <button class="btn btn-success" style="flex: 1; margin-top: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="controlarTeclado('encender-pantalla')" title="Enciende la pantalla y desactiva el guardián">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
@@ -3768,7 +3489,7 @@ const DASHBOARD_HTML = `
       <div class="sub-section" id="sub_portapapeles" data-sub-title="Portapapeles de la PC">
         <div class="divider"></div>
         <div class="sub-section-header">
-          <div class="card-section-title" style="margin-bottom: 0;">Portapapeles de la PC</div>
+          <div class="card-section-title" style="margin-bottom: 0;" data-i18n="clipboardSub">PC Clipboard</div>
         </div>
         <div style="display: flex; gap: 8px; margin-top: 5px;">
           <input type="text" id="inputPortapapeles" placeholder="Text to send to Windows clipboard..." data-i18n="clipPlaceholder" style="flex: 2; padding: 10px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 0;">
@@ -3785,7 +3506,7 @@ const DASHBOARD_HTML = `
       <div class="sub-section" id="sub_captura" data-sub-title="Captura de Pantalla & Latencia">
         <div class="divider"></div>
         <div class="sub-section-header">
-          <div class="card-section-title" style="margin-bottom: 0;">Captura de Pantalla & Latencia</div>
+          <div class="card-section-title" style="margin-bottom: 0;" data-i18n="screenshotSub">Screenshot & Latency</div>
         </div>
         <div style="display: flex; gap: 8px; margin-top: 5px;">
           <button class="btn" onclick="tomarScreenshot()" style="flex: 1; padding: 10px 12px; font-size: 0.75rem; margin-top: 0;">
@@ -3804,7 +3525,7 @@ const DASHBOARD_HTML = `
       <div class="card-header" style="margin-bottom: 0; display: flex; align-items: center; justify-content: space-between;">
         <div class="card-title-group" style="flex: 1;">
           <h2 data-i18n="restartCardTitle">Gateway Server</h2>
-          <p>Reinicia el gateway y reconecta el túnel</p>
+          <p data-i18n="restartCardDesc">Restart gateway and reconnect tunnel</p>
         </div>
         <button class="btn btn-danger" onclick="confirmarReinicio()" style="padding: 10px 16px; font-size: 0.85rem; flex: 0 0 auto; width: auto; margin-top: 0; display: inline-flex; align-items: center; gap: 4px;">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
@@ -3818,14 +3539,14 @@ const DASHBOARD_HTML = `
       <div class="card-header" style="margin-bottom: 15px;">
         <div class="card-title-group">
           <h2 data-i18n="mediaCardTitle">Media & Audio Controls</h2>
-          <p>Audio, brillo del sistema y Lector de voz (TTS)</p>
+          <p data-i18n="mediaCardDesc">Audio, system brightness, and voice reader (TTS)</p>
         </div>
       </div>
       
       <!-- SUB 5.A: AUDIO -->
       <div class="sub-section" id="sub_media_audio" data-sub-title="Audio y Reproducción">
         <div class="sub-section-header">
-          <div class="card-section-title" style="margin-bottom: 0;">Control de Audio y Reproducción</div>
+          <div class="card-section-title" style="margin-bottom: 0;" data-i18n="audioSub">Audio & Playback Control</div>
           <div id="audioStatusText" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500; letter-spacing: 0.3px; margin-right: 8px;">Volume: --% | --</div>
         </div>
         <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 8px;">
@@ -3862,11 +3583,11 @@ const DASHBOARD_HTML = `
       <div class="sub-section" id="sub_media_brillo" data-sub-title="Brillo de Pantalla">
         <div style="border-top: 1px dashed rgba(255,255,255,0.15); margin: 15px 0 10px 0;"></div>
         <div class="sub-section-header">
-          <div class="card-section-title" style="margin-bottom: 0;">Brillo de Pantalla</div>
+          <div class="card-section-title" style="margin-bottom: 0;" data-i18n="brightnessSub">Display Brightness</div>
         </div>
         <div class="form-group" style="margin-bottom: 5px; margin-top: 8px;">
           <div class="form-label-row">
-            <span>Nivel de Brillo</span>
+            <span data-i18n="brightnessLevel">Brightness Level</span>
             <span id="brilloVal">--%</span>
           </div>
           <input type="range" class="slider" id="brilloSlider" min="0" max="100" step="5" value="50" oninput="updateBrilloLabel(this.value)" onchange="cambiarBrillo(this.value)">
@@ -3877,7 +3598,7 @@ const DASHBOARD_HTML = `
       <div class="sub-section" id="sub_media_tts" data-sub-title="Lector de Voz (TTS)">
         <div class="divider"></div>
         <div class="sub-section-header">
-          <div class="card-section-title" style="margin-bottom: 0;">Lector de Voz Remoto (TTS)</div>
+          <div class="card-section-title" style="margin-bottom: 0;" data-i18n="ttsSub">Remote Voice Reader (TTS)</div>
         </div>
         <div style="display: flex; gap: 8px; margin-top: 8px;">
           <input type="text" id="inputTTS" placeholder="Text to speak aloud on PC..." data-i18n="ttsPlaceholder" style="flex: 2; padding: 10px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 0;" onkeydown="checkTTSEnter(event)">
@@ -3893,7 +3614,7 @@ const DASHBOARD_HTML = `
       <div class="card-header" style="margin-bottom: 15px;">
         <div class="card-title-group">
           <h2 data-i18n="powerCardTitle">Power & Brightness</h2>
-          <p>Bloquear o suspender la computadora</p>
+          <p data-i18n="powerCardDesc">Lock or sleep the computer</p>
         </div>
       </div>
       <div style="display: flex; gap: 8px; width: 100%;">
@@ -3913,6 +3634,42 @@ const DASHBOARD_HTML = `
       <span class="badge">Remoto</span>
       <span>Túnel seguro activo: <a id="tunnelLink" href="#" target="_blank">Cargando...</a></span>
     </div>
+  <!-- FULLSCREEN TRACKPAD OVERLAY -->
+  <div id="trackpadFullscreenOverlay" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; background: #0b0f19; z-index: 999999; flex-direction: column; touch-action: none; user-select: none;">
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: rgba(15, 23, 42, 0.95); border-bottom: 1px solid rgba(255, 255, 255, 0.1); backdrop-filter: blur(12px);">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-weight: 700; font-size: 0.92rem; color: #fff;" data-i18n="trackpadTitle">Virtual Trackpad & Mouse</span>
+        <span id="fsSpeedBadge" style="font-size: 0.72rem; padding: 2px 7px; background: rgba(99, 102, 241, 0.25); color: #818cf8; border-radius: 6px; font-weight: 600;">1.2x</span>
+      </div>
+      <button class="btn btn-sm btn-danger" onclick="exitTrackpadFullscreen()" style="padding: 7px 14px; font-weight: 600; font-size: 0.8rem; margin: 0;" data-i18n="exitFullscreen">
+        ✖ Exit Fullscreen
+      </button>
+    </div>
+    <div style="position: relative; flex: 1; width: 100%; height: 100%; overflow: hidden;" id="fsTouchpadSurface">
+      <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; opacity: 0.25;">
+        <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        <span style="font-size: 0.88rem; font-weight: 600; text-align: center; max-width: 80%; margin-top: 10px;" data-i18n="touchpadHint">Slide 1 finger to move • Tap for Left Click • Double-tap for 2x • 2 fingers for Right Click</span>
+      </div>
+      <div id="fsTouchpadScrollStrip" style="position: absolute; right: 0; top: 0; bottom: 0; width: 56px; background: rgba(255, 255, 255, 0.04); border-left: 1px dashed rgba(255, 255, 255, 0.12); display: flex; flex-direction: column; align-items: center; justify-content: center; touch-action: none;">
+        <span style="font-size: 0.72rem; color: var(--text-muted); writing-mode: vertical-rl; transform: rotate(180deg); letter-spacing: 3px;" data-i18n="scrollStrip">SCROLL</span>
+      </div>
+    </div>
+    <div style="padding: 10px 12px; background: rgba(15, 23, 42, 0.95); border-top: 1px solid rgba(255, 255, 255, 0.1); display: flex; gap: 6px;">
+      <button class="btn btn-outline" onclick="sendMouseClick('left')" style="flex: 1; padding: 12px 4px; font-weight: 700; font-size: 0.82rem;" data-i18n="btnLeftClick">
+        Left Click
+      </button>
+      <button class="btn btn-outline" onclick="sendMouseDoubleClick()" style="flex: 0.9; padding: 12px 4px; font-weight: 700; font-size: 0.82rem;" data-i18n="doubleClick">
+        Double Click
+      </button>
+      <button class="btn btn-outline" id="fsBtnDragLock" onclick="toggleDragLock()" style="flex: 1; padding: 12px 4px; font-weight: 700; font-size: 0.8rem;">
+        <span id="fsDragLockIcon">🔓</span> <span id="fsDragLockText" data-i18n="dragLock">Drag Lock</span>
+      </button>
+      <button class="btn btn-outline" onclick="sendMouseClick('right')" style="flex: 1; padding: 12px 4px; font-weight: 700; font-size: 0.82rem;" data-i18n="btnRightClick">
+        Right Click
+      </button>
+    </div>
+  </div>
+
   </main>
 
   <!-- Modal Pausa Temporal -->
@@ -3992,8 +3749,7 @@ const DASHBOARD_HTML = `
       setLanguage(currentLang);
       initTrackpad();
       initDashboardCustomizer();
-      pollGatewayStatus();
-      setInterval(pollGatewayStatus, 5000);
+      scheduledPoll();
       probarPing();
       setInterval(probarPing, 20000);
       obtenerBrillo();
@@ -4195,9 +3951,24 @@ const DASHBOARD_HTML = `
       toast._timer = setTimeout(() => dismissToast(toast), duration);
     }
 
+    
+    let isPollingGateway = false;
+    async function scheduledPoll() {
+      if (isPollingGateway) return;
+      isPollingGateway = true;
+      try {
+        await pollGatewayStatus();
+      } catch (e) {
+        // Ignore error, watchdog prevents tab hang
+      } finally {
+        isPollingGateway = false;
+        setTimeout(scheduledPoll, 5000);
+      }
+    }
+
     async function pollGatewayStatus() {
       try {
-        const response = await fetch('/gateway/status');
+        const response = await safeFetch('/gateway/status', {}, 3500);
         
         if (response.status === 403) {
           logout();
@@ -4371,7 +4142,7 @@ const DASHBOARD_HTML = `
           if (muted) {
             statusStr += isEs ? ' (Silenciado)' : ' (Muted)';
           }
-          statusStr += ' | ' + (playing ? '▶ Reproduciendo' : '⏸ Pausado');
+          statusStr += ' | ' + (playing ? (isEs ? '▶ Reproduciendo' : '▶ Playing') : (isEs ? '⏸ Pausado' : '⏸ Paused'));
           audioTextEl.innerText = statusStr;
         }
 
@@ -4379,9 +4150,10 @@ const DASHBOARD_HTML = `
         const lastActEl = document.getElementById('lastActivityLabel');
         if (lastActEl && data.lastActivityFormatted) {
           if (data.lastActivitySecondsAgo !== null) {
-            lastActEl.innerText = 'Última: ' + data.lastActivityTimeStr + ' (Hace ' + data.lastActivityFormatted + ')';
+            const agoStr = isEs ? ('Hace ' + data.lastActivityFormatted) : (data.lastActivityFormatted + ' ago');
+            lastActEl.innerText = (isEs ? 'Última: ' : 'Last: ') + data.lastActivityTimeStr + ' (' + agoStr + ')';
           } else {
-            lastActEl.innerText = 'Última: Sin actividad';
+            lastActEl.innerText = isEs ? 'Última: Sin actividad' : 'Last: No activity';
           }
         }
 
@@ -4392,22 +4164,22 @@ const DASHBOARD_HTML = `
         const btnGuardiaToggleText = document.getElementById('btnGuardiaToggleText');
         if (data.screenGuardActive) {
           if (screenGuardBadge) screenGuardBadge.className = 'status-badge active';
-          if (screenGuardBadgeText) screenGuardBadgeText.innerText = 'Guardián Activo';
+          if (screenGuardBadgeText) screenGuardBadgeText.innerText = isEs ? 'Guardián Activo' : 'Guard Active';
           if (btnGuardiaToggle) {
             btnGuardiaToggle.style.background = 'rgba(16, 185, 129, 0.2)';
             btnGuardiaToggle.style.borderColor = '#10b981';
             btnGuardiaToggle.style.color = '#10b981';
           }
-          if (btnGuardiaToggleText) btnGuardiaToggleText.innerText = 'Desactivar Guardián (Encender)';
+          if (btnGuardiaToggleText) btnGuardiaToggleText.innerText = isEs ? 'Desactivar Guardián (Encender)' : 'Disable Guard (Turn On)';
         } else {
           if (screenGuardBadge) screenGuardBadge.className = 'status-badge';
-          if (screenGuardBadgeText) screenGuardBadgeText.innerText = 'Guardián Inactivo';
+          if (screenGuardBadgeText) screenGuardBadgeText.innerText = isEs ? 'Guardián Inactivo' : 'Guard Inactive';
           if (btnGuardiaToggle) {
             btnGuardiaToggle.style.background = 'rgba(168, 85, 247, 0.15)';
             btnGuardiaToggle.style.borderColor = 'rgba(168, 85, 247, 0.4)';
             btnGuardiaToggle.style.color = 'rgb(216, 180, 254)';
           }
-          if (btnGuardiaToggleText) btnGuardiaToggleText.innerText = 'Apagar (Guardián)';
+          if (btnGuardiaToggleText) btnGuardiaToggleText.innerText = isEs ? 'Apagar (Guardián)' : 'Turn Off (Guard)';
         }
 
       } catch (err) {
@@ -5397,14 +5169,14 @@ const DASHBOARD_HTML = `
     }
 
     // Touch Drag para Móviles
-    function handleTouchStart(e, card) {
+    function handleCardTouchStart(e, card) {
       if (!isEditModeActive) return;
       touchActiveCard = card;
       card.classList.add('is-dragging');
       if (navigator.vibrate) navigator.vibrate(20);
     }
 
-    function handleTouchMove(e, card) {
+    function handleCardTouchMove(e, card) {
       if (!isEditModeActive || !touchActiveCard) return;
       e.preventDefault();
       const touchY = e.touches[0].clientY;
@@ -5421,7 +5193,7 @@ const DASHBOARD_HTML = `
       }
     }
 
-    function handleTouchEnd(e, card) {
+    function handleCardTouchEnd(e, card) {
       if (!isEditModeActive || !touchActiveCard) return;
       touchActiveCard.classList.remove('is-dragging');
       touchActiveCard = null;
@@ -5494,6 +5266,9 @@ const DASHBOARD_HTML = `
     // ==========================================
     // INTERNATIONALIZATION (I18N) SYSTEM
     // ==========================================
+        // ==========================================
+    // INTERNATIONALIZATION (I18N) SYSTEM
+    // ==========================================
     const I18N = {
       en: {
         appTitle: "Gateway Control Center",
@@ -5504,13 +5279,15 @@ const DASHBOARD_HTML = `
         trackpadTitle: "Virtual Trackpad & Mouse",
         trackpadDesc: "Touchpad navigation, gestures, drag lock, and clicking",
         trackpadSpeed: "Speed:",
-        touchpadHint: "Slide 1 finger to move • Tap for Left Click • 2 fingers for Right Click",
+        btnFullscreen: "⛶ Fullscreen",
+        exitFullscreen: "✖ Exit Fullscreen",
+        touchpadHint: "Slide 1 finger to move • Tap for Left Click • Double-tap for 2x • 2 fingers for Right Click",
         scrollStrip: "SCROLL",
         btnLeftClick: "Left Click",
         btnRightClick: "Right Click",
-        dragLock: "Drag Lock (Hold Down)",
-        dragLockActive: "Drag Lock (Active)",
         doubleClick: "Double Click",
+        dragLock: "Drag Lock (Hold Down)",
+        dragActive: "Drag Active (Click to Release)",
         sensitivity: "Sensitivity:",
         keyboardTitle: "Remote Keyboard & Keystrokes",
         keyboardDesc: "Type phone text at PC cursor and send computer keys",
@@ -5520,52 +5297,174 @@ const DASHBOARD_HTML = `
         clearOnSend: "Clear after send",
         specialKeys: "Special Computer Keys",
         fnKeysSummary: "Function Keys (F1 - F12)",
+        customComboTitle: "Custom Key Combinations",
+        customComboDesc: "Combine modifiers with any key",
+        comboKeyPlaceholder: "Key (e.g. Esc, Tab, F4, D, W, Enter)...",
+        btnSendCombo: "🚀 Send Combo",
+        comboPresets: "Suggestions:",
         browserCardTitle: "Active Browser Keepalive",
         browserCardDesc: "Persistent session and display sleep prevention",
+        browserOpenBadge: "Browser: Open",
+        browserClosedBadge: "Browser: Closed",
+        keepaliveOnBadge: "Keepalive: On",
+        keepaliveOffBadge: "Keepalive: Off",
+        subBrowserWindow: "Browser Window",
+        btnBrowserOpen: "Open Window",
+        btnCloseWindow: "Close Window",
+        btnMinimize: "Minimize",
+        btnRestore: "Restore/View",
+        subKeepalive: "Keep Active Session",
+        activityIntervalLabel: "Activity Interval (minutes)",
+        btnStart: "Start",
+        btnTempPause: "Temp Pause",
+        btnPause: "Pause",
+        tempPauseActiveText: "Scheduled temporary pause:",
+        btnResumeNow: "Resume Now",
+        subSchedule: "Scheduled Hours",
+        lblStartHour: "Start Activity",
+        lblEndHour: "End Activity",
+        lblAllowedDays: "Allowed Days",
+        subAutoClose: "Browser Auto-Close",
+        lblCloseHour: "Close Hour",
+        lblAutoClose: "Auto-Close",
+        subFlexClose: "Flex Close",
+        lblDate: "Date",
+        subInputTests: "Input Tests (Instant Actions)",
+        btnMoveCursor: "Move Cursor",
+        btnTestFocus: "Test Focus",
+        btnPressShift: "Press Shift",
         systemCardTitle: "System & Diagnostics",
-        systemCardDesc: "ScreenGuard and Windows native controls",
+        systemCardDesc: "ScreenGuard, clipboard, screenshots, and native tools",
+        subEmulator: "Android Emulator",
+        emulatorDesc: "Launch or stop the Android emulator configured in .env from your phone.",
+        btnStartEmulator: "Launch",
+        btnCloseEmulator: "Close",
+        displayControlSub: "Display Control (Physical PC)",
+        screenGuardActiveBadge: "Guard Active",
+        screenGuardInactiveBadge: "Guard Inactive",
+        btnGuardToggleOff: "Disable Guard (Turn On)",
+        btnGuardToggleOn: "Turn Off (Guard)",
+        btnTurnOnCtrl: "Turn On (Ctrl)",
+        btnTurnOffAltX: "Traditional Off (Alt+X)",
+        clipboardSub: "PC Clipboard",
+        clipPlaceholder: "Text to send to Windows clipboard...",
+        btnCopyToPC: "Copy to PC",
+        btnReadFromPC: "Read from PC",
+        screenshotSub: "Screenshot & Latency",
+        btnCaptureScreen: "Capture Screen",
         mediaCardTitle: "Media & Audio Controls",
-        mediaCardDesc: "Playback, master volume, and voice synthesis (TTS)",
-        powerCardTitle: "Power & Brightness",
-        powerCardDesc: "Display brightness and PC power states",
+        mediaCardDesc: "Audio, system brightness, and voice reader (TTS)",
+        audioSub: "Audio & Playback Control",
+        brightnessSub: "Display Brightness",
+        brightnessLevel: "Brightness Level",
+        ttsSub: "Remote Voice Reader (TTS)",
+        ttsPlaceholder: "Text to speak aloud on PC...",
+        btnSpeak: "Speak",
+        powerCardTitle: "Power & Session",
+        powerCardDesc: "Lock or sleep the computer",
+        btnLockPC: "Lock PC",
+        btnSleepPC: "Sleep PC",
         restartCardTitle: "Gateway Server",
-        restartCardDesc: "Safe decoupled server restart"
+        restartCardDesc: "Restart gateway and reconnect tunnel",
+        btnRestartServer: "Restart"
       },
       es: {
-        appTitle: "Gateway Control Center",
-        appDesc: "API Gateway & Automatizaciones",
-        editModeBanner: "Modo Edición: Arrastra ⠿ para mover o usa 👁️ para ocultar/mostrar.",
+        appTitle: "Centro de Control Gateway",
+        appDesc: "API Gateway y Servidor de Automatización",
+        editModeBanner: "Modo Edición: Arrastra ⠿ para reordenar o usa 👁️ para ocultar/mostrar.",
         btnReset: "Restablecer",
         btnDone: "Listo",
         trackpadTitle: "Trackpad y Mouse Virtual",
         trackpadDesc: "Navegación táctil, gestos, arrastre y clics",
         trackpadSpeed: "Velocidad:",
-        touchpadHint: "Desliza 1 dedo para mover • 1 toque para Clic • 2 dedos para Clic Derecho",
-        scrollStrip: "SCROLL",
+        btnFullscreen: "⛶ Pantalla Completa",
+        exitFullscreen: "✖ Salir de Pantalla Completa",
+        touchpadHint: "Desliza 1 dedo para mover • Tap para Clic Izq • Doble tap para 2x • 2 dedos para Clic Der",
+        scrollStrip: "RUEDA",
         btnLeftClick: "Clic Izquierdo",
         btnRightClick: "Clic Derecho",
-        dragLock: "Mantener Clic (Arrastrar)",
-        dragLockActive: "Clic Bloqueado (Activo)",
         doubleClick: "Doble Clic",
+        dragLock: "Bloquear Arrastre (Mantener)",
+        dragActive: "Arrastre Activo (Clic para Soltar)",
         sensitivity: "Sensibilidad:",
-        keyboardTitle: "Teclado y Escritura Remota",
-        keyboardDesc: "Escribe desde el móvil en el cursor de la PC y pulsa teclas",
+        keyboardTitle: "Teclado Remoto & Pulsaciones",
+        keyboardDesc: "Escribe desde el móvil en el cursor de la PC y envía teclas",
         typePlaceholder: "Escribe o dicta texto para enviar a la PC...",
         btnSendText: "Enviar",
-        sendOnEnter: "Enviar con Enter",
+        sendOnEnter: "Enviar al pulsar Enter",
         clearOnSend: "Borrar al enviar",
         specialKeys: "Teclas Especiales de PC",
         fnKeysSummary: "Teclas de Función (F1 - F12)",
+        customComboTitle: "Combinaciones de Teclas Personalizadas",
+        customComboDesc: "Combina modificadores con cualquier tecla",
+        comboKeyPlaceholder: "Tecla (ej: Esc, Tab, F4, D, W, Enter)...",
+        btnSendCombo: "🚀 Enviar Combinación",
+        comboPresets: "Sugerencias:",
         browserCardTitle: "Navegador Activo",
         browserCardDesc: "Sesión persistente y prevención de inactividad de pantalla",
+        browserOpenBadge: "Navegador: Abierto",
+        browserClosedBadge: "Navegador: Cerrado",
+        keepaliveOnBadge: "Mantener Activo: On",
+        keepaliveOffBadge: "Mantener Activo: Off",
+        subBrowserWindow: "Ventana del Navegador",
+        btnBrowserOpen: "Abrir Ventana",
+        btnCloseWindow: "Cerrar Ventana",
+        btnMinimize: "Minimizar",
+        btnRestore: "Restaurar/Ver",
+        subKeepalive: "Mantener Sesión Activa",
+        activityIntervalLabel: "Intervalo de Actividad (minutos)",
+        btnStart: "Iniciar",
+        btnTempPause: "Pausa Temp",
+        btnPause: "Pausar",
+        tempPauseActiveText: "Pausa temporal programada:",
+        btnResumeNow: "Reanudar Ya",
+        subSchedule: "Programación Horaria",
+        lblStartHour: "Inicio Actividad",
+        lblEndHour: "Fin Actividad",
+        lblAllowedDays: "Días Permitidos",
+        subAutoClose: "Auto-Cierre del Navegador",
+        lblCloseHour: "Hora de Cierre",
+        lblAutoClose: "Auto-Cierre",
+        subFlexClose: "Cierre Flex",
+        lblDate: "Fecha",
+        subInputTests: "Pruebas de Entrada (Acciones al Instante)",
+        btnMoveCursor: "Mover Cursor",
+        btnTestFocus: "Probar Enfoque",
+        btnPressShift: "Presionar Shift",
         systemCardTitle: "Sistema & Diagnóstico",
         systemCardDesc: "ScreenGuard y utilidades nativas de Windows",
+        subEmulator: "Emulador Android",
+        emulatorDesc: "Permite iniciar o cerrar el emulador configurado en .env desde tu celular.",
+        btnStartEmulator: "Iniciar",
+        btnCloseEmulator: "Cerrar",
+        displayControlSub: "Control de Pantalla (PC Físico)",
+        screenGuardActiveBadge: "Guardián Activo",
+        screenGuardInactiveBadge: "Guardián Inactivo",
+        btnGuardToggleOff: "Desactivar Guardián (Encender)",
+        btnGuardToggleOn: "Apagar (Guardián)",
+        btnTurnOnCtrl: "Encender (Ctrl)",
+        btnTurnOffAltX: "Apagar Tradicional (Alt+X)",
+        clipboardSub: "Portapapeles de la PC",
+        clipPlaceholder: "Texto a enviar al portapapeles de Windows...",
+        btnCopyToPC: "Copiar a PC",
+        btnReadFromPC: "Leer de PC",
+        screenshotSub: "Captura de Pantalla & Latencia",
+        btnCaptureScreen: "Capturar Pantalla",
         mediaCardTitle: "Controles Multimedia & Audio",
-        mediaCardDesc: "Reproducción, volumen maestro y voz sintetizada (TTS)",
+        mediaCardDesc: "Audio, brillo del sistema y lector de voz (TTS)",
+        audioSub: "Control de Audio y Reproducción",
+        brightnessSub: "Brillo de Pantalla",
+        brightnessLevel: "Nivel de Brillo",
+        ttsSub: "Lector de Voz Remoto (TTS)",
+        ttsPlaceholder: "Texto para hablar en voz alta en PC...",
+        btnSpeak: "Hablar",
         powerCardTitle: "Energía & Pantalla",
         powerCardDesc: "Brillo del monitor y suspensión de la PC",
+        btnLockPC: "Bloquear PC",
+        btnSleepPC: "Suspender PC",
         restartCardTitle: "Gateway Server",
-        restartCardDesc: "Reinicio seguro del proceso desacoplado"
+        restartCardDesc: "Reinicio seguro del proceso desacoplado",
+        btnRestartServer: "Reiniciar"
       }
     };
 
@@ -5603,59 +5502,84 @@ const DASHBOARD_HTML = `
 
     function toggleLanguage() {
       setLanguage(currentLang === 'en' ? 'es' : 'en');
+      if (window.lastStatusData) pollGatewayStatus();
     }
 
     // ==========================================
-    // VIRTUAL TRACKPAD & MOUSE LOGIC
+        // ==========================================
+    // VIRTUAL TRACKPAD & MOUSE LOGIC (ROBUST ANTI-FREEZE ENGINE)
     // ==========================================
     let trackpadSensitivity = parseFloat(localStorage.getItem('trackpad_sensitivity') || '1.2');
     let isDragLocked = false;
-    let touchStartX = 0;
-    let touchStartY = 0;
-    let touchStartTime = 0;
-    let lastTouchX = 0;
-    let lastTouchY = 0;
-    let touchMovedTotal = 0;
+    let padTouchStartX = 0, padTouchStartY = 0;
+    let lastPadTouchX = 0, lastPadTouchY = 0;
+    let padGestureStartTime = 0;
+    let maxPadTouches = 0;
+    let isTwoFingerGesture = false;
+    let totalPadMovement = 0;
+    let lastSingleTapTime = 0;
+    let singleTapTimeout = null;
+
     let moveAccumDx = 0;
     let moveAccumDy = 0;
-    let moveFlushTimer = null;
+    let isMouseSending = false;
+
+    // Anti-Freeze safeFetch helper with AbortController timeout
+    async function safeFetch(url, options = {}, timeoutMs = 4000) {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { ...options, signal: controller.signal });
+        clearTimeout(id);
+        return res;
+      } catch (err) {
+        clearTimeout(id);
+        throw err;
+      }
+    }
 
     function initTrackpad() {
       const surface = document.getElementById('touchpadSurface');
       const scrollStrip = document.getElementById('touchpadScrollStrip');
+      const fsSurface = document.getElementById('fsTouchpadSurface');
+      const fsScrollStrip = document.getElementById('fsTouchpadScrollStrip');
       const slider = document.getElementById('sliderSensitivity');
       const label = document.getElementById('trackpadSpeedLabel');
 
       if (slider) slider.value = trackpadSensitivity;
       if (label) label.innerText = trackpadSensitivity.toFixed(1) + 'x';
 
-      if (surface) {
-        surface.addEventListener('touchstart', handleTouchStart, { passive: false });
-        surface.addEventListener('touchmove', handleTouchMove, { passive: false });
-        surface.addEventListener('touchend', handleTouchEnd, { passive: false });
-        surface.addEventListener('touchcancel', handleTouchEnd, { passive: false });
-      }
+      [surface, fsSurface].forEach(surf => {
+        if (surf) {
+          surf.addEventListener('touchstart', handlePadTouchStart, { passive: false });
+          surf.addEventListener('touchmove', handlePadTouchMove, { passive: false });
+          surf.addEventListener('touchend', handlePadTouchEnd, { passive: false });
+          surf.addEventListener('touchcancel', handlePadTouchEnd, { passive: false });
+        }
+      });
 
-      if (scrollStrip) {
-        let scrollStartY = 0;
-        scrollStrip.addEventListener('touchstart', (e) => {
-          e.stopPropagation();
-          if (e.touches.length > 0) scrollStartY = e.touches[0].clientY;
-        }, { passive: true });
+      [scrollStrip, fsScrollStrip].forEach(strip => {
+        if (strip) {
+          let scrollStartY = 0;
+          strip.addEventListener('touchstart', (e) => {
+            e.stopPropagation();
+            if (e.touches.length > 0) scrollStartY = e.touches[0].clientY;
+          }, { passive: true });
 
-        scrollStrip.addEventListener('touchmove', (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          if (e.touches.length > 0) {
-            const curY = e.touches[0].clientY;
-            const deltaY = scrollStartY - curY;
-            if (Math.abs(deltaY) > 8) {
-              sendMouseScroll(Math.round(deltaY * 5));
-              scrollStartY = curY;
+          strip.addEventListener('touchmove', (e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            if (e.touches.length > 0) {
+              const curY = e.touches[0].clientY;
+              const deltaY = scrollStartY - curY;
+              if (Math.abs(deltaY) > 6) {
+                sendMouseScroll(Math.round(deltaY * 5));
+                scrollStartY = curY;
+              }
             }
-          }
-        }, { passive: false });
-      }
+          }, { passive: false });
+        }
+      });
     }
 
     function changeTrackpadSensitivity(val) {
@@ -5663,177 +5587,292 @@ const DASHBOARD_HTML = `
       localStorage.setItem('trackpad_sensitivity', trackpadSensitivity);
       const label = document.getElementById('trackpadSpeedLabel');
       if (label) label.innerText = trackpadSensitivity.toFixed(1) + 'x';
+      const fsBadge = document.getElementById('fsSpeedBadge');
+      if (fsBadge) fsBadge.innerText = trackpadSensitivity.toFixed(1) + 'x';
     }
 
-    function handleTouchStart(e) {
-      e.preventDefault();
-      if (e.touches.length === 1) {
-        touchStartX = e.touches[0].clientX;
-        touchStartY = e.touches[0].clientY;
-        lastTouchX = touchStartX;
-        lastTouchY = touchStartY;
-        touchStartTime = Date.now();
-        touchMovedTotal = 0;
-      } else if (e.touches.length === 2) {
-        touchStartX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-        touchStartY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-        lastTouchX = touchStartX;
-        lastTouchY = touchStartY;
-        touchStartTime = Date.now();
-        touchMovedTotal = 0;
+    function enterTrackpadFullscreen() {
+      const overlay = document.getElementById('trackpadFullscreenOverlay');
+      if (overlay) {
+        overlay.style.display = 'flex';
+        const fsBadge = document.getElementById('fsSpeedBadge');
+        if (fsBadge) fsBadge.innerText = trackpadSensitivity.toFixed(1) + 'x';
+        const docEl = document.documentElement;
+        if (docEl.requestFullscreen) docEl.requestFullscreen().catch(() => {});
+        else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen().catch(() => {});
       }
     }
 
-    function handleTouchMove(e) {
+    function exitTrackpadFullscreen() {
+      const overlay = document.getElementById('trackpadFullscreenOverlay');
+      if (overlay) {
+        overlay.style.display = 'none';
+        if (document.fullscreenElement && document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        } else if (document.webkitFullscreenElement && document.webkitExitFullscreen) {
+          document.webkitExitFullscreen().catch(() => {});
+        }
+      }
+    }
+
+    function handlePadTouchStart(e) {
       e.preventDefault();
+      if (e.touches.length > maxPadTouches) {
+        maxPadTouches = e.touches.length;
+      }
+      if (e.touches.length === 2) {
+        isTwoFingerGesture = true;
+      }
+
       if (e.touches.length === 1) {
+        padTouchStartX = e.touches[0].clientX;
+        padTouchStartY = e.touches[0].clientY;
+        lastPadTouchX = padTouchStartX;
+        lastPadTouchY = padTouchStartY;
+        padGestureStartTime = Date.now();
+        totalPadMovement = 0;
+      } else if (e.touches.length === 2) {
+        padTouchStartX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        padTouchStartY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        lastPadTouchX = padTouchStartX;
+        lastPadTouchY = padTouchStartY;
+        padGestureStartTime = Date.now();
+      }
+    }
+
+    function handlePadTouchMove(e) {
+      e.preventDefault();
+      if (e.touches.length > maxPadTouches) {
+        maxPadTouches = e.touches.length;
+      }
+
+      if (e.touches.length === 1 && !isTwoFingerGesture) {
         const curX = e.touches[0].clientX;
         const curY = e.touches[0].clientY;
-        const dx = (curX - lastTouchX) * trackpadSensitivity;
-        const dy = (curY - lastTouchY) * trackpadSensitivity;
-        touchMovedTotal += Math.abs(curX - lastTouchX) + Math.abs(curY - lastTouchY);
-        lastTouchX = curX;
-        lastTouchY = curY;
+        const dx = (curX - lastPadTouchX) * trackpadSensitivity;
+        const dy = (curY - lastPadTouchY) * trackpadSensitivity;
+        totalPadMovement += Math.abs(curX - lastPadTouchX) + Math.abs(curY - lastPadTouchY);
+        lastPadTouchX = curX;
+        lastPadTouchY = curY;
 
         moveAccumDx += dx;
         moveAccumDy += dy;
-
-        if (!moveFlushTimer) {
-          moveFlushTimer = setTimeout(flushMouseMove, 22);
-        }
+        requestFlushMouseMove();
       } else if (e.touches.length === 2) {
+        isTwoFingerGesture = true;
         const curY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-        const deltaY = lastTouchY - curY;
-        touchMovedTotal += Math.abs(deltaY);
-        lastTouchY = curY;
+        const deltaY = lastPadTouchY - curY;
+        totalPadMovement += Math.abs(deltaY);
+        lastPadTouchY = curY;
 
-        if (Math.abs(deltaY) > 4) {
-          sendMouseScroll(Math.round(deltaY * 6));
+        if (Math.abs(deltaY) > 5) {
+          sendMouseScroll(Math.round(deltaY * 5));
         }
       }
     }
 
-    function flushMouseMove() {
-      moveFlushTimer = null;
-      if (Math.abs(moveAccumDx) >= 0.5 || Math.abs(moveAccumDy) >= 0.5) {
-        const sendX = Math.round(moveAccumDx);
-        const sendY = Math.round(moveAccumDy);
-        moveAccumDx -= sendX;
-        moveAccumDy -= sendY;
+    function requestFlushMouseMove() {
+      if (isMouseSending) return;
+      if (Math.abs(moveAccumDx) < 0.5 && Math.abs(moveAccumDy) < 0.5) return;
 
-        fetch('/system/mouse', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'move', dx: sendX, dy: sendY })
-        }).catch(() => {});
-      }
+      const sendX = Math.round(moveAccumDx);
+      const sendY = Math.round(moveAccumDy);
+      moveAccumDx -= sendX;
+      moveAccumDy -= sendY;
+
+      isMouseSending = true;
+      safeFetch('/system/mouse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'move', dx: sendX, dy: sendY })
+      }, 1200).catch(() => {}).finally(() => {
+        isMouseSending = false;
+        if (Math.abs(moveAccumDx) >= 0.5 || Math.abs(moveAccumDy) >= 0.5) {
+          requestFlushMouseMove();
+        }
+      });
     }
 
-    function handleTouchEnd(e) {
+    function handlePadTouchEnd(e) {
       e.preventDefault();
-      const elapsed = Date.now() - touchStartTime;
+      if (e.touches.length > 0) return;
 
-      if (moveFlushTimer) {
-        clearTimeout(moveFlushTimer);
-        flushMouseMove();
-      }
+      const elapsed = Date.now() - padGestureStartTime;
+      requestFlushMouseMove();
 
-      if (elapsed < 240 && touchMovedTotal < 8) {
-        if (e.changedTouches.length === 1) {
-          sendMouseClick('left');
-        } else if (e.changedTouches.length === 2) {
+      if (isTwoFingerGesture) {
+        // Two-finger tap: RIGHT CLICK
+        if (elapsed < 380 && totalPadMovement < 30) {
+          if (singleTapTimeout) { clearTimeout(singleTapTimeout); singleTapTimeout = null; }
           sendMouseClick('right');
+          if (navigator.vibrate) navigator.vibrate(30);
+        }
+      } else if (maxPadTouches === 1) {
+        // Single finger tap
+        if (elapsed < 260 && totalPadMovement < 16) {
+          const now = Date.now();
+          if (now - lastSingleTapTime < 320) {
+            // Double tap -> DOUBLE CLICK
+            if (singleTapTimeout) { clearTimeout(singleTapTimeout); singleTapTimeout = null; }
+            lastSingleTapTime = 0;
+            sendMouseDoubleClick();
+            if (navigator.vibrate) navigator.vibrate([20, 30, 20]);
+          } else {
+            lastSingleTapTime = now;
+            singleTapTimeout = setTimeout(() => {
+              singleTapTimeout = null;
+              if (Date.now() - lastSingleTapTime >= 280) {
+                sendMouseClick('left');
+              }
+            }, 230);
+          }
         }
       }
+
+      maxPadTouches = 0;
+      isTwoFingerGesture = false;
+      totalPadMovement = 0;
     }
 
     async function sendMouseClick(button) {
       try {
-        await fetch('/system/mouse', {
+        await safeFetch('/system/mouse', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'click', button })
-        });
+        }, 2000);
       } catch (e) {}
     }
 
     async function sendMouseDoubleClick() {
       try {
-        await fetch('/system/mouse', {
+        await safeFetch('/system/mouse', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'double-click', button: 'left' })
-        });
+        }, 2000);
       } catch (e) {}
     }
 
     async function sendMouseScroll(deltaY) {
       try {
-        await fetch('/system/mouse', {
+        await safeFetch('/system/mouse', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'scroll', deltaY })
-        });
+        }, 1500);
       } catch (e) {}
     }
 
     async function toggleDragLock() {
       isDragLocked = !isDragLocked;
-      const btn = document.getElementById('btnDragLock');
-      const icon = document.getElementById('dragLockIcon');
-      const text = document.getElementById('dragLockText');
-      const dict = I18N[currentLang] || I18N.en;
+      const action = isDragLocked ? 'down' : 'up';
+      try {
+        await safeFetch('/system/mouse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action, button: 'left' })
+        }, 2000);
 
-      if (isDragLocked) {
-        if (btn) btn.style.background = 'rgba(245, 158, 11, 0.25)';
-        if (btn) btn.style.borderColor = '#f59e0b';
-        if (icon) icon.innerText = '🔒';
-        if (text) text.innerText = dict.dragLockActive || 'Drag Lock (Active)';
-        await fetch('/system/mouse', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'down', button: 'left' })
-        }).catch(() => {});
-        showToast(currentLang === 'es' ? 'Arrastre bloqueado: cursor presionado.' : 'Drag lock active: mouse held down.', 'info');
-      } else {
-        if (btn) btn.style.background = '';
-        if (btn) btn.style.borderColor = '';
-        if (icon) icon.innerText = '🔓';
-        if (text) text.innerText = dict.dragLock || 'Drag Lock (Hold Down)';
-        await fetch('/system/mouse', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'up', button: 'left' })
-        }).catch(() => {});
-        showToast(currentLang === 'es' ? 'Arrastre liberado.' : 'Drag lock released.', 'info');
-      }
+        const dict = I18N[currentLang] || I18N.en;
+        const icon = isDragLocked ? '🔒' : '🔓';
+        const txt = isDragLocked ? dict.dragActive : dict.dragLock;
+
+        const iconEl = document.getElementById('dragLockIcon');
+        const textEl = document.getElementById('dragLockText');
+        const btn = document.getElementById('btnDragLock');
+        if (iconEl) iconEl.innerText = icon;
+        if (textEl) textEl.innerText = txt;
+        if (btn) {
+          btn.style.background = isDragLocked ? 'rgba(239, 68, 68, 0.2)' : '';
+          btn.style.borderColor = isDragLocked ? 'var(--danger)' : '';
+          btn.style.color = isDragLocked ? '#f87171' : '';
+        }
+
+        const fsIconEl = document.getElementById('fsDragLockIcon');
+        const fsTextEl = document.getElementById('fsDragLockText');
+        const fsBtn = document.getElementById('fsBtnDragLock');
+        if (fsIconEl) fsIconEl.innerText = icon;
+        if (fsTextEl) fsTextEl.innerText = txt;
+        if (fsBtn) {
+          fsBtn.style.background = isDragLocked ? 'rgba(239, 68, 68, 0.25)' : '';
+          fsBtn.style.borderColor = isDragLocked ? 'var(--danger)' : '';
+          fsBtn.style.color = isDragLocked ? '#f87171' : '';
+        }
+      } catch (e) {}
     }
 
     // ==========================================
-    // REMOTE KEYBOARD & KEYSTROKES LOGIC
+    // REMOTE KEYBOARD & CUSTOM COMBINATIONS LOGIC
     // ==========================================
+    const activeModifiers = new Set();
+
+    function toggleModifier(mod) {
+      const idMap = { ctrl: 'modCtrl', alt: 'modAlt', shift: 'modShift', win: 'modWin' };
+      const btn = document.getElementById(idMap[mod]);
+      if (activeModifiers.has(mod)) {
+        activeModifiers.delete(mod);
+        if (btn) {
+          btn.style.background = '';
+          btn.style.borderColor = '';
+          btn.style.color = '';
+        }
+      } else {
+        activeModifiers.add(mod);
+        if (btn) {
+          btn.style.background = 'rgba(99, 102, 241, 0.25)';
+          btn.style.borderColor = 'var(--accent-primary)';
+          btn.style.color = '#818cf8';
+        }
+      }
+    }
+
+    function setCustomKey(key) {
+      const input = document.getElementById('inputCustomKey');
+      if (input) {
+        input.value = key;
+        input.focus();
+      }
+    }
+
+    function sendCustomCombination() {
+      const input = document.getElementById('inputCustomKey');
+      const key = input ? input.value.trim() : '';
+      const mods = Array.from(activeModifiers);
+
+      if (mods.length === 0 && !key) {
+        showToast(currentLang === 'es' ? 'Selecciona un modificador o escribe una tecla' : 'Select a modifier or enter a key', 'warning');
+        return;
+      }
+
+      const parts = [...mods];
+      if (key) parts.push(key);
+      const combo = parts.join('+');
+      sendKey(combo);
+    }
+
     async function sendRemoteText() {
       const input = document.getElementById('inputRemoteText');
-      if (!input || !input.value) return;
+      if (!input) return;
       const text = input.value;
+      if (!text) return;
 
       try {
-        const res = await fetch('/system/keyboard/type', {
+        const res = await safeFetch('/system/keyboard/type', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text })
-        });
+        }, 3000);
+
         if (res.ok) {
+          showToast((currentLang === 'es' ? 'Texto enviado: ' : 'Text typed: ') + (text.length > 25 ? text.substring(0, 25) + '...' : text), 'success');
           const chkClear = document.getElementById('chkClearOnSend');
           if (chkClear && chkClear.checked) {
             input.value = '';
           }
-          showToast(currentLang === 'es' ? 'Texto enviado a la PC.' : 'Text sent to PC.', 'success');
-        } else {
-          showToast(currentLang === 'es' ? 'Error al enviar texto.' : 'Error sending text.', 'error');
         }
       } catch (e) {
-        showToast(currentLang === 'es' ? 'Error de conexión.' : 'Connection error.', 'error');
+        showToast(currentLang === 'es' ? 'Error al enviar texto' : 'Failed to send text', 'error');
       }
     }
 
@@ -5849,15 +5888,17 @@ const DASHBOARD_HTML = `
 
     async function sendKey(key) {
       try {
-        const res = await fetch('/system/keyboard/key', {
+        const res = await safeFetch('/system/keyboard/key', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ key })
-        });
+        }, 3000);
         if (res.ok) {
           showToast(key.toUpperCase(), 'info');
         }
-      } catch (e) {}
+      } catch (e) {
+        showToast((currentLang === 'es' ? 'Error al presionar: ' : 'Failed key: ') + key, 'error');
+      }
     }
 
   </script>
@@ -5877,7 +5918,8 @@ const DASHBOARD_HTML = `
 </html>
 `;
 
-// Ruta principal GET /
+// Ruta principal GET /`;
+
 app.get('/', (req, res) => {
   let cookieKey = getApiKeyFromCookie(req.headers.cookie);
   const queryKey = req.query.key || req.query.api_key;
