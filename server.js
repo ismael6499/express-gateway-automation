@@ -9,6 +9,8 @@ const { exec, spawn } = require('child_process');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.API_KEY;
+const TARGET_WEB_URL = process.env.TARGET_WEB_URL || 'https://example.com';
+const TARGET_ACCOUNT_EMAIL = process.env.TARGET_ACCOUNT_EMAIL || '';
 
 // Middleware para parsear JSON
 app.use(express.json());
@@ -544,14 +546,21 @@ async function autoLoginTargetSession(page) {
         } else {
           // No es la página de contraseña -> Puede ser "Pick an account" o "Stay signed in?"
           
-          // 1. Intentar hacer clic en la fila de la cuenta ("Pick an account")
-          // Excluimos selectores de texto simple que puedan confundirse con etiquetas
-          const accountSelectors = [
-            'div[data-username*="user@example.com"]',
-            '[data-username*="user@example.com"]',
-            'div[role="button"]:has-text("user@example.com")',
-            '.tile:has-text("user@example.com")'
-          ];
+          const accountSelectors = [];
+          if (TARGET_ACCOUNT_EMAIL) {
+            accountSelectors.push(
+              `div[data-username*="${TARGET_ACCOUNT_EMAIL}"]`,
+              `[data-username*="${TARGET_ACCOUNT_EMAIL}"]`,
+              `div[role="button"]:has-text("${TARGET_ACCOUNT_EMAIL}")`,
+              `.tile:has-text("${TARGET_ACCOUNT_EMAIL}")`
+            );
+          }
+          accountSelectors.push(
+            'div.table[role="button"]',
+            '.tile-container .tile',
+            'div[data-test-id*="account"]',
+            'div[role="button"].tile'
+          );
 
           let clickedAccount = false;
           for (let sel of accountSelectors) {
@@ -853,11 +862,16 @@ app.post('/browser/browser', async (req, res) => {
       await new Promise(resolve => setTimeout(resolve, 800));
 
       const pages = browserBrowserContext.pages();
-      // Buscar si ya hay alguna pestaña restaurada de Browser
-      const restoredBrowserPage = pages.find(p => p.url().includes('example.com') || p.url().includes('cloud.example.com'));
+      // Buscar si ya hay alguna pestaña restaurada
+      let targetHost = '';
+      try { targetHost = new URL(TARGET_WEB_URL).hostname; } catch (e) {}
+      const restoredBrowserPage = pages.find(p => {
+        const u = p.url();
+        return u.includes('example.com') || u.includes('cloud.example.com') || (targetHost && u.includes(targetHost));
+      });
 
       if (restoredBrowserPage) {
-        log('Auto-Login: Reutilizando pestaña de Browser restaurada automáticamente.');
+        log('Auto-Login: Reutilizando pestaña restaurada automáticamente.');
         browserPage = restoredBrowserPage;
 
         // Cerrar las pestañas about:blank sobrantes
@@ -874,9 +888,9 @@ app.post('/browser/browser', async (req, res) => {
           browserPage = await browserBrowserContext.newPage();
         }
 
-        log('Navegando asíncronamente a https://example.com...');
-        browserPage.goto('https://example.com').catch((err) => {
-          log(`Error al navegar a Browser: ${err.message}`);
+        log(`Navegando asíncronamente a ${TARGET_WEB_URL}...`);
+        browserPage.goto(TARGET_WEB_URL).catch((err) => {
+          log(`Error al navegar a la URL objetivo: ${err.message}`);
         });
       }
 
@@ -1348,7 +1362,7 @@ app.post('/browser/status', async (req, res) => {
         });
         const pages = browserBrowserContext.pages();
         browserPage = pages.length > 0 ? pages[0] : await browserBrowserContext.newPage();
-        browserPage.goto('https://example.com').catch(() => {});
+        browserPage.goto(TARGET_WEB_URL).catch(() => {});
         browserBrowserAbierto = true;
         setupSignInCheckInterval();
       }
@@ -2758,12 +2772,15 @@ const DASHBOARD_HTML = `
     .btn-sub-vis.is-hidden:hover {
       background: rgba(239, 68, 68, 0.2);
     }
+    .secret-hidden {
+      display: none !important;
+    }
   </style>
 </head>
 <body>
 
   <header>
-    <div class="logo-container">
+    <div class="logo-container" id="logoContainer" onclick="handleSecretHeaderClick()" style="cursor: pointer; user-select: none;" title="Gateway Control Center">
       <h1>Gateway Control Center</h1>
       <p>API Gateway & Automatizaciones</p>
     </div>
@@ -2789,12 +2806,12 @@ const DASHBOARD_HTML = `
         <button class="btn btn-sm btn-primary" onclick="toggleEditMode()">Listo</button>
       </div>
     </div>
-    <!-- CARD 1: MICROSOFT TEAMS -->
-    <div class="card" id="cardBrowser">
+    <!-- CARD 1: NAVEGADOR ACTIVO -->
+    <div class="card secret-hidden" id="cardBrowser">
       <div class="card-header">
         <div class="card-title-group">
-          <h2>Presencia en Browser</h2>
-          <p>Navegador Playwright y simulación independientes</p>
+          <h2>Navegador Activo</h2>
+          <p>Sesión persistente y prevención de inactividad de pantalla</p>
         </div>
         <div class="status-badge-container">
           <div class="status-badge" id="browserBadge">
@@ -2832,16 +2849,16 @@ const DASHBOARD_HTML = `
       </div>
 
       <!-- SECCIÓN 1.B: AUTOMATIZACIÓN DE ACTIVIDAD -->
-      <div class="sub-section" id="sub_browser_presencia" data-sub-title="Mantener Activo (Presencia)">
+      <div class="sub-section" id="sub_browser_presencia" data-sub-title="Mantener Sesión Activa">
         <div class="divider"></div>
         <div class="sub-section-header" style="margin-bottom: 5px;">
-          <div class="card-section-title" style="margin-bottom: 0;">Mantener Activo (Presencia)</div>
+          <div class="card-section-title" style="margin-bottom: 0;">Mantener Sesión Activa</div>
           <div id="lastActivityLabel" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500; letter-spacing: 0.3px;">Última: Sin actividad</div>
         </div>
         
         <div class="form-group">
           <div class="form-label-row">
-            <span>Intervalo de Simulación (minutos)</span>
+            <span>Intervalo de Actividad (minutos)</span>
             <span id="browserIntervalVal">4 minutos</span>
           </div>
           <input type="number" class="number-input" id="browserIntervalInput" min="1" max="9999" step="1" value="4" onchange="cambiarIntervaloEnCaliente(this.value)">
@@ -2865,7 +2882,7 @@ const DASHBOARD_HTML = `
         <div id="pausaTemporalStatusBanner" style="display: none; margin-top: 12px; background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 12px; padding: 10px 14px; font-size: 0.8rem; color: #fbbf24; align-items: center; justify-content: space-between;">
           <div style="display: flex; align-items: center; gap: 8px;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-            <span>Pausa temporal (Programada): <strong id="pausaTemporalCountdownText">20m 00s</strong></span>
+            <span>Pausa temporal programada: <strong id="pausaTemporalCountdownText">20m 00s</strong></span>
           </div>
           <button onclick="controlPresencia('iniciar')" style="background: rgba(245, 158, 11, 0.25); border: 1px solid #f59e0b; color: #fff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer;">Reanudar Ya</button>
         </div>
@@ -2875,16 +2892,16 @@ const DASHBOARD_HTML = `
       <div class="sub-section" id="sub_browser_schedule" data-sub-title="Programación Horaria">
         <div class="divider"></div>
         <div class="sub-section-header">
-          <div class="card-section-title" style="margin-bottom: 0;">Programación de la Simulación</div>
+          <div class="card-section-title" style="margin-bottom: 0;">Programación Horaria</div>
         </div>
         <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 8px;">
           <div style="display: flex; gap: 10px; width: 100%;">
             <div style="flex: 1;">
-              <label style="font-size: 0.75rem; color: var(--text-muted);">Inicio Simulación</label>
+              <label style="font-size: 0.75rem; color: var(--text-muted);">Inicio Actividad</label>
               <input type="time" id="browserStartHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
             </div>
             <div style="flex: 1;">
-              <label style="font-size: 0.75rem; color: var(--text-muted);">Fin Simulación</label>
+              <label style="font-size: 0.75rem; color: var(--text-muted);">Fin Actividad</label>
               <input type="time" id="browserEndHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
             </div>
           </div>
@@ -2969,17 +2986,17 @@ const DASHBOARD_HTML = `
       </div>
 
       <!-- SECCIÓN 1.F: PRUEBAS MANUALES EN CALIENTE -->
-      <div class="sub-section" id="sub_browser_manualtests" data-sub-title="Pruebas Manuales">
+      <div class="sub-section" id="sub_browser_manualtests" data-sub-title="Pruebas de Entrada">
         <div class="divider"></div>
         <div class="sub-section-header">
-          <div class="card-section-title" style="margin-bottom: 0;">Pruebas Manuales (Acciones al Instante)</div>
+          <div class="card-section-title" style="margin-bottom: 0;">Pruebas de Entrada (Acciones al Instante)</div>
         </div>
         <div class="btn-row" style="gap: 8px; margin-top: 10px;">
           <button class="btn" id="btnTestMouse" onclick="enviarAccionPrueba('mover-mouse')" style="padding: 8px; font-size: 0.75rem;">
-            Mover Mouse
+            Mover Cursor
           </button>
           <button class="btn" id="btnTestTipeo" onclick="enviarAccionPrueba('tipear-buscador')" style="padding: 8px; font-size: 0.75rem;">
-            Tipear Buscador
+            Probar Enfoque
           </button>
           <button class="btn" id="btnTestShift" onclick="enviarAccionPrueba('pulsar-shift')" style="padding: 8px; font-size: 0.75rem;">
             Pulsar Shift
@@ -3205,13 +3222,13 @@ const DASHBOARD_HTML = `
       <div class="modal-header">
         <h3>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-          Pausa Temporal (Programada)
+          Pausa Temporal Programada
         </h3>
         <button class="modal-close-btn" onclick="cerrarModalPausaTemporal()">&times;</button>
       </div>
       <div class="modal-body">
         <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px; line-height: 1.4;">
-          Ingresa la cantidad de minutos para pausar temporalmente los movimientos del navegador. Al terminar el tiempo, la simulación se reanudará automáticamente.
+          Ingresa la cantidad de minutos para pausar temporalmente la actividad del navegador. Al terminar el tiempo, la actividad se reanudará automáticamente.
         </p>
         <div class="form-group">
           <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">Minutos de Pausa</label>
@@ -3228,7 +3245,7 @@ const DASHBOARD_HTML = `
         </div>
 
         <details style="margin-bottom: 15px; font-size: 0.75rem; color: var(--text-muted);" id="detailsPauseIntervals">
-          <summary style="cursor: pointer; user-select: none; font-weight: 500; opacity: 0.85; margin-bottom: 8px;">⚙️ Configurar intervalos por hora (Hasta 4)</summary>
+          <summary style="cursor: pointer; user-select: none; font-weight: 500; opacity: 0.85; margin-bottom: 8px;">⚙️ Configurar intervalos de pausa programada (Hasta 4)</summary>
           <div style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 10px; border: 1px solid var(--card-border);">
             <div id="pauseIntervalsList" style="display: flex; flex-direction: column; gap: 8px;">
               <!-- Filas generadas dinámicamente -->
@@ -4336,7 +4353,7 @@ const DASHBOARD_HTML = `
     // === GESTIÓN DE PERSONALIZACIÓN, ORDEN Y VISIBILIDAD DE SECCIONES ===
     const DEFAULT_CARD_ORDER = ['cardBrowser', 'cardSistema', 'cardReiniciar', 'cardMultimedia', 'cardEnergia'];
     const CARD_TITLES = {
-      'cardBrowser': 'Presencia en Browser',
+      'cardBrowser': 'Navegador Activo',
       'cardSistema': 'Acciones de Sistema',
       'cardReiniciar': 'Reiniciar Servidor',
       'cardMultimedia': 'Controles Multimedia, Brillo & Voz',
@@ -4708,6 +4725,69 @@ const DASHBOARD_HTML = `
       touchActiveCard = null;
       saveCurrentDOMState();
     }
+
+    // === GESTIÓN DE MODO AVANZADO (DESBLOQUEO SECRETO DE HERRAMIENTAS WEB) ===
+    function isWebToolsUnlocked() {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('tools') === '1' || urlParams.get('web') === '1') {
+          localStorage.setItem('gw_web_tools_unlocked', '1');
+          return true;
+        }
+        return localStorage.getItem('gw_web_tools_unlocked') === '1';
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function applyWebToolsVisibility() {
+      const card = document.getElementById('cardBrowser');
+      if (!card) return;
+      if (isWebToolsUnlocked()) {
+        card.classList.remove('secret-hidden');
+      } else {
+        card.classList.add('secret-hidden');
+      }
+    }
+
+    let headerClickCount = 0;
+    let headerClickTimer = null;
+    function handleSecretHeaderClick() {
+      headerClickCount++;
+      if (headerClickTimer) clearTimeout(headerClickTimer);
+      headerClickTimer = setTimeout(() => { headerClickCount = 0; }, 2500);
+      if (headerClickCount >= 5) {
+        headerClickCount = 0;
+        const wasUnlocked = isWebToolsUnlocked();
+        if (wasUnlocked) {
+          localStorage.removeItem('gw_web_tools_unlocked');
+          showToast('Modo estándar activo.', 'info');
+        } else {
+          localStorage.setItem('gw_web_tools_unlocked', '1');
+          showToast('Herramientas web activadas.', 'success');
+        }
+        applyWebToolsVisibility();
+      }
+    }
+
+    window.addEventListener('keydown', function(e) {
+      if ((e.ctrlKey && e.shiftKey && (e.key === 'U' || e.key === 'u')) ||
+          (e.ctrlKey && e.altKey && (e.key === 'A' || e.key === 'a'))) {
+        e.preventDefault();
+        const wasUnlocked = isWebToolsUnlocked();
+        if (wasUnlocked) {
+          localStorage.removeItem('gw_web_tools_unlocked');
+          showToast('Modo estándar activo.', 'info');
+        } else {
+          localStorage.setItem('gw_web_tools_unlocked', '1');
+          showToast('Herramientas web activadas.', 'success');
+        }
+        applyWebToolsVisibility();
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', applyWebToolsVisibility);
+    setTimeout(applyWebToolsVisibility, 100);
   </script>
   <div id="restartOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(10, 10, 12, 0.9); z-index: 9999; align-items: center; justify-content: center; flex-direction: column; color: #fff; text-align: center; padding: 20px; box-sizing: border-box;">
     <div style="border: 4px solid rgba(255,255,255,0.1); border-left-color: var(--primary || #3b82f6); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px;"></div>

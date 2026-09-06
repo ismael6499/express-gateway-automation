@@ -1,11 +1,43 @@
+# Dependencias
 node_modules/
-browser_user_data/
-browser_user_data/
+
+# Entorno y Secretos
 .env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+gateway_server.log
+
+# Datos de sesión y perfiles de navegador
+browser_user_data/
+browser_user_data/
+browser_user_data/
+user_data/
+
+# Archivos temporales y capturas
 desktop_screenshot.png
 take_screenshot.ps1
+screenguard_state.json
+simulation_state.json
+
+# Scripts auxiliares de inspección local
 find_profile.js
 find_all_keys.js
 inspect_preferences.js
 copy_profile.js
-screenguard_state.json
+
+# IDE y Sistema Operativo
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+Thumbs.db
+.DS_Store
