@@ -35,11 +35,22 @@ A lightweight, robust local **API Gateway & Workspace Automation Server** built 
 - **Multi-Monitor DPI-Aware Screenshot:** Capture all connected displays with full DPI scaling and taskbar visibility.
 - **Self-Healing Remote Restart:** Safe, non-blocking asynchronous server restart via decoupled VBS launcher (`remote_restart.vbs`).
 
-### 📱 Responsive Glassmorphism Dashboard
-- Dark glassmorphism web UI optimized for mobile touch and desktop.
-- Drag-and-drop customizable layout order and section toggles.
-- Authenticated via secure HTTP-only cookies or `X-API-KEY` headers.
-- Built-in ngrok tunnel integration for secure remote WAN access with static domains.
+### 🖱️ Virtual Trackpad & Native Mouse Control
+- **Touch Navigation:** High-frequency relative cursor motion (< 0.5ms latency) driven by a dedicated C# Win32 helper (`InputHelper.exe`) over a persistent stdio pipe.
+- **Gestures & Clicks:** Tap for Left Click, two-finger tap for Right Click, Middle Click, Double Click, and two-finger vertical scroll or dedicated side strip.
+- **Drag Lock:** Toggleable hold-down state allowing users to easily drag windows, select text, or draw without keeping a physical finger pressed.
+- **Adjustable Sensitivity:** 0.4x to 2.5x speed scaling stored locally in browser.
+
+### ⌨️ Remote Keyboard & Unicode Keystroke Injection
+- **Cursor Text Typing:** Type or dictate text from your mobile keyboard and inject it directly into the PC's active cursor location with full UTF-16 Unicode character support (`KEYEVENTF_UNICODE` for accents `á, é, ñ`, symbols, and emojis).
+- **Special Computer Keys:** Direct buttons for `Enter`, `Escape`, `Tab`, `Win`, `Backspace`, `Delete`, `Home`, `End`, `PageUp`, `PageDown`, and `Arrow Keys`.
+- **Desktop Shortcuts & Function Keys:** Built-in shortcuts for `Ctrl+C`, `Ctrl+V`, `Ctrl+Z`, `Ctrl+A`, `Alt+Tab`, and expandable `F1` to `F12`.
+
+### 📱 Responsive Multilingual Glassmorphism Dashboard
+- **English Default with Spanish Toggle:** Clean English interface by default, switchable to Spanish (`🌐 EN` / `🌐 ES`) with persistent state in `localStorage`.
+- **Drag-and-Drop Layout:** Customizable card order and section visibility toggles.
+- **Secure Access:** Authenticated via secure HTTP-only cookies or `X-API-KEY` headers.
+- **Ngrok Integration:** Built-in public tunnel management for remote access from anywhere.
 
 ---
 
@@ -131,6 +142,9 @@ All requests must provide authentication using the `X-API-KEY` header or a valid
 
 | Method | Canonical Endpoint | Legacy Alias | Description | Sample Payload |
 |---|---|---|---|---|
+| `POST` | `/system/mouse` | `/sistema/mouse` | Relative cursor motion, clicks, and scroll | `{"action": "move", "dx": 10, "dy": -5}` |
+| `POST` | `/system/keyboard/type` | `/sistema/teclado/escribir` | Types Unicode text at active PC cursor | `{"text": "Hello PC"}` |
+| `POST` | `/system/keyboard/key` | `/sistema/teclado/tecla` | Injects PC keyboard key or hotkey combo | `{"key": "Enter"}` |
 | `POST` | `/system/keyboard` | `/sistema/teclado` | Manages display standby & ScreenGuard hook (`turn-off-screen`, `turn-on-screen`, `start-screenguard`, `screenguard-status`) | `{"action": "start-screenguard"}` |
 | `POST` | `/system/screenguard-toggle` | `/sistema/screenguard-toggle` | Toggles intelligent ScreenGuard watchdog on/off | - |
 | `GET` | `/system/clipboard` | `/sistema/portapapeles` | Reads current Windows clipboard text | - |
