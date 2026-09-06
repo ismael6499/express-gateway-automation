@@ -277,6 +277,9 @@ namespace InputHelper {
             { "alt", 0x12 }, { "menu", 0x12 },
             { "shift", 0x10 },
             { "capslock", 0x14 },
+            { "printscreen", 0x2C }, { "prtscn", 0x2C }, { "prntscrn", 0x2C },
+            { "scrolllock", 0x91 },
+            { "pause", 0x13 },
             { "f1", 0x70 }, { "f2", 0x71 }, { "f3", 0x72 }, { "f4", 0x73 },
             { "f5", 0x74 }, { "f6", 0x75 }, { "f7", 0x76 }, { "f8", 0x77 },
             { "f9", 0x78 }, { "f10", 0x79 }, { "f11", 0x7A }, { "f12", 0x7B }
@@ -284,9 +287,9 @@ namespace InputHelper {
 
         private static void PressKey(string keyExpr) {
             if (string.IsNullOrEmpty(keyExpr)) return;
-            string[] parts = keyExpr.Split(new char[] { '+', '-' });
+            string[] parts = keyExpr.Split(new char[] { '+', '-', ' ' }, StringSplitOptions.RemoveEmptyEntries);
             List<byte> modifiersToRelease = new List<byte>();
-            byte mainKey = 0;
+            List<byte> mainKeys = new List<byte>();
 
             for (int i = 0; i < parts.Length; i++) {
                 string p = parts[i].Trim().ToLowerInvariant();
@@ -301,24 +304,33 @@ namespace InputHelper {
                 } else if (p == "shift") {
                     keybd_event(0x10, 0, 0, UIntPtr.Zero);
                     modifiersToRelease.Add(0x10);
-                } else if (p == "win" || p == "windows") {
+                } else if (p == "win" || p == "windows" || p == "lwin") {
                     keybd_event(0x5B, 0, 0, UIntPtr.Zero);
                     modifiersToRelease.Add(0x5B);
                 } else {
                     if (KeyMap.ContainsKey(p)) {
-                        mainKey = KeyMap[p];
+                        mainKeys.Add(KeyMap[p]);
                     } else if (p.Length == 1) {
                         char c = p[0];
-                        if (c >= 'a' && c <= 'z') mainKey = (byte)('A' + (c - 'a'));
-                        else if (c >= '0' && c <= '9') mainKey = (byte)c;
+                        if (c >= 'a' && c <= 'z') mainKeys.Add((byte)('A' + (c - 'a')));
+                        else if (c >= '0' && c <= '9') mainKeys.Add((byte)c);
                     }
                 }
             }
 
-            if (mainKey != 0) {
-                keybd_event(mainKey, 0, 0, UIntPtr.Zero);
-                Thread.Sleep(20);
-                keybd_event(mainKey, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+            if (mainKeys.Count > 0) {
+                Thread.Sleep(15);
+                foreach (byte k in mainKeys) {
+                    keybd_event(k, 0, 0, UIntPtr.Zero);
+                }
+                Thread.Sleep(30);
+                for (int i = mainKeys.Count - 1; i >= 0; i--) {
+                    keybd_event(mainKeys[i], 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+                }
+                Thread.Sleep(15);
+            } else if (modifiersToRelease.Count > 0) {
+                // If only modifier(s) were pressed (e.g. Win key or Alt key alone)
+                Thread.Sleep(40);
             }
 
             for (int i = modifiersToRelease.Count - 1; i >= 0; i--) {
