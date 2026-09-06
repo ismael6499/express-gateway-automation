@@ -260,7 +260,7 @@ let ngrokListener = null;
 
 // Middleware de Autenticación para rutas de la API (interviene en /browser, /sistema, y /gateway/status)
 app.use((req, res, next) => {
-  if (req.path === '/' || req.path === '/favicon.ico' || req.path === '/gateway/login' || req.path === '/gateway/restart') {
+  if (req.path === '/' || req.path === '/favicon.ico' || req.path === '/gateway/login' || req.path === '/gateway/restart' || req.path === '/system/restart') {
     return next();
   }
 
@@ -302,8 +302,8 @@ app.post('/gateway/login', (req, res) => {
   }
 });
 
-// Endpoint POST /gateway/restart para reiniciar el servidor de forma segura
-app.post('/gateway/restart', (req, res) => {
+// Endpoint POST /gateway/restart (and /system/restart) para reiniciar el servidor de forma segura
+app.post(['/gateway/restart', '/system/restart'], (req, res) => {
   log('Recibida petición de reinicio del Gateway Server (/gateway/restart)...');
   res.json({ status: 'ok', message: 'Reiniciando servidor...' });
   const vbsPath = path.join(__dirname, 'remote_restart.vbs');
@@ -650,7 +650,7 @@ function formatSecondsAgo(seconds) {
 }
 
 // Endpoint GET /gateway/status
-app.get('/gateway/status', (req, res) => {
+app.get(['/gateway/status', '/system/status'], (req, res) => {
   const helperPath = path.join(__dirname, 'AudioHelper.exe');
   exec(`"${helperPath}"`, { timeout: 1500 }, (error, stdout) => {
     let audioData = { volume: null, muted: null, playing: null };
@@ -728,14 +728,18 @@ app.get('/gateway/status', (req, res) => {
   });
 });
 
-// Endpoint POST /browser/browser para controlar el ciclo del navegador web
-app.post('/browser/browser', async (req, res) => {
-  const { accion } = req.body;
+// Endpoint POST /browser/window (and legacy /browser/browser) para controlar el ciclo del navegador web
+app.post(['/browser/window', '/browser/browser'], async (req, res) => {
+  let accion = req.body.action || req.body.accion;
+  if (accion === 'open') accion = 'abrir';
+  if (accion === 'close') accion = 'cerrar';
+  if (accion === 'minimize') accion = 'minimizar';
+  if (accion === 'restore') accion = 'restaurar';
 
   if (accion !== 'abrir' && accion !== 'cerrar' && accion !== 'minimizar' && accion !== 'restaurar') {
     return res.status(400).json({
       error: 'Bad Request',
-      message: "La 'accion' debe ser 'abrir', 'cerrar', 'minimizar' o 'restaurar'."
+      message: "The 'action' must be 'open', 'close', 'minimize', or 'restore' ('abrir', 'cerrar', 'minimizar', 'restaurar')."
     });
   }
 
@@ -983,8 +987,8 @@ app.post('/browser/browser', async (req, res) => {
   }
 });
 
-// Endpoint POST /browser/programacion - Actualizar horario y días de la automatización
-app.post('/browser/programacion', (req, res) => {
+// Endpoint POST /browser/schedule (and legacy /browser/programacion) - Actualizar horario y días de la automatización
+app.post(['/browser/schedule', '/browser/programacion'], (req, res) => {
   const b = req.body || {};
 
   if (b.startHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(b.startHour)) {
@@ -996,20 +1000,25 @@ app.post('/browser/programacion', (req, res) => {
   if (b.days && Array.isArray(b.days)) {
     browserSimulacionDays = b.days.map(Number);
   }
-  if (b.browserCloseHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(b.browserCloseHour)) {
-    browserCloseHour = b.browserCloseHour;
+  const closeHourVal = b.closeHour || b.browserCloseHour;
+  if (closeHourVal && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(closeHourVal)) {
+    browserCloseHour = closeHourVal;
   }
-  if (b.browserCloseEnabled !== undefined) {
-    browserCloseEnabled = !!b.browserCloseEnabled;
+  const closeEnabledVal = b.closeEnabled !== undefined ? b.closeEnabled : b.browserCloseEnabled;
+  if (closeEnabledVal !== undefined) {
+    browserCloseEnabled = !!closeEnabledVal;
   }
-  if (b.flexCloseDate !== undefined) {
-    browserFlexCloseDate = b.flexCloseDate;
+  const flexDateVal = b.flexCloseDate !== undefined ? b.flexCloseDate : b.browserFlexCloseDate;
+  if (flexDateVal !== undefined) {
+    browserFlexCloseDate = flexDateVal;
   }
-  if (b.flexCloseHour !== undefined && (b.flexCloseHour === '' || /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(b.flexCloseHour))) {
-    browserFlexCloseHour = b.flexCloseHour;
+  const flexHourVal = b.flexCloseHour !== undefined ? b.flexCloseHour : b.browserFlexCloseHour;
+  if (flexHourVal !== undefined && (flexHourVal === '' || /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(flexHourVal))) {
+    browserFlexCloseHour = flexHourVal;
   }
-  if (b.flexCloseEnabled !== undefined) {
-    browserFlexCloseEnabled = !!b.flexCloseEnabled;
+  const flexEnabledVal = b.flexCloseEnabled !== undefined ? b.flexCloseEnabled : b.browserFlexCloseEnabled;
+  if (flexEnabledVal !== undefined) {
+    browserFlexCloseEnabled = !!flexEnabledVal;
   }
   if (b.mealPauseCutoffHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(b.mealPauseCutoffHour)) {
     mealPauseCutoffHour = b.mealPauseCutoffHour;
@@ -1038,22 +1047,32 @@ app.post('/browser/programacion', (req, res) => {
     browserSimulacionDays,
     browserCloseHour,
     browserCloseEnabled,
+    closeHour: browserCloseHour,
+    closeEnabled: browserCloseEnabled,
     browserFlexCloseDate,
     browserFlexCloseHour,
     browserFlexCloseEnabled,
+    flexCloseDate: browserFlexCloseDate,
+    flexCloseHour: browserFlexCloseHour,
+    flexCloseEnabled: browserFlexCloseEnabled,
     mealPauseCutoffHour,
     mealPauseIntervals
   });
 });
 
-// Endpoint POST /browser/presencia para controlar la actividad web
-app.post('/browser/presencia', (req, res) => {
-  const { accion, intervaloMs } = req.body;
+// Endpoint POST /browser/presence (and legacy /browser/presencia) para controlar la actividad web
+app.post(['/browser/presence', '/browser/presencia'], (req, res) => {
+  let accion = req.body.action || req.body.accion;
+  if (accion === 'start') accion = 'iniciar';
+  if (accion === 'pause' || accion === 'stop') accion = 'pausar';
+  if (accion === 'temporary_pause' || accion === 'temp_pause' || accion === 'pause_temporary') accion = 'pausa_temporal';
+
+  const intervaloMs = req.body.intervalMs || req.body.intervaloMs;
 
   if (accion !== 'iniciar' && accion !== 'pausar' && accion !== 'pausa_temporal') {
     return res.status(400).json({
       error: 'Bad Request',
-      message: "La 'accion' de presencia debe ser 'iniciar', 'pausar' o 'pausa_temporal'."
+      message: "The 'action' must be 'start', 'pause', or 'temporary_pause' ('iniciar', 'pausar', 'pausa_temporal')."
     });
   }
 
@@ -1117,7 +1136,7 @@ app.post('/browser/presencia', (req, res) => {
     });
   } else if (accion === 'pausa_temporal') {
     let defaultMins = getMealPauseDefaultMins();
-    let duracionMins = Number(req.body.duracionMins || req.body.minutos || defaultMins);
+    let duracionMins = Number(req.body.durationMins || req.body.duracionMins || req.body.minutes || req.body.minutos || defaultMins);
     if (isNaN(duracionMins) || duracionMins < 1) duracionMins = defaultMins;
     if (duracionMins > 1440) duracionMins = 1440;
 
@@ -1245,9 +1264,12 @@ function setupBrowserInterval() {
   }, browserIntervalMs);
 }
 
-// 2.A Endpoint POST /browser/simular-accion para ejecutar acciones de test manuales e inmediatas
-app.post('/browser/simular-accion', async (req, res) => {
-  const { accion } = req.body;
+// Endpoint POST /browser/simulate-action (and legacy /browser/action, /browser/simular-accion)
+app.post(['/browser/simulate-action', '/browser/action', '/browser/simular-accion'], async (req, res) => {
+  let accion = req.body.action || req.body.accion;
+  if (accion === 'move-mouse' || accion === 'move_mouse') accion = 'mover-mouse';
+  if (accion === 'type-search' || accion === 'type_search' || accion === 'type-searchbox') accion = 'tipear-buscador';
+  if (accion === 'press-shift' || accion === 'press_shift' || accion === 'shift') accion = 'pulsar-shift';
 
   if (!browserContext || !browserPage || browserPage.isClosed()) {
     log('Fallo de prueba: Intento de simular acción sin ventana de navegador abierta.');
@@ -1355,7 +1377,10 @@ app.post('/browser/simular-accion', async (req, res) => {
 
 // Endpoint POST /browser/status
 app.post('/browser/status', async (req, res) => {
-  const { estado, intervaloMs } = req.body;
+  let estado = req.body.status || req.body.estado;
+  if (estado === 'active') estado = 'activo';
+  if (estado === 'inactive' || estado === 'stop' || estado === 'pause') estado = 'inactivo';
+  const intervaloMs = req.body.intervalMs || req.body.intervaloMs;
   log(`POST /browser/status recibido con estado '${estado}'`);
 
   if (intervaloMs) {
@@ -1400,14 +1425,18 @@ app.post('/browser/status', async (req, res) => {
   }
 });
 
-// Endpoint POST /sistema/teclado para enviar atajos al sistema operativo (Alt+X, Ctrl o Guardián de Pantalla)
-app.post('/sistema/teclado', (req, res) => {
-  const { accion } = req.body;
+// Endpoint POST /system/keyboard (and legacy /sistema/teclado)
+app.post(['/system/keyboard', '/sistema/teclado'], (req, res) => {
+  let accion = req.body.action || req.body.accion;
+  if (accion === 'turn-off-screen' || accion === 'screen-off' || accion === 'screen_off') accion = 'apagar-pantalla';
+  if (accion === 'turn-on-screen' || accion === 'screen-on' || accion === 'screen_on') accion = 'encender-pantalla';
+  if (accion === 'start-screenguard' || accion === 'screenguard-on' || accion === 'screenguard_on' || accion === 'guard-on') accion = 'apagar-guardia';
+  if (accion === 'screenguard-status' || accion === 'guard-status' || accion === 'guard_status') accion = 'estado-guardia';
 
   if (accion !== 'apagar-pantalla' && accion !== 'encender-pantalla' && accion !== 'apagar-guardia' && accion !== 'estado-guardia') {
     return res.status(400).json({
       error: 'Bad Request',
-      message: "La 'accion' de teclado debe ser 'apagar-pantalla', 'encender-pantalla', 'apagar-guardia' o 'estado-guardia'."
+      message: "The 'action' must be 'turn-off-screen', 'turn-on-screen', 'start-screenguard', or 'screenguard-status' ('apagar-pantalla', 'encender-pantalla', 'apagar-guardia', 'estado-guardia')."
     });
   }
 
@@ -1487,8 +1516,41 @@ app.post('/sistema/teclado', (req, res) => {
   }
 });
 
-// Endpoint GET /sistema/brillo - Obtener el brillo de pantalla actual en Windows
-app.get('/sistema/brillo', (req, res) => {
+// Endpoint POST /system/screenguard-toggle (and legacy /sistema/screenguard-toggle)
+app.post(['/system/screenguard-toggle', '/sistema/screenguard-toggle'], (req, res) => {
+  const screenGuardExe = path.join(__dirname, 'ScreenGuard.exe');
+  let active = false;
+  try {
+    const statePath = path.join(__dirname, 'screenguard_state.json');
+    if (fs.existsSync(statePath)) {
+      const raw = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+      if (raw && raw.active && raw.pid) {
+        try {
+          process.kill(raw.pid, 0);
+          active = true;
+        } catch (e) {}
+      }
+    }
+  } catch (e) {}
+
+  if (active) {
+    log('Deteniendo ScreenGuard por toggle...');
+    exec(`"${screenGuardExe}" stop`, { timeout: 2000 }, (err) => {
+      if (err) log(`Aviso al detener ScreenGuard: ${err.message}`);
+    });
+    const psCommand = 'powershell -Command "$sig = \'[DllImport(\\"user32.dll\\")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, uint dwExtraInfo);\'; $win = Add-Type -MemberDefinition $sig -Name \\"WinAPI2\\" -Namespace \\"Win32\\" -PassThru; $win::keybd_event(0xA2, 0, 0, 0); $win::keybd_event(0xA2, 0, 2, 0);"';
+    exec(psCommand, () => {});
+    return res.status(200).json({ status: 'ok', active: false, message: 'ScreenGuard desactivado, pantalla encendida.', msg: 'Pantalla encendida' });
+  } else {
+    log('Iniciando ScreenGuard por toggle...');
+    const child = spawn(screenGuardExe, ['start'], { detached: true, stdio: 'ignore', windowsHide: true });
+    child.unref();
+    return res.status(200).json({ status: 'ok', active: true, message: 'ScreenGuard activado, pantalla protegida en standby.', msg: 'Guardián activado' });
+  }
+});
+
+// Endpoint GET /system/brightness (and legacy /sistema/brillo) - Obtener brillo actual
+app.get(['/system/brightness', '/sistema/brillo'], (req, res) => {
   exec('powershell -Command "(Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness).CurrentBrightness"', (error, stdout) => {
     if (error) {
       log(`Error al obtener brillo de pantalla: ${error.message}`);
@@ -1499,11 +1561,11 @@ app.get('/sistema/brillo', (req, res) => {
   });
 });
 
-// Endpoint POST /sistema/brillo - Modificar el brillo de pantalla en Windows (0 a 100)
-app.post('/sistema/brillo', (req, res) => {
-  const { brillo } = req.body;
+// Endpoint POST /system/brightness (and legacy /sistema/brillo) - Modificar brillo
+app.post(['/system/brightness', '/sistema/brillo'], (req, res) => {
+  const brillo = req.body.brightness !== undefined ? req.body.brightness : req.body.brillo;
   if (brillo === undefined || brillo === null) {
-    return res.status(400).json({ error: 'Bad Request', message: 'Falta parámetro brillo.' });
+    return res.status(400).json({ error: 'Bad Request', message: "Falta el parámetro 'brightness' ('brillo')." });
   }
 
   const level = Math.max(0, Math.min(100, Math.round(Number(brillo))));
@@ -1519,12 +1581,14 @@ app.post('/sistema/brillo', (req, res) => {
   });
 });
 
-// Endpoint POST /sistema/energia - Suspender y Bloquear PC
-app.post('/sistema/energia', (req, res) => {
-  const { accion } = req.body;
+// Endpoint POST /system/power (and legacy /sistema/energia) - Suspender y Bloquear PC
+app.post(['/system/power', '/sistema/energia'], (req, res) => {
+  let accion = req.body.action || req.body.accion;
+  if (accion === 'lock') accion = 'bloquear';
+  if (accion === 'sleep' || accion === 'suspend') accion = 'suspender';
 
   if (accion !== 'bloquear' && accion !== 'suspender') {
-    return res.status(400).json({ error: 'Bad Request', message: "Acción de energía debe ser 'bloquear' o 'suspender'." });
+    return res.status(400).json({ error: 'Bad Request', message: "Power action must be 'lock' or 'sleep' ('bloquear' o 'suspender')." });
   }
 
   if (accion === 'bloquear') {
@@ -1542,8 +1606,8 @@ app.post('/sistema/energia', (req, res) => {
   }
 });
 
-// Endpoint GET /sistema/portapapeles - Leer portapapeles de la PC
-app.get('/sistema/portapapeles', (req, res) => {
+// Endpoint GET /system/clipboard (and legacy /sistema/portapapeles) - Leer portapapeles
+app.get(['/system/clipboard', '/sistema/portapapeles'], (req, res) => {
   exec('cmd /c "chcp 65001 > nul && powershell.exe -Command Get-Clipboard"', { encoding: 'buffer' }, (error, stdout) => {
     if (error) {
       return res.status(500).json({ error: 'Error al obtener portapapeles', message: error.message });
@@ -1553,11 +1617,11 @@ app.get('/sistema/portapapeles', (req, res) => {
   });
 });
 
-// Endpoint POST /sistema/portapapeles - Escribir portapapeles de la PC
-app.post('/sistema/portapapeles', (req, res) => {
-  const { text } = req.body;
+// Endpoint POST /system/clipboard (and legacy /sistema/portapapeles) - Escribir portapapeles
+app.post(['/system/clipboard', '/sistema/portapapeles'], (req, res) => {
+  const text = req.body.text !== undefined ? req.body.text : req.body.texto;
   if (text === undefined) {
-    return res.status(400).json({ error: 'Bad Request', message: 'Falta parámetro text.' });
+    return res.status(400).json({ error: 'Bad Request', message: "Falta el parámetro 'text' ('texto')." });
   }
 
   const escaped = text.replace(/'/g, "''");
@@ -1572,8 +1636,8 @@ app.post('/sistema/portapapeles', (req, res) => {
   });
 });
 
-// Endpoint GET /sistema/screenshot - Captura de pantalla de Windows
-app.get('/sistema/screenshot', (req, res) => {
+// Endpoint GET /system/screenshot (and legacy /sistema/screenshot) - Captura de pantalla
+app.get(['/system/screenshot', '/sistema/screenshot'], (req, res) => {
   const screenshotPath = path.join(__dirname, 'temp_screenshot.png');
   const escapedPath = screenshotPath.replace(/\\/g, '\\\\');
   // SetProcessDPIAware para obtener dimensiones físicas reales (incluye barra de tareas)
@@ -1595,11 +1659,11 @@ app.get('/sistema/screenshot', (req, res) => {
 
 
 
-// Endpoint POST /sistema/tts - Text to Speech nativo en Windows
-app.post('/sistema/tts', (req, res) => {
-  const { texto } = req.body;
-  if (!texto || texto.trim() === '') {
-    return res.status(400).json({ error: 'Bad Request', message: 'Falta el texto a reproducir.' });
+// Endpoint POST /system/tts (and legacy /sistema/tts) - Text to Speech nativo en Windows
+app.post(['/system/tts', '/sistema/tts'], (req, res) => {
+  const texto = req.body.text !== undefined ? req.body.text : req.body.texto;
+  if (!texto || String(texto).trim() === '') {
+    return res.status(400).json({ error: 'Bad Request', message: "Falta el parámetro 'text' ('texto') a reproducir." });
   }
 
   log(`TTS: Reproduciendo texto: "${texto}"`);
@@ -1615,9 +1679,12 @@ app.post('/sistema/tts', (req, res) => {
   });
 });
 
-// Endpoint POST /sistema/media - Controles multimedia nativos en Windows
-app.post('/sistema/media', (req, res) => {
-  const { accion } = req.body;
+// Endpoint POST /system/media (and legacy /sistema/media) - Controles multimedia nativos en Windows
+app.post(['/system/media', '/sistema/media'], (req, res) => {
+  let accion = req.body.action || req.body.accion;
+  if (accion === 'play-pause' || accion === 'playpause' || accion === 'play_pause') accion = 'play-pausa';
+  if (accion === 'previous') accion = 'prev';
+
   const vks = {
     'mute': '0xAD',
     'vol-': '0xAE',
@@ -1629,7 +1696,7 @@ app.post('/sistema/media', (req, res) => {
 
   const vk = vks[accion];
   if (!vk) {
-    return res.status(400).json({ error: 'Bad Request', message: 'Acción multimedia no reconocida.' });
+    return res.status(400).json({ error: 'Bad Request', message: "Acción multimedia no reconocida. Valores válidos: 'playpause', 'next', 'prev', 'vol+', 'vol-', 'mute'." });
   }
 
   log(`Multimedia: Enviando acción '${accion}' (VK: ${vk})`);
@@ -1647,8 +1714,8 @@ app.post('/sistema/media', (req, res) => {
 
 
 
-// Endpoint GET /sistema/ping - Test de latencia de red
-app.get('/sistema/ping', (req, res) => {
+// Endpoint GET /system/ping (and legacy /sistema/ping, /gateway/ping) - Test de latencia
+app.get(['/system/ping', '/sistema/ping', '/gateway/ping'], (req, res) => {
   exec('ping -n 1 8.8.8.8', (error, stdout) => {
     if (error) {
       return res.json({ status: 'error', latencyMs: null, msg: 'Error de red' });
@@ -1663,8 +1730,8 @@ app.get('/sistema/ping', (req, res) => {
   });
 });
 
-// Endpoint GET /browser/ultima-actividad - Tiempo desde la última actividad
-app.get('/browser/ultima-actividad', (req, res) => {
+// Endpoint GET /browser/last-activity (and legacy /browser/ultima-actividad)
+app.get(['/browser/last-activity', '/browser/ultima-actividad'], (req, res) => {
   if (!lastActivityTime) {
     return res.json({ lastActivityTime: null, formatted: 'Sin actividad registrada', secondsAgo: null, msg: 'Sin actividad' });
   }
@@ -1681,14 +1748,15 @@ app.get('/browser/ultima-actividad', (req, res) => {
   });
 });
 
-// Endpoint POST /sistema/ejecutar para lanzar programas locales como el Emulador
-app.post('/sistema/ejecutar', (req, res) => {
-  const { programa } = req.body;
+// Endpoint POST /system/execute (and legacy /system/run, /sistema/ejecutar)
+app.post(['/system/execute', '/system/run', '/sistema/ejecutar'], (req, res) => {
+  let programa = req.body.program || req.body.programa;
+  if (programa === 'emulator') programa = 'emulador';
 
   if (programa !== 'emulador') {
     return res.status(400).json({
       error: 'Bad Request',
-      message: "Programa no soportado. Actualmente solo se soporta 'emulador'."
+      message: "Unsupported program. Currently only 'emulator' ('emulador') is supported."
     });
   }
 
@@ -1722,14 +1790,15 @@ app.post('/sistema/ejecutar', (req, res) => {
   });
 });
 
-// Endpoint POST /sistema/cerrar para cerrar programas locales como el Emulador
-app.post('/sistema/cerrar', (req, res) => {
-  const { programa } = req.body;
+// Endpoint POST /system/close (and legacy /sistema/cerrar)
+app.post(['/system/close', '/sistema/cerrar'], (req, res) => {
+  let programa = req.body.program || req.body.programa;
+  if (programa === 'emulator') programa = 'emulador';
 
   if (programa !== 'emulador') {
     return res.status(400).json({
       error: 'Bad Request',
-      message: "Programa no soportado. Actualmente solo se soporta 'emulador'."
+      message: "Unsupported program. Currently only 'emulator' ('emulador') is supported."
     });
   }
 
@@ -1750,31 +1819,7 @@ app.post('/sistema/cerrar', (req, res) => {
   });
 });
 
-// Endpoint POST /gateway/restart para reiniciar el servidor de forma remota y controlada
-app.post('/gateway/restart', (req, res) => {
-  log('Solicitud de reinicio remoto del servidor recibida.');
-  res.json({
-    status: 'ok',
-    message: 'Reiniciando el Gateway Server en la PC. Por favor espera unos segundos...',
-    msg: 'Servidor reiniciando'
-  });
-
-  const { spawn } = require('child_process');
-  const vbsPath = path.join(__dirname, 'remote_restart.vbs');
-
-  // Lanzar wscript.exe directamente de forma detached para evitar la muerte por árbol de procesos
-  const child = spawn('wscript.exe', [vbsPath], {
-    detached: true,
-    stdio: 'ignore'
-  });
-  child.unref();
-
-  // Apagar este proceso después de 2 segundos para dar tiempo a enviar la respuesta y guardar logs
-  setTimeout(() => {
-    log('Cerrando proceso actual para reiniciar...');
-    process.exit(0);
-  }, 2000);
-});
+// Endpoint POST /gateway/restart is handled above
 
 // HTML para la Pantalla de Login Segura (Glassmorphism)
 const LOGIN_HTML = `
@@ -3314,7 +3359,7 @@ const DASHBOARD_HTML = `
 
     async function obtenerBrillo() {
       try {
-        const response = await fetch('/sistema/brillo');
+        const response = await fetch('/system/brightness');
         const data = await response.json();
         if (response.ok && data.brightness !== null) {
           if (document.activeElement !== document.getElementById('brilloSlider')) {
@@ -3330,10 +3375,10 @@ const DASHBOARD_HTML = `
     async function cambiarBrillo(val) {
       updateBrilloLabel(val);
       try {
-        const response = await fetch('/sistema/brillo', {
+        const response = await fetch('/system/brightness', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ brillo: Number(val) })
+          body: JSON.stringify({ brightness: Number(val) })
         });
         const data = await response.json();
         if (response.ok) {
@@ -3370,10 +3415,10 @@ const DASHBOARD_HTML = `
       }
 
       try {
-        const response = await fetch('/sistema/tts', {
+        const response = await fetch('/system/tts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ texto })
+          body: JSON.stringify({ text: texto })
         });
         const data = await response.json();
         if (response.ok) {
@@ -3389,10 +3434,10 @@ const DASHBOARD_HTML = `
 
     async function enviarMultimedia(accion) {
       try {
-        const response = await fetch('/sistema/media', {
+        const response = await fetch('/system/media', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accion })
+          body: JSON.stringify({ action: accion })
         });
         const data = await response.json();
         if (response.ok) {
@@ -3761,7 +3806,7 @@ const DASHBOARD_HTML = `
       drawDayLabels();
 
       try {
-        const response = await fetch('/browser/programacion', {
+        const response = await fetch('/browser/schedule', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -3786,10 +3831,10 @@ const DASHBOARD_HTML = `
 
     async function controlBrowser(accion) {
       try {
-        const response = await fetch('/browser/browser', {
+        const response = await fetch('/browser/window', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accion })
+          body: JSON.stringify({ action: accion })
         });
 
         const data = await response.json();
@@ -3997,7 +4042,7 @@ const DASHBOARD_HTML = `
       }
 
       try {
-        const response = await fetch('/browser/programacion', {
+        const response = await fetch('/browser/schedule', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ mealPauseIntervals: intervals })
@@ -4070,10 +4115,10 @@ const DASHBOARD_HTML = `
       cerrarModalPausaTemporal();
 
       try {
-        const response = await fetch('/browser/presencia', {
+        const response = await fetch('/browser/presence', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accion: 'pausa_temporal', duracionMins: mins })
+          body: JSON.stringify({ action: 'pausa_temporal', durationMins: mins })
         });
         const data = await response.json();
         if (response.ok) {
@@ -4098,10 +4143,10 @@ const DASHBOARD_HTML = `
       updateBrowserSliderLabel(mins);
       const ms = mins * 60000;
       try {
-        const response = await fetch('/browser/presencia', {
+        const response = await fetch('/browser/presence', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accion, intervaloMs: ms })
+          body: JSON.stringify({ action: accion, intervalMs: ms })
         });
         const data = await response.json();
         if (response.ok) {
@@ -4130,12 +4175,12 @@ const DASHBOARD_HTML = `
       const estaActiva = !btnPause.classList.contains('btn-disabled');
 
       try {
-        const response = await fetch('/browser/presencia', {
+        const response = await fetch('/browser/presence', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
-            accion: estaActiva ? 'iniciar' : 'pausar', 
-            intervaloMs: ms 
+            action: estaActiva ? 'iniciar' : 'pausar', 
+            intervalMs: ms 
           })
         });
         const data = await response.json();
@@ -4152,10 +4197,10 @@ const DASHBOARD_HTML = `
 
     async function enviarAccionPrueba(accion) {
       try {
-        const response = await fetch('/browser/simular-accion', {
+        const response = await fetch('/browser/simulate-action', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accion })
+          body: JSON.stringify({ action: accion })
         });
 
         const data = await response.json();
@@ -4177,10 +4222,10 @@ const DASHBOARD_HTML = `
       if (!conf) return;
 
       try {
-        const response = await fetch('/sistema/ejecutar', {
+        const response = await fetch('/system/execute', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ programa })
+          body: JSON.stringify({ program: programa })
         });
 
         const data = await response.json();
@@ -4202,10 +4247,10 @@ const DASHBOARD_HTML = `
       if (!conf) return;
 
       try {
-        const response = await fetch('/sistema/cerrar', {
+        const response = await fetch('/system/close', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ programa })
+          body: JSON.stringify({ program: programa })
         });
 
         const data = await response.json();
@@ -4221,10 +4266,10 @@ const DASHBOARD_HTML = `
 
     async function controlarTeclado(accion) {
       try {
-        const response = await fetch('/sistema/teclado', {
+        const response = await fetch('/system/keyboard', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accion })
+          body: JSON.stringify({ action: accion })
         });
         const data = await response.json();
         showToast(data.message, response.ok ? 'success' : 'error');
@@ -4254,10 +4299,10 @@ const DASHBOARD_HTML = `
       }
 
       try {
-        const response = await fetch('/sistema/energia', {
+        const response = await fetch('/system/power', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accion })
+          body: JSON.stringify({ action: accion })
         });
         const data = await response.json();
         showToast(data.message, response.ok ? 'success' : 'error');
@@ -4273,7 +4318,7 @@ const DASHBOARD_HTML = `
         return;
       }
       try {
-        const response = await fetch('/sistema/portapapeles', {
+        const response = await fetch('/system/clipboard', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text })
@@ -4287,7 +4332,7 @@ const DASHBOARD_HTML = `
 
     async function obtenerPortapapeles() {
       try {
-        const response = await fetch('/sistema/portapapeles');
+        const response = await fetch('/system/clipboard');
         const data = await response.json();
         if (response.ok) {
           document.getElementById('inputPortapapeles').value = data.text;
@@ -4305,13 +4350,13 @@ const DASHBOARD_HTML = `
       preview.onload = () => {
         showToast('Captura de pantalla actualizada.', 'success');
       };
-      preview.src = '/sistema/screenshot?t=' + Date.now();
+      preview.src = '/system/screenshot?t=' + Date.now();
       preview.style.display = 'block';
     }
 
     async function probarPing() {
       try {
-        const response = await fetch('/sistema/ping');
+        const response = await fetch('/system/ping');
         const data = await response.json();
         const pingTxt = document.getElementById('pingResultText');
         if (response.ok && data.latencyMs !== null) {
