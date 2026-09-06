@@ -11,6 +11,10 @@ const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.API_KEY;
 const TARGET_WEB_URL = process.env.TARGET_WEB_URL || 'https://example.com';
 const TARGET_ACCOUNT_EMAIL = process.env.TARGET_ACCOUNT_EMAIL || '';
+const USER_DATA_DIR = process.env.BROWSER_USER_DATA_DIR || 
+  (fs.existsSync(path.join(__dirname, 'browser_user_data')) ? path.join(__dirname, 'browser_user_data') :
+   fs.existsSync(path.join(__dirname, 'browser_user_data')) ? path.join(__dirname, 'browser_user_data') :
+   path.join(__dirname, 'browser_user_data'));
 
 // Middleware para parsear JSON
 app.use(express.json());
@@ -51,10 +55,10 @@ function getApiKeyFromCookie(cookieHeader) {
 }
 
 // Variables de estado en Runtime
-let browserBrowserAbierto = false;
+let browserAbierto = false;
 let browserPresenciaActiva = false;
 let browserIntervalMs = 240000; // 4 minutos por defecto
-let browserBrowserContext = null;
+let browserContext = null;
 let browserPage = null;
 let browserIntervalId = null;
 let browserSignInCheckIntervalId = null; // intervalo de 1 min para verificar banner de re-autenticación "Sign In"
@@ -66,15 +70,15 @@ let browserPresenciaActiveSince = null; // timestamp de cuando se inicio la simu
 let browserSimulacionStartHour = '09:00';
 let browserSimulacionEndHour = '18:00';
 let browserSimulacionDays = [1, 2, 3, 4, 5]; // Lunes a Viernes por defecto
-let browserBrowserCloseHour = '18:03';
-let browserBrowserCloseEnabled = true;
+let browserCloseHour = '18:03';
+let browserCloseEnabled = true;
 let browserFlexCloseDate = '';
 let browserFlexCloseHour = '';
 let browserFlexCloseEnabled = false;
 let browserPausaTemporalUntil = null;
 let browserPausaTemporalTimeoutId = null;
-let browserMealPauseCutoffHour = '15:15';
-let browserMealPauseIntervals = [
+let mealPauseCutoffHour = '15:15';
+let mealPauseIntervals = [
   { start: '00:00', end: '15:15', mins: 25 },
   { start: '15:15', end: '23:59', mins: 15 }
 ];
@@ -83,8 +87,8 @@ function getMealPauseDefaultMins() {
   const now = new Date();
   const curMinutes = now.getHours() * 60 + now.getMinutes();
 
-  if (Array.isArray(browserMealPauseIntervals) && browserMealPauseIntervals.length > 0) {
-    for (const item of browserMealPauseIntervals) {
+  if (Array.isArray(mealPauseIntervals) && mealPauseIntervals.length > 0) {
+    for (const item of mealPauseIntervals) {
       if (!item.start || !item.end) continue;
       const [sH, sM] = item.start.split(':').map(Number);
       const [eH, eM] = item.end.split(':').map(Number);
@@ -103,7 +107,7 @@ function getMealPauseDefaultMins() {
     }
   }
 
-  const [cutoffH, cutoffM] = (browserMealPauseCutoffHour || '15:15').split(':').map(Number);
+  const [cutoffH, cutoffM] = (mealPauseCutoffHour || '15:15').split(':').map(Number);
   const curH = now.getHours();
   const curM = now.getMinutes();
 
@@ -189,13 +193,13 @@ function saveSimulationState() {
       browserSimulacionStartHour,
       browserSimulacionEndHour,
       browserSimulacionDays,
-      browserBrowserCloseHour,
-      browserBrowserCloseEnabled,
+      browserCloseHour,
+      browserCloseEnabled,
       browserFlexCloseDate,
       browserFlexCloseHour,
       browserFlexCloseEnabled,
-      browserMealPauseCutoffHour,
-      browserMealPauseIntervals
+      mealPauseCutoffHour,
+      mealPauseIntervals
     }, null, 2));
   } catch (err) {
     log(`Error al guardar estado de simulación: ${err.message}`);
@@ -221,11 +225,11 @@ function loadSimulationState() {
       if (data.browserSimulacionDays !== undefined) {
         browserSimulacionDays = data.browserSimulacionDays;
       }
-      if (data.browserBrowserCloseHour !== undefined) {
-        browserBrowserCloseHour = data.browserBrowserCloseHour;
+      if (data.browserCloseHour !== undefined) {
+        browserCloseHour = data.browserCloseHour;
       }
-      if (data.browserBrowserCloseEnabled !== undefined) {
-        browserBrowserCloseEnabled = data.browserBrowserCloseEnabled;
+      if (data.browserCloseEnabled !== undefined) {
+        browserCloseEnabled = data.browserCloseEnabled;
       }
       if (data.browserFlexCloseDate !== undefined) {
         browserFlexCloseDate = data.browserFlexCloseDate;
@@ -236,13 +240,13 @@ function loadSimulationState() {
       if (data.browserFlexCloseEnabled !== undefined) {
         browserFlexCloseEnabled = data.browserFlexCloseEnabled;
       }
-      if (data.browserMealPauseCutoffHour !== undefined) {
-        browserMealPauseCutoffHour = data.browserMealPauseCutoffHour;
+      if (data.mealPauseCutoffHour !== undefined) {
+        mealPauseCutoffHour = data.mealPauseCutoffHour;
       }
-      if (Array.isArray(data.browserMealPauseIntervals) && data.browserMealPauseIntervals.length > 0) {
-        browserMealPauseIntervals = data.browserMealPauseIntervals;
+      if (Array.isArray(data.mealPauseIntervals) && data.mealPauseIntervals.length > 0) {
+        mealPauseIntervals = data.mealPauseIntervals;
       }
-      log(`Estado de simulación cargado: Habilitada=${browserPresenciaActiva}, Intervalo=${browserIntervalMs}ms, Horario=${browserSimulacionStartHour}-${browserSimulacionEndHour}, Cierre=${browserBrowserCloseHour} (Activo=${browserBrowserCloseEnabled}), FlexCierre=${browserFlexCloseDate} ${browserFlexCloseHour} (Activo=${browserFlexCloseEnabled})`);
+      log(`Estado de simulación cargado: Habilitada=${browserPresenciaActiva}, Intervalo=${browserIntervalMs}ms, Horario=${browserSimulacionStartHour}-${browserSimulacionEndHour}, Cierre=${browserCloseHour} (Activo=${browserCloseEnabled}), FlexCierre=${browserFlexCloseDate} ${browserFlexCloseHour} (Activo=${browserFlexCloseEnabled})`);
     }
   } catch (err) {
     log(`Error al cargar estado de simulación: ${err.message}`);
@@ -312,7 +316,7 @@ app.post('/gateway/restart', (req, res) => {
   }, 1000);
 });
 
-// Helper para detectar y presionar el botón "Sign In" de re-autenticación en la barra/banner superior de Browser
+// Helper para detectar y presionar el botón "Sign In" de re-autenticación en la barra/banner superior de autenticación web
 async function checkAndClickSignInBanner(page) {
   if (!page || page.isClosed()) return false;
   try {
@@ -423,13 +427,13 @@ function setupSignInCheckInterval() {
   }
   log('Iniciando monitoreo periódico de banner "Sign In" (cada 60 segundos)...');
   browserSignInCheckIntervalId = setInterval(async () => {
-    if (browserBrowserContext && browserPage && !browserPage.isClosed()) {
+    if (browserContext && browserPage && !browserPage.isClosed()) {
       await checkAndClickSignInBanner(browserPage);
     }
   }, 60000);
 }
 
-// Helper para limpiar el contexto e intervalo de Browser de forma segura
+// Helper para limpiar el contexto e intervalo de navegación web de forma segura
 async function cleanupBrowserSession() {
   if (browserIntervalId) {
     clearInterval(browserIntervalId);
@@ -443,23 +447,23 @@ async function cleanupBrowserSession() {
     log('Intervalo de monitoreo "Sign In" destruido.');
   }
 
-  if (browserBrowserContext) {
+  if (browserContext) {
     try {
-      await browserBrowserContext.close();
+      await browserContext.close();
       log('Contexto de navegador Playwright cerrado.');
     } catch (err) {
       log(`Error al cerrar el contexto de Playwright: ${err.message}`);
     } finally {
-      browserBrowserContext = null;
+      browserContext = null;
       browserPage = null;
     }
   }
-  browserBrowserAbierto = false;
+  browserAbierto = false;
 }
 
-// Bucle asíncrono para automatizar el login de Browser en las redirecciones de Microsoft
+// Bucle asíncrono para automatizar el login en redirecciones de autenticación corporativa
 async function autoLoginTargetSession(page) {
-  log('Iniciando monitoreo de auto-login de Browser Session...');
+  log('Iniciando monitoreo de auto-login web...');
   
   const startTime = Date.now();
   const maxWaitMs = 120000; // 120 segundos máximo de tolerancia para cargas lentas
@@ -490,7 +494,7 @@ async function autoLoginTargetSession(page) {
         continue;
       }
 
-      // Si ya estamos en Browser
+      // Si la aplicación web ya ha cargado
       if (url.includes('cloud.example.com') || url.includes('example.com')) {
         // Verificar y presionar el botón de Sign In superior si aparece en la barra de re-autenticación
         await checkAndClickSignInBanner(page);
@@ -507,7 +511,7 @@ async function autoLoginTargetSession(page) {
         const chatInput = page.locator('input[placeholder*="Search"], input[placeholder*="Buscar"], div[data-testid="chat-list"]');
         const isLoaded = await chatInput.first().isVisible().catch(() => false);
         if (isLoaded) {
-          log('¡Auto-Login exitoso! Browser Session ha cargado por completo.');
+          log('¡Auto-Login exitoso! La sesión web ha cargado por completo.');
           break;
         }
       }
@@ -621,9 +625,9 @@ function handleManualCloseCleanup() {
     log('Intervalo de monitoreo "Sign In" destruido tras cierre manual del navegador.');
   }
   // Mantener browserPresenciaActiva intacto
-  browserBrowserContext = null;
+  browserContext = null;
   browserPage = null;
-  browserBrowserAbierto = false;
+  browserAbierto = false;
 }
 
 // Helper para formatear los segundos de forma amigable (horas, minutos, segundos)
@@ -691,22 +695,22 @@ app.get('/gateway/status', (req, res) => {
     } catch (e) {}
 
     res.json({
-      browserBrowserAbierto,
+      browserAbierto,
       browserPresenciaActiva,
       browserIntervalMs,
       browserSimulacionStartHour,
       browserSimulacionEndHour,
       browserSimulacionDays,
-      browserBrowserCloseHour,
-      browserBrowserCloseEnabled,
+      browserCloseHour,
+      browserCloseEnabled,
       browserFlexCloseDate,
       browserFlexCloseHour,
       browserFlexCloseEnabled,
       browserPausaTemporalUntil,
       browserPausaTemporalRemainingMs,
-      browserMealPauseDefaultMins: getMealPauseDefaultMins(),
-      browserMealPauseCutoffHour,
-      browserMealPauseIntervals,
+      mealPauseDefaultMins: getMealPauseDefaultMins(),
+      mealPauseCutoffHour,
+      mealPauseIntervals,
       ngrokUrl: ngrokUrl || 'Inactivo',
       hasEmulatorPath: !!process.env.EMULATOR_BAT_PATH,
       audioVolume: audioData.volume,
@@ -721,7 +725,7 @@ app.get('/gateway/status', (req, res) => {
 });
 
 // Endpoint POST /browser/browser para controlar el ciclo del navegador Browser
-app.post('/browser/browser', async (req, res) => {
+app.post(['/browser/browser', '/browser/browser'], async (req, res) => {
   const { accion } = req.body;
 
   if (accion !== 'abrir' && accion !== 'cerrar' && accion !== 'minimizar' && accion !== 'restaurar') {
@@ -734,12 +738,12 @@ app.post('/browser/browser', async (req, res) => {
   // Permitir la acción "cerrar" siempre (incluso si isLaunchingBrowser está activo)
   if (accion === 'cerrar') {
     isLaunchingBrowser = false;
-  } else if (accion === 'abrir' && browserBrowserContext) {
+  } else if (accion === 'abrir' && browserContext) {
     isLaunchingBrowser = false;
     log('El navegador ya se encuentra abierto.');
     return res.status(200).json({
       status: 'ok',
-      message: 'El navegador de Browser ya está abierto.',
+      message: 'El navegador web ya está abierto.',
       msg: 'Navegador ya abierto'
     });
   } else if (isLaunchingBrowser && accion === 'abrir') {
@@ -756,7 +760,7 @@ app.post('/browser/browser', async (req, res) => {
 
   try {
     if (accion === 'minimizar') {
-      if (!browserBrowserContext || !browserPage || browserPage.isClosed()) {
+      if (!browserContext || !browserPage || browserPage.isClosed()) {
         return res.status(400).json({
           error: 'Precondition Failed',
           message: 'El navegador no está abierto.',
@@ -778,7 +782,7 @@ app.post('/browser/browser', async (req, res) => {
     }
 
     if (accion === 'restaurar') {
-      if (!browserBrowserContext || !browserPage || browserPage.isClosed()) {
+      if (!browserContext || !browserPage || browserPage.isClosed()) {
         return res.status(400).json({
           error: 'Precondition Failed',
           message: 'El navegador no está abierto.',
@@ -801,12 +805,12 @@ app.post('/browser/browser', async (req, res) => {
 
     if (accion === 'abrir') {
 
-      const userDataDir = path.join(__dirname, 'browser_user_data');
+      const userDataDir = USER_DATA_DIR;
       log(`Abriendo ventana de Playwright en: ${userDataDir}`);
       
       try {
         log('Intentando iniciar con Google Chrome oficial...');
-        browserBrowserContext = await chromium.launchPersistentContext(userDataDir, {
+        browserContext = await chromium.launchPersistentContext(userDataDir, {
           headless: false,
           channel: 'chrome', // Google Chrome no integra las cuentas de Windows SSO de la misma forma que Edge
           viewport: null,
@@ -824,7 +828,7 @@ app.post('/browser/browser', async (req, res) => {
       } catch (errChrome) {
         try {
           log('Chrome oficial no disponible, iniciando con Chromium por defecto...');
-          browserBrowserContext = await chromium.launchPersistentContext(userDataDir, {
+          browserContext = await chromium.launchPersistentContext(userDataDir, {
             headless: false,
             viewport: null,
             ignoreDefaultArgs: ['--no-sandbox'],
@@ -840,7 +844,7 @@ app.post('/browser/browser', async (req, res) => {
           });
         } catch (errChromium) {
           log('Error al iniciar Chromium, intentando con Microsoft Edge...');
-          browserBrowserContext = await chromium.launchPersistentContext(userDataDir, {
+          browserContext = await chromium.launchPersistentContext(userDataDir, {
             headless: false,
             channel: 'msedge',
             viewport: null,
@@ -861,7 +865,7 @@ app.post('/browser/browser', async (req, res) => {
       // Esperar un breve instante para dar tiempo a que se restauren las páginas de la sesión anterior
       await new Promise(resolve => setTimeout(resolve, 800));
 
-      const pages = browserBrowserContext.pages();
+      const pages = browserContext.pages();
       // Buscar si ya hay alguna pestaña restaurada
       let targetHost = '';
       try { targetHost = new URL(TARGET_WEB_URL).hostname; } catch (e) {}
@@ -885,7 +889,7 @@ app.post('/browser/browser', async (req, res) => {
         if (pages.length > 0) {
           browserPage = pages[0];
         } else {
-          browserPage = await browserBrowserContext.newPage();
+          browserPage = await browserContext.newPage();
         }
 
         log(`Navegando asíncronamente a ${TARGET_WEB_URL}...`);
@@ -896,13 +900,13 @@ app.post('/browser/browser', async (req, res) => {
 
       // Detectar si el usuario cierra la página de Browser directamente
       browserPage.on('close', async () => {
-        log('Aviso: La página de Browser fue cerrada manualmente por el usuario.');
+        log('Aviso: La página web fue cerrada manualmente por el usuario.');
         handleManualCloseCleanup();
       });
 
       // Detectar si el contexto entero se cierra
-      browserBrowserContext.on('close', async () => {
-        log('Aviso: El navegador de Browser fue cerrado manualmente por el usuario.');
+      browserContext.on('close', async () => {
+        log('Aviso: El navegador web fue cerrado manualmente por el usuario.');
         handleManualCloseCleanup();
       });
 
@@ -914,16 +918,16 @@ app.post('/browser/browser', async (req, res) => {
       // Iniciar el monitoreo periódico de "Sign In" en la barra superior
       setupSignInCheckInterval();
 
-      browserBrowserAbierto = true;
+      browserAbierto = true;
 
       // Auto-minimizar la ventana a los 10 segundos de abrirse
       setTimeout(async () => {
-        if (browserBrowserContext && browserPage && !browserPage.isClosed()) {
+        if (browserContext && browserPage && !browserPage.isClosed()) {
           try {
             const session = await browserPage.context().newCDPSession(browserPage);
             const { windowId } = await session.send('Browser.getWindowForTarget');
             await session.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'minimized' } });
-            log('Ventana de Browser minimizada automáticamente a los 10 segundos.');
+            log('Ventana del navegador minimizada automáticamente a los 10 segundos.');
           } catch (err) {
             log(`Error al auto-minimizar: ${err.message}`);
           }
@@ -934,7 +938,7 @@ app.post('/browser/browser', async (req, res) => {
       if (browserPresenciaActiva) {
         log('Mantener Activo está encendido. Iniciando simulación automática en 20 segundos...');
         setTimeout(() => {
-          if (browserBrowserContext && browserPresenciaActiva) {
+          if (browserContext && browserPresenciaActiva) {
             if (!browserIntervalId) {
               log('Iniciando simulación automática planificada...');
               setupBrowserInterval();
@@ -949,7 +953,7 @@ app.post('/browser/browser', async (req, res) => {
       isLaunchingBrowser = false;
       return res.status(200).json({
         status: 'ok',
-        message: 'Navegador de Browser abierto con éxito y cargando página.',
+        message: 'Navegador web abierto con éxito y cargando página.',
         msg: 'Navegador abierto'
       });
 
@@ -958,12 +962,12 @@ app.post('/browser/browser', async (req, res) => {
       isLaunchingBrowser = false;
       return res.status(200).json({
         status: 'ok',
-        message: 'Navegador de Browser cerrado (la simulación continuará activa al abrirlo de nuevo).',
+        message: 'Navegador web cerrado (la automatización continuará activa al abrirlo de nuevo).',
         msg: 'Navegador cerrado'
       });
     }
   } catch (error) {
-    log(`Error al controlar el navegador de Browser: ${error.message}`);
+    log(`Error al controlar el navegador web: ${error.message}`);
     isLaunchingBrowser = false;
     await cleanupBrowserSession();
     return res.status(500).json({
@@ -974,7 +978,7 @@ app.post('/browser/browser', async (req, res) => {
 });
 
 // Endpoint POST /browser/programacion - Actualizar horario y días de la simulación
-app.post('/browser/programacion', (req, res) => {
+app.post(['/browser/programacion', '/browser/programacion'], (req, res) => {
   const { startHour, endHour, days, browserCloseHour, browserCloseEnabled, flexCloseDate, flexCloseHour, flexCloseEnabled, mealPauseCutoffHour, mealPauseIntervals } = req.body;
 
   if (startHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(startHour)) {
@@ -987,10 +991,10 @@ app.post('/browser/programacion', (req, res) => {
     browserSimulacionDays = days.map(Number);
   }
   if (browserCloseHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(browserCloseHour)) {
-    browserBrowserCloseHour = browserCloseHour;
+    browserCloseHour = browserCloseHour;
   }
   if (browserCloseEnabled !== undefined) {
-    browserBrowserCloseEnabled = !!browserCloseEnabled;
+    browserCloseEnabled = !!browserCloseEnabled;
   }
   if (flexCloseDate !== undefined) {
     browserFlexCloseDate = flexCloseDate;
@@ -1002,7 +1006,7 @@ app.post('/browser/programacion', (req, res) => {
     browserFlexCloseEnabled = !!flexCloseEnabled;
   }
   if (mealPauseCutoffHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(mealPauseCutoffHour)) {
-    browserMealPauseCutoffHour = mealPauseCutoffHour;
+    mealPauseCutoffHour = mealPauseCutoffHour;
   }
   if (Array.isArray(mealPauseIntervals)) {
     const validIntervals = mealPauseIntervals.slice(0, 4).filter(item => {
@@ -1013,12 +1017,12 @@ app.post('/browser/programacion', (req, res) => {
       mins: Math.max(1, Math.min(480, Number(item.mins) || 20))
     }));
     if (validIntervals.length > 0) {
-      browserMealPauseIntervals = validIntervals;
+      mealPauseIntervals = validIntervals;
     }
   }
 
   saveSimulationState();
-  log(`Programación actualizada: Rango: ${browserSimulacionStartHour}-${browserSimulacionEndHour}, Días: ${browserSimulacionDays.join(',')}, Cierre: ${browserBrowserCloseHour} (Activo=${browserBrowserCloseEnabled}), Flex: ${browserFlexCloseDate} ${browserFlexCloseHour} (Activo=${browserFlexCloseEnabled}), IntervalosPausa: ${JSON.stringify(browserMealPauseIntervals)}`);
+  log(`Programación actualizada: Rango: ${browserSimulacionStartHour}-${browserSimulacionEndHour}, Días: ${browserSimulacionDays.join(',')}, Cierre: ${browserCloseHour} (Activo=${browserCloseEnabled}), Flex: ${browserFlexCloseDate} ${browserFlexCloseHour} (Activo=${browserFlexCloseEnabled}), IntervalosPausa: ${JSON.stringify(mealPauseIntervals)}`);
 
   res.json({
     status: 'ok',
@@ -1026,18 +1030,18 @@ app.post('/browser/programacion', (req, res) => {
     browserSimulacionStartHour,
     browserSimulacionEndHour,
     browserSimulacionDays,
-    browserBrowserCloseHour,
-    browserBrowserCloseEnabled,
+    browserCloseHour,
+    browserCloseEnabled,
     browserFlexCloseDate,
     browserFlexCloseHour,
     browserFlexCloseEnabled,
-    browserMealPauseCutoffHour,
-    browserMealPauseIntervals
+    mealPauseCutoffHour,
+    mealPauseIntervals
   });
 });
 
 // Endpoint POST /browser/presencia para controlar la simulación de actividad
-app.post('/browser/presencia', (req, res) => {
+app.post(['/browser/presencia', '/browser/presencia'], (req, res) => {
   const { accion, intervaloMs } = req.body;
 
   if (accion !== 'iniciar' && accion !== 'pausar' && accion !== 'pausa_temporal') {
@@ -1052,7 +1056,7 @@ app.post('/browser/presencia', (req, res) => {
     if (mins < 1) mins = 1;
     if (mins > 9999) mins = 9999;
     browserIntervalMs = mins * 60000;
-    log(`Browser interval updated to: ${browserIntervalMs} ms (${mins} minutes)`);
+    log(`Intervalo web actualizado a: ${browserIntervalMs} ms (${mins} minutes)`);
   }
 
   if (accion === 'iniciar') {
@@ -1182,14 +1186,14 @@ async function runBrowserActivityLoop() {
       log('Simulación de presencia omitida: Fuera de los días/horas programados.');
       return;
     }
-    if (!browserBrowserContext) return;
+    if (!browserContext) return;
 
     if (!browserPage || browserPage.isClosed()) {
-      const pages = browserBrowserContext.pages();
+      const pages = browserContext.pages();
       if (pages.length > 0) {
         browserPage = pages[0];
       } else {
-        log('Advertencia: No hay páginas en Browser para simular presencia.');
+        log('Advertencia: No hay páginas abiertas para mantener sesión.');
         return;
       }
     }
@@ -1197,7 +1201,7 @@ async function runBrowserActivityLoop() {
     // Verificar y clickear si existe el banner de Sign In en la barra superior
     await checkAndClickSignInBanner(browserPage);
 
-    log('Simulando actividad en Browser (movimiento de mouse y teclado)...');
+    log('Ejecutando keepalive de sesión web...');
     
     // 1. Movimiento del mouse
     const x = Math.floor(Math.random() * 500) + 100;
@@ -1224,11 +1228,11 @@ async function runBrowserActivityLoop() {
     lastActivityTime = new Date();
     log('Actividad simulada con éxito.');
   } catch (err) {
-    log(`Error al ejecutar simulación de actividad de Browser: ${err.message}`);
+    log(`Error al ejecutar actividad de sesión web: ${err.message}`);
   }
 }
 
-// Iniciar intervalo de actividad de Browser
+// Iniciar intervalo de actividad de sesión web
 function setupBrowserInterval() {
   browserIntervalId = setInterval(async () => {
     await runBrowserActivityLoop();
@@ -1236,14 +1240,14 @@ function setupBrowserInterval() {
 }
 
 // 2.A Endpoint POST /browser/simular-accion para ejecutar acciones de test manuales e inmediatas
-app.post('/browser/simular-accion', async (req, res) => {
+app.post(['/browser/simular-accion', '/browser/simular-accion'], async (req, res) => {
   const { accion } = req.body;
 
-  if (!browserBrowserContext || !browserPage || browserPage.isClosed()) {
-    log('Fallo de prueba: Intento de simular acción sin ventana de Browser abierta.');
+  if (!browserContext || !browserPage || browserPage.isClosed()) {
+    log('Fallo de prueba: Intento de simular acción sin ventana de navegador abierta.');
     return res.status(400).json({
       error: 'Precondition Failed',
-      message: 'No se puede simular la acción si la ventana de Browser está cerrada.'
+      message: 'No se puede simular la acción si el navegador está cerrado.'
     });
   }
 
@@ -1316,7 +1320,7 @@ app.post('/browser/simular-accion', async (req, res) => {
           log(`Error en el selector físico de respaldo: ${fallbackErr.message}`);
           return res.status(400).json({
             error: 'Element Not Found',
-            message: 'No se pudo interactuar con el buscador de Browser ni usando atajos ni selectores.'
+            message: 'No se pudo interactuar con el buscador de la aplicación web ni usando atajos ni selectores.'
           });
         }
       }
@@ -1344,7 +1348,7 @@ app.post('/browser/simular-accion', async (req, res) => {
 });
 
 // Endpoint POST /browser/status (Compatibilidad hacia atrás)
-app.post('/browser/status', async (req, res) => {
+app.post(['/browser/status', '/browser/status'], async (req, res) => {
   const { estado, intervaloMs } = req.body;
   log(`[Compatibilidad] POST /browser/status recibido con estado '${estado}'`);
 
@@ -1354,16 +1358,16 @@ app.post('/browser/status', async (req, res) => {
 
   try {
     if (estado === 'activo') {
-      if (!browserBrowserContext) {
-        const userDataDir = path.join(__dirname, 'browser_user_data');
-        browserBrowserContext = await chromium.launchPersistentContext(userDataDir, {
+      if (!browserContext) {
+        const userDataDir = USER_DATA_DIR;
+        browserContext = await chromium.launchPersistentContext(userDataDir, {
           headless: false,
           viewport: null
         });
-        const pages = browserBrowserContext.pages();
-        browserPage = pages.length > 0 ? pages[0] : await browserBrowserContext.newPage();
+        const pages = browserContext.pages();
+        browserPage = pages.length > 0 ? pages[0] : await browserContext.newPage();
         browserPage.goto(TARGET_WEB_URL).catch(() => {});
-        browserBrowserAbierto = true;
+        browserAbierto = true;
         setupSignInCheckInterval();
       }
       if (browserIntervalId) clearInterval(browserIntervalId);
@@ -1375,13 +1379,13 @@ app.post('/browser/status', async (req, res) => {
 
       return res.status(200).json({
         status: 'ok',
-        message: 'Sesión de Browser iniciada e intervalo de actividad configurado.'
+        message: 'Sesión web iniciada e intervalo de actividad configurado.'
       });
     } else {
       await cleanupBrowserSession();
       return res.status(200).json({
         status: 'ok',
-        message: 'Sesión y telemetría de Browser detenidas.'
+        message: 'Sesión web y actividad detenidas.'
       });
     }
   } catch (error) {
@@ -1654,7 +1658,7 @@ app.get('/sistema/ping', (req, res) => {
 });
 
 // Endpoint GET /browser/ultima-actividad - Tiempo desde el ultimo movimiento simulado
-app.get('/browser/ultima-actividad', (req, res) => {
+app.get(['/browser/ultima-actividad', '/browser/ultima-actividad'], (req, res) => {
   if (!lastActivityTime) {
     return res.json({ lastActivityTime: null, formatted: 'Sin actividad registrada', secondsAgo: null, msg: 'Sin actividad' });
   }
@@ -2826,7 +2830,7 @@ const DASHBOARD_HTML = `
       </div>
 
       <!-- SECCIÓN 1.A: NAVEGADOR -->
-      <div class="sub-section" id="sub_browser_browser" data-sub-title="Ventana del Navegador">
+      <div class="sub-section" id="sub_browser_window" data-sub-title="Ventana del Navegador">
         <div class="sub-section-header">
           <div class="card-section-title" style="margin-bottom: 0;">Ventana del Navegador</div>
         </div>
@@ -2944,13 +2948,13 @@ const DASHBOARD_HTML = `
         <div style="display: flex; gap: 10px; width: 100%; align-items: center; margin-top: 8px;">
           <div style="flex: 1.2;">
             <label style="font-size: 0.75rem; color: var(--text-muted);">Hora de Cierre</label>
-            <input type="time" id="browserBrowserCloseHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
+            <input type="time" id="browserCloseHour" style="width: 100%; padding: 8px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 4px;" onchange="updateSchedule()">
           </div>
           <div style="flex: 0.8; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; margin-top: 14px;">
             <div class="switch-container" style="margin-top: 0; justify-content: flex-end; gap: 10px;">
               <span style="font-size: 0.85rem; color: var(--text-muted);">Auto-Cierre</span>
               <label class="switch">
-                <input type="checkbox" id="browserBrowserCloseEnabled" onchange="updateSchedule()">
+                <input type="checkbox" id="browserCloseEnabled" onchange="updateSchedule()">
                 <span class="slider-toggle"></span>
               </label>
             </div>
@@ -3506,7 +3510,7 @@ const DASHBOARD_HTML = `
         const data = await response.json();
         window.lastStatusData = data;
         
-        // Sincronizar UI de Navegador Browser
+        // Sincronizar UI de Navegador Web
         const browserBadge = document.getElementById('browserBadge');
         const browserBadgeText = document.getElementById('browserBadgeText');
         const btnBrowserOpen = document.getElementById('btnBrowserOpen');
@@ -3516,7 +3520,7 @@ const DASHBOARD_HTML = `
         const testTipeoBtn = document.getElementById('btnTestTipeo');
         const testShiftBtn = document.getElementById('btnTestShift');
 
-        if (data.browserBrowserAbierto) {
+        if (data.browserAbierto) {
           browserBadge.className = 'status-badge active';
           browserBadgeText.innerText = 'Navegador: Abierto';
           btnBrowserOpen.className = 'btn btn-primary btn-disabled';
@@ -3547,7 +3551,7 @@ const DASHBOARD_HTML = `
         intervalInput.classList.remove('btn-disabled');
         intervalInput.disabled = false;
 
-        // Sincronizar UI de Presencia Browser
+        // Sincronizar UI de Sesión Activa
         const presenciaBadge = document.getElementById('presenciaBadge');
         const presenciaBadgeText = document.getElementById('presenciaBadgeText');
         const cardBrowser = document.getElementById('cardBrowser');
@@ -3591,7 +3595,7 @@ const DASHBOARD_HTML = `
           } else {
             presenciaBadge.className = 'status-badge';
             presenciaBadgeText.innerText = 'Mantener Activo: Off';
-            if (!data.browserBrowserAbierto) {
+            if (!data.browserAbierto) {
               cardBrowser.classList.remove('active-state');
             }
             btnPlay.classList.remove('btn-disabled');
@@ -3613,11 +3617,11 @@ const DASHBOARD_HTML = `
         if (document.activeElement !== document.getElementById('browserEndHour')) {
           document.getElementById('browserEndHour').value = data.browserSimulacionEndHour || '18:00';
         }
-        if (document.activeElement !== document.getElementById('browserBrowserCloseHour')) {
-          document.getElementById('browserBrowserCloseHour').value = data.browserBrowserCloseHour || '18:03';
+        if (document.activeElement !== document.getElementById('browserCloseHour')) {
+          document.getElementById('browserCloseHour').value = data.browserCloseHour || '18:03';
         }
-        if (document.activeElement !== document.getElementById('browserBrowserCloseEnabled')) {
-          document.getElementById('browserBrowserCloseEnabled').checked = !!data.browserBrowserCloseEnabled;
+        if (document.activeElement !== document.getElementById('browserCloseEnabled')) {
+          document.getElementById('browserCloseEnabled').checked = !!data.browserCloseEnabled;
         }
         if (document.activeElement !== document.getElementById('browserFlexCloseDate')) {
           document.getElementById('browserFlexCloseDate').value = data.browserFlexCloseDate || '';
@@ -3734,8 +3738,8 @@ const DASHBOARD_HTML = `
     async function updateSchedule() {
       const startHour = document.getElementById('browserStartHour').value;
       const endHour = document.getElementById('browserEndHour').value;
-      const browserCloseHour = document.getElementById('browserBrowserCloseHour').value;
-      const browserCloseEnabled = document.getElementById('browserBrowserCloseEnabled').checked;
+      const browserCloseHour = document.getElementById('browserCloseHour').value;
+      const browserCloseEnabled = document.getElementById('browserCloseEnabled').checked;
       const flexCloseDate = document.getElementById('browserFlexCloseDate').value;
       const flexCloseHour = document.getElementById('browserFlexCloseHour').value;
       const flexCloseEnabled = document.getElementById('browserFlexCloseEnabled').checked;
@@ -3996,7 +4000,7 @@ const DASHBOARD_HTML = `
         if (response.ok) {
           showToast('Intervalos de pausa actualizados con éxito.', 'success');
           if (window.lastStatusData) {
-            window.lastStatusData.browserMealPauseIntervals = intervals;
+            window.lastStatusData.mealPauseIntervals = intervals;
           }
           const defaultMins = calcularDefaultMinsSegunIntervalos(intervals);
           document.getElementById('pausaTemporalMinsInput').value = defaultMins;
@@ -4010,7 +4014,7 @@ const DASHBOARD_HTML = `
     }
 
     function abrirModalPausaTemporal() {
-      const intervals = (window.lastStatusData && window.lastStatusData.browserMealPauseIntervals) || [
+      const intervals = (window.lastStatusData && window.lastStatusData.mealPauseIntervals) || [
         { start: '00:00', end: '15:15', mins: 25 },
         { start: '15:15', end: '23:59', mins: 15 }
       ];
@@ -4367,7 +4371,17 @@ const DASHBOARD_HTML = `
     function getDashboardConfig() {
       try {
         const saved = localStorage.getItem('gateway_dashboard_custom_v1');
-        if (saved) return JSON.parse(saved);
+        if (saved) {
+          const cfg = JSON.parse(saved);
+          if (Array.isArray(cfg.order)) {
+            cfg.order = cfg.order.map(id => id === 'cardBrowser' ? 'cardBrowser' : id);
+          }
+          if (cfg.hidden && cfg.hidden.cardBrowser !== undefined) {
+            cfg.hidden.cardBrowser = cfg.hidden.cardBrowser;
+            delete cfg.hidden.cardBrowser;
+          }
+          return cfg;
+        }
       } catch (e) {}
       return {
         order: [...DEFAULT_CARD_ORDER],
@@ -4855,8 +4869,8 @@ setInterval(async () => {
 
   // 1. Auto-cierre por hora programada fija
   // Usamos >= y guardamos el minuto en que ya se ejecuto para no re-disparar
-  if (browserBrowserCloseEnabled && browserBrowserCloseHour) {
-    const [closeHH, closeMM] = browserBrowserCloseHour.split(':').map(Number);
+  if (browserCloseEnabled && browserCloseHour) {
+    const [closeHH, closeMM] = browserCloseHour.split(':').map(Number);
     const nowTotalMins = now.getHours() * 60 + now.getMinutes();
     const closeTotalMins = closeHH * 60 + closeMM;
     const minuteKey = `${HH}:${mm}`;
@@ -4866,8 +4880,8 @@ setInterval(async () => {
       const diffMins = nowTotalMins - closeTotalMins;
       if (diffMins <= 1) { // hasta 1 minuto de gracia
         lastAutoCierreMinute = minuteKey;
-        if (browserBrowserContext || browserBrowserAbierto) {
-          log(`Cron Horario: Auto-cierre del navegador programado a las ${browserBrowserCloseHour} (ahora ${currentTimeString}).`);
+        if (browserContext || browserAbierto) {
+          log(`Cron Horario: Auto-cierre del navegador programado a las ${browserCloseHour} (ahora ${currentTimeString}).`);
           await cleanupBrowserSession();
         }
         exec('taskkill /f /im emulator.exe & taskkill /f /im qemu-system-x86_64.exe', (error) => {});
@@ -4896,7 +4910,7 @@ setInterval(async () => {
         browserFlexCloseEnabled = false;
         saveSimulationState();
 
-        if (browserBrowserContext || browserBrowserAbierto) {
+        if (browserContext || browserAbierto) {
           log(`Cron Horario: Cierre Flex del navegador ejecutado para la fecha ${browserFlexCloseDate} a las ${browserFlexCloseHour} (ahora ${currentTimeString}).`);
           await cleanupBrowserSession();
         }
@@ -4909,8 +4923,8 @@ setInterval(async () => {
   if (browserPresenciaActiva) {
     if (!isSimulationInSchedule()) {
       // Si estamos fuera de horario, asegurar que el navegador y el emulador esten cerrados
-      if (browserBrowserContext || browserBrowserAbierto) {
-        log('Cron Horario: Cerrando navegador de Browser por estar fuera de horario de simulacion.');
+      if (browserContext || browserAbierto) {
+        log('Cron Horario: Cerrando navegador web por estar fuera de horario programado.');
         await cleanupBrowserSession();
       }
       
