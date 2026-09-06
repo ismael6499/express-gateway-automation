@@ -1,4 +1,4 @@
-﻿# Express Gateway Automation
+# Express Gateway Automation
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen.svg)](https://nodejs.org/)
@@ -114,38 +114,44 @@ The dashboard will be accessible locally at `http://localhost:3000`.
 
 All requests must provide authentication using the `X-API-KEY` header or a valid session cookie.
 
+> [!NOTE]
+> **Backward Compatibility:** All routes support both canonical English paths (`/browser/...`, `/system/...`) and legacy Spanish paths (`/sistema/...`, `/browser/presencia`, etc.), accepting both English and Spanish request payload keys and values. Existing Tasker, Home Assistant, or shortcut automations will continue functioning without modification.
+
 ### Browser Session & Automation (`/browser`)
 
-| Method | Endpoint | Description | Sample Payload |
-|---|---|---|---|
-| `POST` | `/browser/browser` | Controls browser lifecycle (`abrir`, `cerrar`, `minimizar`, `restaurar`) | `{"accion": "abrir"}` |
-| `POST` | `/browser/presencia` | Toggles activity simulation or changes interval | `{"accion": "toggle"}` |
-| `POST` | `/browser/programacion` | Configures schedule and auto-close hours | `{"startHour": "09:00", "endHour": "18:00"}` |
-| `POST` | `/browser/simular-accion` | Injects immediate test actions (typing, mouse, shift) | `{"accion": "tipear-buscador"}` |
-| `GET` | `/browser/ultima-actividad` | Returns timestamp and seconds since last keepalive | - |
+| Method | Canonical Endpoint | Legacy Alias | Description | Sample Payload |
+|---|---|---|---|---|
+| `POST` | `/browser/window` | `/browser/browser` | Controls browser lifecycle (`open`, `close`, `minimize`, `restore`) | `{"action": "open"}` |
+| `POST` | `/browser/presence` | `/browser/presencia` | Toggles activity keepalive (`start`, `pause`, `temporary_pause`) | `{"action": "start", "intervalMs": 240000}` |
+| `POST` | `/browser/schedule` | `/browser/programacion` | Configures schedule, flex close, and pause intervals | `{"startHour": "09:00", "endHour": "18:00", "closeHour": "18:03"}` |
+| `POST` | `/browser/simulate-action` | `/browser/simular-accion` | Injects immediate test actions (`move-mouse`, `type-search`, `press-shift`) | `{"action": "type-search"}` |
+| `GET` | `/browser/last-activity` | `/browser/ultima-actividad` | Returns timestamp and elapsed seconds since last keepalive | - |
 
-### System, Screen & Hardware (`/sistema`)
+### System, Screen & Hardware (`/system`)
 
-| Method | Endpoint | Description | Sample Payload |
-|---|---|---|---|
-| `POST` | `/sistema/teclado` | Manages display standby & ScreenGuard guard | `{"accion": "apagar-guardia"}` |
-| `POST` | `/sistema/screenguard-toggle` | Toggles intelligent ScreenGuard watchdog on/off | - |
-| `GET` | `/sistema/portapapeles` | Reads current Windows clipboard text | - |
-| `POST` | `/sistema/portapapeles` | Writes UTF-8 text into clipboard | `{"text": "Hello world"}` |
-| `GET` | `/sistema/screenshot` | Captures multi-monitor screenshot | Returns PNG binary |
-| `POST` | `/sistema/media` | Media playback controls (`playpause`, `next`, `prev`) | `{"accion": "playpause"}` |
-| `POST` | `/sistema/volumen` | Sets master volume (0-100) | `{"volumen": 35}` |
-| `POST` | `/sistema/brillo` | Sets physical monitor brightness (0-100%) | `{"brillo": 80}` |
-| `POST` | `/sistema/tts` | Text-to-speech speaker synthesis | `{"texto": "Server active"}` |
-| `POST` | `/sistema/energia` | PC energy controls (`suspender`, `apagar`, `reiniciar`) | `{"accion": "suspender"}` |
+| Method | Canonical Endpoint | Legacy Alias | Description | Sample Payload |
+|---|---|---|---|---|
+| `POST` | `/system/keyboard` | `/sistema/teclado` | Manages display standby & ScreenGuard hook (`turn-off-screen`, `turn-on-screen`, `start-screenguard`, `screenguard-status`) | `{"action": "start-screenguard"}` |
+| `POST` | `/system/screenguard-toggle` | `/sistema/screenguard-toggle` | Toggles intelligent ScreenGuard watchdog on/off | - |
+| `GET` | `/system/clipboard` | `/sistema/portapapeles` | Reads current Windows clipboard text | - |
+| `POST` | `/system/clipboard` | `/sistema/portapapeles` | Writes UTF-8 text into clipboard | `{"text": "Hello world"}` |
+| `GET` | `/system/screenshot` | `/sistema/screenshot` | Captures multi-monitor screenshot | Returns PNG binary |
+| `POST` | `/system/media` | `/sistema/media` | Media playback controls (`playpause`, `next`, `prev`, `vol+`, `vol-`, `mute`) | `{"action": "playpause"}` |
+| `GET` | `/system/brightness` | `/sistema/brillo` | Reads physical monitor brightness (0-100%) | - |
+| `POST` | `/system/brightness` | `/sistema/brillo` | Sets physical monitor brightness (0-100%) | `{"brightness": 80}` |
+| `POST` | `/system/tts` | `/sistema/tts` | Text-to-speech speaker synthesis | `{"text": "Server active"}` |
+| `POST` | `/system/power` | `/sistema/energia` | PC energy controls (`lock`, `sleep`) | `{"action": "sleep"}` |
+| `POST` | `/system/execute` | `/sistema/ejecutar` | Launches local background helpers (`emulator`) | `{"program": "emulator"}` |
+| `POST` | `/system/close` | `/sistema/cerrar` | Terminates local background processes (`emulator`) | `{"program": "emulator"}` |
+| `GET` | `/system/ping` | `/sistema/ping` | Network latency check | - |
 
 ### Gateway Management (`/gateway`)
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/gateway/status` | Returns complete real-time JSON status of all subsystems |
-| `POST` | `/gateway/restart` | Safely triggers a decoupled background restart |
-| `GET` | `/gateway/ping` | Liveness check |
+| Method | Canonical Endpoint | Alias | Description |
+|---|---|---|---|
+| `GET` | `/gateway/status` | `/system/status` | Returns complete real-time JSON status of all subsystems |
+| `POST` | `/gateway/restart` | `/system/restart` | Safely triggers a decoupled background restart via `remote_restart.vbs` |
+| `POST` | `/gateway/login` | - | Session authentication endpoint for web dashboard |
 
 ---
 
@@ -156,7 +162,7 @@ You can easily automate PC states from Android using [Tasker](https://play.googl
 ### Example: Turn Off Monitors with Guard upon Leaving Home
 - **Action:** `HTTP Request`
 - **Method:** `POST`
-- **URL:** `https://your-domain.ngrok-free.dev/sistema/teclado`
+- **URL:** `https://your-domain.ngrok-free.dev/system/keyboard`
 - **Headers:**
   ```http
   Content-Type: application/json
@@ -165,8 +171,9 @@ You can easily automate PC states from Android using [Tasker](https://play.googl
   ```
 - **Body:**
   ```json
-  {"accion": "apagar-guardia"}
+  {"action": "start-screenguard"}
   ```
+  *(Legacy body `{"accion": "apagar-guardia"}` sent to `/sistema/teclado` remains fully supported)*
 
 ---
 
