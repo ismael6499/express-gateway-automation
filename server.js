@@ -1918,6 +1918,13 @@ app.post(['/system/keyboard/type', '/system/type', '/sistema/teclado/escribir', 
   return res.json({ status: 'ok', message: 'Text typed successfully.', text: cleanText });
 });
 
+// Endpoint POST /system/keyboard/reset (and legacy /sistema/teclado/reset) - Liberar todas las teclas atascadas
+app.post(['/system/keyboard/reset', '/system/reset-keys', '/sistema/teclado/reset'], (req, res) => {
+  log('Solicitado reset forzado de teclas modificadoras (soltar Ctrl, Alt, Shift, Win)...');
+  sendInputCommand('r');
+  return res.json({ status: 'ok', message: 'All modifier keys and mouse buttons released successfully.' });
+});
+
 // Endpoint POST /system/keyboard/key (and legacy /sistema/teclado/tecla, /sistema/tecla) - Presionar teclas de PC y atajos
 app.post(['/system/keyboard/key', '/system/key', '/sistema/teclado/tecla', '/sistema/tecla'], (req, res) => {
   const key = req.body.key !== undefined ? req.body.key : req.body.tecla;
@@ -1925,6 +1932,10 @@ app.post(['/system/keyboard/key', '/system/key', '/sistema/teclado/tecla', '/sis
     return res.status(400).json({ error: 'Bad Request', message: "Missing 'key' ('tecla') parameter." });
   }
   sendInputCommand(`k ${key}`);
+  // Safety watchdog: auto-release all modifiers 350ms after any keystroke or combo
+  setTimeout(() => {
+    sendInputCommand('r');
+  }, 350);
   return res.json({ status: 'ok', message: `Key ${key} injected successfully.`, key });
 });
 
@@ -3310,9 +3321,12 @@ const DASHBOARD_HTML = `
 
       <!-- CUSTOM COMBINATIONS BUILDER -->
       <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 12px; margin-bottom: 14px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-          <span style="font-size: 0.78rem; font-weight: 600; color: var(--text);" data-i18n="customComboTitle">Custom Key Combinations</span>
-          <span style="font-size: 0.7rem; color: var(--text-muted);" data-i18n="customComboDesc">Combine modifiers with any key</span>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; flex-wrap: wrap; gap: 6px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 0.78rem; font-weight: 600; color: var(--text);" data-i18n="customComboTitle">Custom Key Combinations</span>
+            <span id="modifierTimerBadge" style="display: none; font-size: 0.68rem; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); align-items: center; gap: 4px;">⏱️ 8s</span>
+          </div>
+          <button type="button" class="btn btn-outline btn-sm" onclick="resetStuckKeys()" style="font-size: 0.7rem; padding: 3px 8px; color: #f59e0b; border-color: rgba(245, 158, 11, 0.35);" title="Soltar Ctrl, Alt, Shift si quedaron presionadas" data-i18n="btnUnstickKeys">🔓 Unstick Keys</button>
         </div>
 
         <!-- MODIFIERS SELECTOR -->
@@ -5310,6 +5324,7 @@ const DASHBOARD_HTML = `
         customComboDesc: "Combine modifiers with any key",
         comboKeyPlaceholder: "Key (e.g. Esc, Tab, F4, D, W, Enter)...",
         btnSendCombo: "🚀 Send Combo",
+        btnUnstickKeys: "🔓 Unstick Keys",
         comboPresets: "Suggestions:",
         browserCardTitle: "Active Browser Keepalive",
         browserCardDesc: "Persistent session and display sleep prevention",
@@ -5408,6 +5423,7 @@ const DASHBOARD_HTML = `
         customComboDesc: "Combina modificadores con cualquier tecla",
         comboKeyPlaceholder: "Tecla (ej: Esc, Tab, F4, D, W, Enter)...",
         btnSendCombo: "🚀 Enviar Combinación",
+        btnUnstickKeys: "🔓 Soltar Teclas",
         comboPresets: "Sugerencias:",
         browserCardTitle: "Navegador Activo",
         browserCardDesc: "Sesión persistente y prevención de inactividad de pantalla",
@@ -5564,6 +5580,11 @@ const DASHBOARD_HTML = `
           surf.addEventListener('touchmove', handlePadTouchMove, { passive: false });
           surf.addEventListener('touchend', handlePadTouchEnd, { passive: false });
           surf.addEventListener('touchcancel', handlePadTouchEnd, { passive: false });
+          surf.addEventListener('click', (e) => {
+            if (e.pointerType === 'mouse' || (!('ontouchstart' in window) && e.detail === 1)) {
+              sendMouseClick('left');
+            }
+          });
         }
       });
 
@@ -5720,9 +5741,9 @@ const DASHBOARD_HTML = `
         }
       } else if (maxPadTouches === 1) {
         // Single finger tap
-        if (elapsed < 300 && totalPadMovement < 25) {
+        if (elapsed < 420 && totalPadMovement < 35) {
           const now = Date.now();
-          if (now - lastSingleTapTime < 350) {
+          if (now - lastSingleTapTime < 320) {
             // Double tap -> DOUBLE CLICK
             if (singleTapTimeout) { clearTimeout(singleTapTimeout); singleTapTimeout = null; }
             lastSingleTapTime = 0;
@@ -5733,10 +5754,9 @@ const DASHBOARD_HTML = `
             lastSingleTapTime = now;
             singleTapTimeout = setTimeout(() => {
               singleTapTimeout = null;
-              if (Date.now() - lastSingleTapTime >= 280) {
-                sendMouseClick('left');
-              }
-            }, 230);
+              sendMouseClick('left');
+              if (navigator.vibrate) navigator.vibrate(30);
+            }, 200);
           }
         }
       }
@@ -5818,6 +5838,58 @@ const DASHBOARD_HTML = `
     // REMOTE KEYBOARD & CUSTOM COMBINATIONS LOGIC
     // ==========================================
     const activeModifiers = new Set();
+    let modifierAutoClearTimer = null;
+    let modifierCountdownInterval = null;
+    let modifierSecondsLeft = 0;
+
+    function resetActiveModifiers() {
+      if (modifierAutoClearTimer) { clearTimeout(modifierAutoClearTimer); modifierAutoClearTimer = null; }
+      if (modifierCountdownInterval) { clearInterval(modifierCountdownInterval); modifierCountdownInterval = null; }
+      activeModifiers.clear();
+      ['modCtrl', 'modAlt', 'modShift', 'modWin'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) {
+          btn.style.background = '';
+          btn.style.borderColor = '';
+          btn.style.color = '';
+        }
+      });
+      const timerEl = document.getElementById('modifierTimerBadge');
+      if (timerEl) timerEl.style.display = 'none';
+    }
+
+    function startModifierTimer() {
+      if (modifierAutoClearTimer) clearTimeout(modifierAutoClearTimer);
+      if (modifierCountdownInterval) clearInterval(modifierCountdownInterval);
+
+      if (activeModifiers.size === 0) {
+        const timerEl = document.getElementById('modifierTimerBadge');
+        if (timerEl) timerEl.style.display = 'none';
+        return;
+      }
+
+      modifierSecondsLeft = 8;
+      const timerEl = document.getElementById('modifierTimerBadge');
+      if (timerEl) {
+        timerEl.style.display = 'inline-flex';
+        timerEl.innerText = '⏱️ ' + modifierSecondsLeft + 's';
+      }
+
+      modifierCountdownInterval = setInterval(() => {
+        modifierSecondsLeft--;
+        if (modifierSecondsLeft <= 0) {
+          clearInterval(modifierCountdownInterval);
+          modifierCountdownInterval = null;
+        } else if (timerEl) {
+          timerEl.innerText = '⏱️ ' + modifierSecondsLeft + 's';
+        }
+      }, 1000);
+
+      modifierAutoClearTimer = setTimeout(() => {
+        resetActiveModifiers();
+        showToast(currentLang === 'es' ? 'Modificadores desactivados por inactividad' : 'Modifiers cleared by timer', 'info');
+      }, 8000);
+    }
 
     function toggleModifier(mod) {
       const idMap = { ctrl: 'modCtrl', alt: 'modAlt', shift: 'modShift', win: 'modWin' };
@@ -5837,6 +5909,7 @@ const DASHBOARD_HTML = `
           btn.style.color = '#818cf8';
         }
       }
+      startModifierTimer();
     }
 
     function setCustomKey(key) {
@@ -5861,6 +5934,20 @@ const DASHBOARD_HTML = `
       if (key) parts.push(key);
       const combo = parts.join('+');
       sendKey(combo);
+
+      // Auto-clear active modifiers and timer once combo is sent!
+      resetActiveModifiers();
+    }
+
+    async function resetStuckKeys() {
+      resetActiveModifiers();
+      try {
+        await safeFetch('/system/keyboard/reset', { method: 'POST' }, 2000);
+        showToast(currentLang === 'es' ? 'Teclas liberadas (Reset OK)' : 'Keys released (Reset OK)', 'success');
+        if (navigator.vibrate) navigator.vibrate(30);
+      } catch (e) {
+        showToast(currentLang === 'es' ? 'Error al liberar teclas' : 'Failed to reset keys', 'error');
+      }
     }
 
     async function sendRemoteText() {
