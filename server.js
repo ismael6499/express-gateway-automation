@@ -985,37 +985,37 @@ app.post('/browser/browser', async (req, res) => {
 
 // Endpoint POST /browser/programacion - Actualizar horario y días de la automatización
 app.post('/browser/programacion', (req, res) => {
-  const { startHour, endHour, days, browserCloseHour, browserCloseEnabled, flexCloseDate, flexCloseHour, flexCloseEnabled, mealPauseCutoffHour, mealPauseIntervals } = req.body;
+  const b = req.body || {};
 
-  if (startHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(startHour)) {
-    browserSimulacionStartHour = startHour;
+  if (b.startHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(b.startHour)) {
+    browserSimulacionStartHour = b.startHour;
   }
-  if (endHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(endHour)) {
-    browserSimulacionEndHour = endHour;
+  if (b.endHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(b.endHour)) {
+    browserSimulacionEndHour = b.endHour;
   }
-  if (days && Array.isArray(days)) {
-    browserSimulacionDays = days.map(Number);
+  if (b.days && Array.isArray(b.days)) {
+    browserSimulacionDays = b.days.map(Number);
   }
-  if (browserCloseHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(browserCloseHour)) {
-    browserCloseHour = browserCloseHour;
+  if (b.browserCloseHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(b.browserCloseHour)) {
+    browserCloseHour = b.browserCloseHour;
   }
-  if (browserCloseEnabled !== undefined) {
-    browserCloseEnabled = !!browserCloseEnabled;
+  if (b.browserCloseEnabled !== undefined) {
+    browserCloseEnabled = !!b.browserCloseEnabled;
   }
-  if (flexCloseDate !== undefined) {
-    browserFlexCloseDate = flexCloseDate;
+  if (b.flexCloseDate !== undefined) {
+    browserFlexCloseDate = b.flexCloseDate;
   }
-  if (flexCloseHour !== undefined && (flexCloseHour === '' || /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(flexCloseHour))) {
-    browserFlexCloseHour = flexCloseHour;
+  if (b.flexCloseHour !== undefined && (b.flexCloseHour === '' || /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(b.flexCloseHour))) {
+    browserFlexCloseHour = b.flexCloseHour;
   }
-  if (flexCloseEnabled !== undefined) {
-    browserFlexCloseEnabled = !!flexCloseEnabled;
+  if (b.flexCloseEnabled !== undefined) {
+    browserFlexCloseEnabled = !!b.flexCloseEnabled;
   }
-  if (mealPauseCutoffHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(mealPauseCutoffHour)) {
-    mealPauseCutoffHour = mealPauseCutoffHour;
+  if (b.mealPauseCutoffHour && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(b.mealPauseCutoffHour)) {
+    mealPauseCutoffHour = b.mealPauseCutoffHour;
   }
-  if (Array.isArray(mealPauseIntervals)) {
-    const validIntervals = mealPauseIntervals.slice(0, 4).filter(item => {
+  if (Array.isArray(b.mealPauseIntervals)) {
+    const validIntervals = b.mealPauseIntervals.slice(0, 4).filter(item => {
       return item && typeof item.start === 'string' && typeof item.end === 'string' && !isNaN(Number(item.mins));
     }).map(item => ({
       start: item.start,
