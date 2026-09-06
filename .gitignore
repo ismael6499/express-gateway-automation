@@ -22,7 +22,7 @@ user_data*/
 
 # Archivos temporales y capturas
 desktop_screenshot.png
-take_screenshot.ps1
+temp_screenshot.png
 screenguard_state.json
 simulation_state.json
 
