@@ -1907,15 +1907,24 @@ app.post(['/system/mouse', '/sistema/mouse'], (req, res) => {
   });
 });
 
-// Endpoint POST /system/keyboard/type (and legacy /sistema/teclado/escribir, /sistema/escribir) - Escribir texto Unicode
+// Endpoint POST /system/keyboard/type (and legacy /sistema/teclado/escribir, /sistema/escribir) - Escribir texto o pegar prompts
 app.post(['/system/keyboard/type', '/system/type', '/sistema/teclado/escribir', '/sistema/escribir'], (req, res) => {
   const text = req.body.text !== undefined ? req.body.text : req.body.texto;
   if (text === undefined || text === null || String(text).length === 0) {
     return res.status(400).json({ error: 'Bad Request', message: "Missing 'text' ('texto') parameter." });
   }
-  const cleanText = String(text).replace(/[\r\n]+/g, ' ');
-  sendInputCommand(`t ${cleanText}`);
-  return res.json({ status: 'ok', message: 'Text typed successfully.', text: cleanText });
+  const str = String(text);
+  const usePaste = req.body.paste === true || req.body.mode === 'paste' || str.includes('\n') || str.includes('\r') || str.length > 50;
+
+  if (usePaste) {
+    const b64 = Buffer.from(str, 'utf8').toString('base64');
+    sendInputCommand(`p ${b64}`);
+    return res.json({ status: 'ok', message: 'Text pasted successfully via clipboard.', mode: 'paste', length: str.length });
+  } else {
+    const cleanText = str.replace(/[\r\n]+/g, ' ');
+    sendInputCommand(`t ${cleanText}`);
+    return res.json({ status: 'ok', message: 'Text typed successfully.', mode: 'type', text: cleanText });
+  }
 });
 
 // Endpoint POST /system/keyboard/reset (and legacy /sistema/teclado/reset) - Liberar todas las teclas atascadas
@@ -1931,12 +1940,15 @@ app.post(['/system/keyboard/key', '/system/key', '/sistema/teclado/tecla', '/sis
   if (!key) {
     return res.status(400).json({ error: 'Bad Request', message: "Missing 'key' ('tecla') parameter." });
   }
-  sendInputCommand(`k ${key}`);
+  const count = Math.min(Math.max(parseInt(req.body.count) || 1, 1), 50);
+  for (let i = 0; i < count; i++) {
+    sendInputCommand(`k ${key}`);
+  }
   // Safety watchdog: auto-release all modifiers 350ms after any keystroke or combo
   setTimeout(() => {
     sendInputCommand('r');
   }, 350);
-  return res.json({ status: 'ok', message: `Key ${key} injected successfully.`, key });
+  return res.json({ status: 'ok', message: `Key ${key} injected successfully.`, key, count });
 });
 
 // Endpoint POST /system/close (and legacy /sistema/cerrar)
@@ -3658,6 +3670,29 @@ const DASHBOARD_HTML = `
       <button class="btn btn-sm btn-danger" onclick="exitTrackpadFullscreen()" style="padding: 7px 14px; font-weight: 600; font-size: 0.8rem; margin: 0;" data-i18n="exitFullscreen">
         ✖ Exit Fullscreen
       </button>
+    </div>
+    <!-- FULLSCREEN REMOTE PROMPT & ACTION BAR (Above Mousepad) -->
+    <div style="padding: 8px 12px; background: rgba(15, 23, 42, 0.95); border-bottom: 1px solid rgba(255, 255, 255, 0.1); display: flex; flex-direction: column; gap: 6px; z-index: 10;">
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <textarea id="fsPromptInput" rows="1" placeholder="Type prompt for AI / PC cursor..." data-i18n="fsPromptPlaceholder" oninput="autoGrowFsTextarea(this)" style="flex: 1; padding: 8px 10px; font-size: 0.84rem; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 8px; color: #fff; resize: none; min-height: 38px; max-height: 90px; outline: none; font-family: inherit; line-height: 1.35; touch-action: manipulation; user-select: text; -webkit-user-select: text;"></textarea>
+        <button type="button" class="btn btn-primary" onclick="sendFullscreenPrompt()" style="padding: 8px 14px; font-weight: 700; font-size: 0.82rem; min-height: 38px; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;" data-i18n="btnSendPrompt">
+          🚀 Send
+        </button>
+      </div>
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <button type="button" class="btn btn-outline" id="fsBtnBackspace" style="flex: 1; padding: 8px 6px; font-size: 0.78rem; font-weight: 600; color: #f87171; border-color: rgba(239, 68, 68, 0.35); touch-action: none; user-select: none; -webkit-user-select: none;" title="Tap to delete character, hold down to delete words and entire lines">
+          ⌫ <span data-i18n="fsBtnDelete">Delete (Hold: Lines)</span>
+        </button>
+        <button type="button" class="btn btn-outline" onclick="sendKey('Enter')" style="flex: 1; padding: 8px 6px; font-size: 0.78rem; font-weight: 700; color: #34d399; border-color: rgba(52, 211, 153, 0.35);" title="Send Enter to PC cursor">
+          ↵ <span data-i18n="fsBtnEnter">Enter</span>
+        </button>
+        <button type="button" class="btn btn-outline" onclick="sendKey('shift+enter')" style="flex: 0.85; padding: 8px 6px; font-size: 0.74rem; font-weight: 600; color: #818cf8; border-color: rgba(129, 140, 248, 0.35);" title="Shift+Enter (New line in AI chats)">
+          ⇧↵ <span data-i18n="fsBtnShiftEnter">New Line</span>
+        </button>
+        <button type="button" class="btn btn-outline" onclick="clearFsPrompt()" style="padding: 8px 11px; font-size: 0.74rem; color: var(--text-muted);" title="Clear text">
+          ✕
+        </button>
+      </div>
     </div>
     <div style="position: relative; flex: 1; width: 100%; height: 100%; overflow: hidden;" id="fsTouchpadSurface">
       <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; opacity: 0.25;">
@@ -5392,7 +5427,12 @@ const DASHBOARD_HTML = `
         btnSleepPC: "Sleep PC",
         restartCardTitle: "Gateway Server",
         restartCardDesc: "Restart gateway and reconnect tunnel",
-        btnRestartServer: "Restart"
+        btnRestartServer: "Restart",
+        fsPromptPlaceholder: "Type prompt for AI / PC cursor...",
+        btnSendPrompt: "🚀 Send",
+        fsBtnDelete: "Delete (Hold: Lines)",
+        fsBtnEnter: "Enter",
+        fsBtnShiftEnter: "New Line"
       },
       es: {
         appTitle: "Centro de Control Gateway",
@@ -5491,7 +5531,12 @@ const DASHBOARD_HTML = `
         btnSleepPC: "Suspender PC",
         restartCardTitle: "Gateway Server",
         restartCardDesc: "Reinicio seguro del proceso desacoplado",
-        btnRestartServer: "Reiniciar"
+        btnRestartServer: "Reiniciar",
+        fsPromptPlaceholder: "Escribe prompt para IA / cursor de PC...",
+        btnSendPrompt: "🚀 Enviar",
+        fsBtnDelete: "Borrar (Mantener: Líneas)",
+        fsBtnEnter: "Enter",
+        fsBtnShiftEnter: "Salto Línea"
       }
     };
 
@@ -5612,6 +5657,7 @@ const DASHBOARD_HTML = `
           }, { passive: false });
         }
       });
+      initContinuousBackspace();
     }
 
     function changeTrackpadSensitivity(val) {
@@ -5623,19 +5669,149 @@ const DASHBOARD_HTML = `
       if (fsBadge) fsBadge.innerText = trackpadSensitivity.toFixed(1) + 'x';
     }
 
+    function autoGrowFsTextarea(el) {
+      if (!el) return;
+      el.style.height = 'auto';
+      el.style.height = Math.min(Math.max(el.scrollHeight, 38), 120) + 'px';
+    }
+
+    function clearFsPrompt() {
+      const input = document.getElementById('fsPromptInput');
+      if (input) {
+        input.value = '';
+        input.style.height = '38px';
+        input.focus();
+      }
+    }
+
+    async function sendFullscreenPrompt() {
+      const input = document.getElementById('fsPromptInput');
+      if (!input) return;
+      const text = input.value;
+      if (!text || !text.trim()) {
+        showToast(currentLang === 'es' ? 'Escribe algo primero' : 'Type something first', 'warning');
+        return;
+      }
+      try {
+        const res = await safeFetch('/system/keyboard/type', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, paste: true })
+        }, 3500);
+        const data = await res.json();
+        if (res.ok && data.status === 'ok') {
+          showToast(currentLang === 'es' ? 'Prompt enviado 🚀' : 'Prompt sent 🚀', 'success');
+          input.value = '';
+          input.style.height = '38px';
+        } else {
+          showToast(data.message || 'Error', 'error');
+        }
+      } catch (err) {
+        showToast(currentLang === 'es' ? 'Error al enviar prompt' : 'Failed to send prompt', 'error');
+      }
+    }
+
+    function initContinuousBackspace() {
+      const btn = document.getElementById('fsBtnBackspace');
+      if (!btn) return;
+
+      let timer = null;
+      let interval = null;
+      let isHolding = false;
+      let holdStartTime = 0;
+      let lineDeleteCount = 0;
+      let defaultLabel = '';
+
+      function sendDelete(key) {
+        safeFetch('/system/keyboard/key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key })
+        }, 1200).catch(() => {});
+      }
+
+      function startPress(e) {
+        if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+        if (isHolding) return;
+        isHolding = true;
+        holdStartTime = Date.now();
+        lineDeleteCount = 0;
+        defaultLabel = btn.innerHTML;
+
+        btn.style.background = 'rgba(239, 68, 68, 0.3)';
+        btn.style.borderColor = '#ef4444';
+
+        // 1. Immediate single backspace
+        sendDelete('backspace');
+
+        // 2. Schedule continuous deletion
+        timer = setTimeout(() => {
+          interval = setInterval(() => {
+            if (!isHolding) return;
+            const elapsed = Date.now() - holdStartTime;
+            if (elapsed > 1100) {
+              lineDeleteCount++;
+              sendDelete('delline');
+              const label = currentLang === 'es' ? 'Líneas' : 'Lines';
+              btn.innerHTML = '⌫ ' + label + ' (x' + lineDeleteCount + ')';
+            } else if (elapsed > 350) {
+              sendDelete('ctrl+backspace');
+              const label = currentLang === 'es' ? 'Palabras...' : 'Words...';
+              btn.innerHTML = '⌫ ' + label;
+            } else {
+              sendDelete('backspace');
+            }
+          }, 140);
+        }, 320);
+      }
+
+      function endPress(e) {
+        if (!isHolding) return;
+        isHolding = false;
+        if (timer) { clearTimeout(timer); timer = null; }
+        if (interval) { clearInterval(interval); interval = null; }
+
+        btn.style.background = '';
+        btn.style.borderColor = '';
+        if (defaultLabel) {
+          btn.innerHTML = defaultLabel;
+        }
+
+        // Auto-release any stuck modifiers
+        safeFetch('/system/keyboard/reset', { method: 'POST' }, 1200).catch(() => {});
+      }
+
+      btn.addEventListener('pointerdown', startPress, { passive: false });
+      btn.addEventListener('pointerup', endPress, { passive: false });
+      btn.addEventListener('pointercancel', endPress, { passive: false });
+      btn.addEventListener('pointerleave', endPress, { passive: false });
+      btn.addEventListener('contextmenu', (e) => e.preventDefault());
+    }
+
     function enterTrackpadFullscreen() {
       const overlay = document.getElementById('trackpadFullscreenOverlay');
       if (overlay) {
         overlay.style.display = 'flex';
         const fsBadge = document.getElementById('fsSpeedBadge');
         if (fsBadge) fsBadge.innerText = trackpadSensitivity.toFixed(1) + 'x';
+
+        // Mobile back button / swipe gesture integration
+        try {
+          if (!history.state || !history.state.isFullscreenTrackpad) {
+            history.pushState({ isFullscreenTrackpad: true }, '');
+          }
+        } catch (e) {}
+
         const docEl = document.documentElement;
         if (docEl.requestFullscreen) docEl.requestFullscreen().catch(() => {});
         else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen().catch(() => {});
       }
     }
 
-    function exitTrackpadFullscreen() {
+    function exitTrackpadFullscreen(fromPopstate = false) {
       const overlay = document.getElementById('trackpadFullscreenOverlay');
       if (overlay) {
         overlay.style.display = 'none';
@@ -5644,8 +5820,21 @@ const DASHBOARD_HTML = `
         } else if (document.webkitFullscreenElement && document.webkitExitFullscreen) {
           document.webkitExitFullscreen().catch(() => {});
         }
+
+        if (!fromPopstate && history.state && history.state.isFullscreenTrackpad) {
+          try {
+            history.back();
+          } catch (e) {}
+        }
       }
     }
+
+    window.addEventListener('popstate', () => {
+      const overlay = document.getElementById('trackpadFullscreenOverlay');
+      if (overlay && overlay.style.display !== 'none') {
+        exitTrackpadFullscreen(true);
+      }
+    });
 
     function handlePadTouchStart(e) {
       e.preventDefault();

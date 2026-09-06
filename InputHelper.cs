@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
+using System.Windows.Forms;
 
 namespace InputHelper {
     public class Program {
@@ -201,6 +202,22 @@ namespace InputHelper {
                 case "key":
                     PressKey(rest);
                     break;
+                case "p":
+                case "paste":
+                    string pasteText = "";
+                    try {
+                        byte[] bytes = Convert.FromBase64String(rest);
+                        pasteText = Encoding.UTF8.GetString(bytes);
+                    } catch {
+                        pasteText = rest;
+                    }
+                    SetClipboardAndPaste(pasteText);
+                    break;
+                case "delline":
+                case "line_delete":
+                case "deleteline":
+                    DeleteLine();
+                    break;
                 case "r":
                 case "reset":
                 case "release":
@@ -212,6 +229,31 @@ namespace InputHelper {
                 default:
                     throw new ArgumentException("Unknown action: " + action);
             }
+        }
+
+        private static void DeleteLine() {
+            PressKey("end");
+            Thread.Sleep(10);
+            PressKey("shift+home");
+            Thread.Sleep(10);
+            PressKey("backspace");
+            Thread.Sleep(10);
+            PressKey("backspace");
+        }
+
+        private static void SetClipboardAndPaste(string text) {
+            if (string.IsNullOrEmpty(text)) return;
+            Thread staThread = new Thread(() => {
+                try {
+                    System.Windows.Forms.Clipboard.SetText(text);
+                } catch { }
+            });
+            staThread.SetApartmentState(ApartmentState.STA);
+            staThread.Start();
+            staThread.Join(1000);
+
+            Thread.Sleep(30);
+            PressKey("ctrl+v");
         }
 
         private static void MouseMove(string args) {
@@ -345,6 +387,12 @@ namespace InputHelper {
 
         private static void PressKey(string keyExpr) {
             if (string.IsNullOrEmpty(keyExpr)) return;
+            if (keyExpr.Equals("delline", StringComparison.OrdinalIgnoreCase) ||
+                keyExpr.Equals("delete_line", StringComparison.OrdinalIgnoreCase) ||
+                keyExpr.Equals("deleteline", StringComparison.OrdinalIgnoreCase)) {
+                DeleteLine();
+                return;
+            }
             string[] parts = keyExpr.Split(new char[] { '+', '-', ' ' }, StringSplitOptions.RemoveEmptyEntries);
             List<byte> modifiersToRelease = new List<byte>();
             List<byte> mainKeys = new List<byte>();
