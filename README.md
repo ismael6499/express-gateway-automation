@@ -37,17 +37,20 @@ A lightweight, robust local **API Gateway & Workspace Automation Server** built 
 
 ### 🖱️ Virtual Trackpad & Native Mouse Control
 - **Touch Navigation:** High-frequency relative cursor motion (< 0.5ms latency) driven by a dedicated C# Win32 helper (`InputHelper.exe`) over a persistent stdio pipe.
-- **Gestures & Clicks:** Tap for Left Click, two-finger tap for Right Click, Middle Click, Double Click, and two-finger vertical scroll or dedicated side strip.
+- **Gestures & Clicks:** Tap for Left Click, two-finger tap for Right Click, double-tap for Double Click, Middle Click, and two-finger vertical scroll or dedicated side strip.
+- **Fullscreen Trackpad Mode:** Dedicated full-viewport trackpad surface (`⛶ Fullscreen`) with edge scroll strip and floating control toolbar for mobile phones.
 - **Drag Lock:** Toggleable hold-down state allowing users to easily drag windows, select text, or draw without keeping a physical finger pressed.
 - **Adjustable Sensitivity:** 0.4x to 2.5x speed scaling stored locally in browser.
 
 ### ⌨️ Remote Keyboard & Unicode Keystroke Injection
 - **Cursor Text Typing:** Type or dictate text from your mobile keyboard and inject it directly into the PC's active cursor location with full UTF-16 Unicode character support (`KEYEVENTF_UNICODE` for accents `á, é, ñ`, symbols, and emojis).
 - **Special Computer Keys:** Direct buttons for `Enter`, `Escape`, `Tab`, `Win`, `Backspace`, `Delete`, `Home`, `End`, `PageUp`, `PageDown`, and `Arrow Keys`.
+- **Custom Key Combination Builder:** Interactively combine modifiers (`Ctrl`, `Alt`, `Shift`, `Win`) with any computer key, plus instant presets for `Ctrl+Shift+Esc` (Task Manager), `Alt+F4` (Close window), `Win+D` (Show Desktop), `Win+R` (Run), `Win+E` (Explorer), `Win+L` (Lock PC), `Win+V` (Clipboard History), `Ctrl+W`, `Ctrl+T`, and `Ctrl+R`.
 - **Desktop Shortcuts & Function Keys:** Built-in shortcuts for `Ctrl+C`, `Ctrl+V`, `Ctrl+Z`, `Ctrl+A`, `Alt+Tab`, and expandable `F1` to `F12`.
 
 ### 📱 Responsive Multilingual Glassmorphism Dashboard
-- **English Default with Spanish Toggle:** Clean English interface by default, switchable to Spanish (`🌐 EN` / `🌐 ES`) with persistent state in `localStorage`.
+- **English Default with Spanish Toggle:** 100% bilingual interface, English by default with instant toggle button (`🌐 EN` / `🌐 ES`) and persistence in `localStorage`.
+- **Anti-Freeze & Auto-Recovery Architecture:** Single-flight mouse event buffering, `AbortController` request timeouts, sequential non-overlapping status polling, and server-side process caching to prevent socket starvation and mobile browser tab freezes.
 - **Drag-and-Drop Layout:** Customizable card order and section visibility toggles.
 - **Secure Access:** Authenticated via secure HTTP-only cookies or `X-API-KEY` headers.
 - **Ngrok Integration:** Built-in public tunnel management for remote access from anywhere.
