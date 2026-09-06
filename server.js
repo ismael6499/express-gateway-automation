@@ -4825,7 +4825,7 @@ const DASHBOARD_HTML = `
     }
 
     // === GESTIÓN DE PERSONALIZACIÓN, ORDEN Y VISIBILIDAD DE SECCIONES ===
-    const DEFAULT_CARD_ORDER = ['cardBrowser', 'cardSistema', 'cardReiniciar', 'cardMultimedia', 'cardEnergia'];
+    const DEFAULT_CARD_ORDER = ['cardBrowser', 'cardMousePad', 'cardTeclado', 'cardSistema', 'cardReiniciar', 'cardMultimedia', 'cardEnergia'];
     const CARD_TITLES = {
       'cardBrowser': 'Navegador Activo',
       'cardSistema': 'Acciones de Sistema',
@@ -4839,15 +4839,24 @@ const DASHBOARD_HTML = `
     let touchActiveCard = null;
 
     function getDashboardConfig() {
+      let cfg = null;
       try {
         const saved = localStorage.getItem('gateway_dashboard_custom_v1');
-        if (saved) return JSON.parse(saved);
+        if (saved) cfg = JSON.parse(saved);
       } catch (e) {}
-      return {
-        order: [...DEFAULT_CARD_ORDER],
-        hidden: {},
-        subHidden: {}
-      };
+      if (!cfg || !Array.isArray(cfg.order)) {
+        return {
+          order: [...DEFAULT_CARD_ORDER],
+          hidden: {},
+          subHidden: {}
+        };
+      }
+      DEFAULT_CARD_ORDER.forEach(id => {
+        if (!cfg.order.includes(id)) {
+          cfg.order.push(id);
+        }
+      });
+      return cfg;
     }
 
     function saveDashboardConfig(config) {
@@ -5673,10 +5682,11 @@ const DASHBOARD_HTML = `
 
     function requestFlushMouseMove() {
       if (isMouseSending) return;
-      if (Math.abs(moveAccumDx) < 0.5 && Math.abs(moveAccumDy) < 0.5) return;
 
-      const sendX = Math.round(moveAccumDx);
-      const sendY = Math.round(moveAccumDy);
+      const sendX = Math.trunc(moveAccumDx);
+      const sendY = Math.trunc(moveAccumDy);
+      if (sendX === 0 && sendY === 0) return;
+
       moveAccumDx -= sendX;
       moveAccumDy -= sendY;
 
@@ -5685,9 +5695,9 @@ const DASHBOARD_HTML = `
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'move', dx: sendX, dy: sendY })
-      }, 1200).catch(() => {}).finally(() => {
+      }, 1000).catch(() => {}).finally(() => {
         isMouseSending = false;
-        if (Math.abs(moveAccumDx) >= 0.5 || Math.abs(moveAccumDy) >= 0.5) {
+        if (Math.trunc(moveAccumDx) !== 0 || Math.trunc(moveAccumDy) !== 0) {
           requestFlushMouseMove();
         }
       });
@@ -5701,22 +5711,24 @@ const DASHBOARD_HTML = `
       requestFlushMouseMove();
 
       if (isTwoFingerGesture) {
-        // Two-finger tap: RIGHT CLICK
-        if (elapsed < 380 && totalPadMovement < 30) {
+        // Two-finger tap: RIGHT CLICK (generous threshold for mobile digitizers)
+        if (elapsed < 500 && totalPadMovement < 60) {
           if (singleTapTimeout) { clearTimeout(singleTapTimeout); singleTapTimeout = null; }
           sendMouseClick('right');
-          if (navigator.vibrate) navigator.vibrate(30);
+          showToast(currentLang === 'es' ? 'Clic Derecho (2 dedos)' : 'Right Click (2 fingers)', 'info');
+          if (navigator.vibrate) navigator.vibrate(40);
         }
       } else if (maxPadTouches === 1) {
         // Single finger tap
-        if (elapsed < 260 && totalPadMovement < 16) {
+        if (elapsed < 300 && totalPadMovement < 25) {
           const now = Date.now();
-          if (now - lastSingleTapTime < 320) {
+          if (now - lastSingleTapTime < 350) {
             // Double tap -> DOUBLE CLICK
             if (singleTapTimeout) { clearTimeout(singleTapTimeout); singleTapTimeout = null; }
             lastSingleTapTime = 0;
             sendMouseDoubleClick();
-            if (navigator.vibrate) navigator.vibrate([20, 30, 20]);
+            showToast(currentLang === 'es' ? 'Doble Clic' : 'Double Click', 'info');
+            if (navigator.vibrate) navigator.vibrate([20, 40, 20]);
           } else {
             lastSingleTapTime = now;
             singleTapTimeout = setTimeout(() => {
