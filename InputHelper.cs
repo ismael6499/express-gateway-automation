@@ -70,6 +70,56 @@ namespace InputHelper {
         [DllImport("user32.dll")]
         private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
 
+        [DllImport("user32.dll")]
+        private static extern uint MapVirtualKey(uint uCode, uint uMapType);
+
+        private static System.Threading.Timer watchdogTimer = null;
+        private static readonly object watchdogLock = new object();
+
+        private static void ArmWatchdog(int ms = 450) {
+            lock (watchdogLock) {
+                if (watchdogTimer == null) {
+                    watchdogTimer = new System.Threading.Timer((s) => {
+                        try { ReleaseAllModifiers(); } catch { }
+                    }, null, ms, Timeout.Infinite);
+                } else {
+                    watchdogTimer.Change(ms, Timeout.Infinite);
+                }
+            }
+        }
+
+        private static bool IsExtendedKey(byte vk) {
+            return vk == 0x5B || vk == 0x5C || vk == 0xA3 || vk == 0xA5 ||
+                   vk == 0x2D || vk == 0x2E || vk == 0x24 || vk == 0x23 ||
+                   vk == 0x21 || vk == 0x22 || (vk >= 0x25 && vk <= 0x28);
+        }
+
+        private static void SendKeyDown(byte vk) {
+            uint scan = MapVirtualKey((uint)vk, 0);
+            uint flags = 0;
+            if (IsExtendedKey(vk)) flags |= KEYEVENTF_EXTENDEDKEY;
+            keybd_event(vk, (byte)scan, flags, UIntPtr.Zero);
+        }
+
+        private static void SendKeyUp(byte vk) {
+            uint scan = MapVirtualKey((uint)vk, 0);
+            uint flags = KEYEVENTF_KEYUP;
+            if (IsExtendedKey(vk)) flags |= KEYEVENTF_EXTENDEDKEY;
+            keybd_event(vk, (byte)scan, flags, UIntPtr.Zero);
+        }
+
+        public static void ReleaseAllModifiers() {
+            byte[] modKeys = new byte[] {
+                0x11, 0xA2, 0xA3,
+                0x12, 0xA4, 0xA5,
+                0x10, 0xA0, 0xA1,
+                0x5B, 0x5C
+            };
+            foreach (byte vk in modKeys) {
+                SendKeyUp(vk);
+            }
+        }
+
         public static void Main(string[] args) {
             Console.OutputEncoding = Encoding.UTF8;
             Console.InputEncoding = Encoding.UTF8;
@@ -150,6 +200,14 @@ namespace InputHelper {
                 case "k":
                 case "key":
                     PressKey(rest);
+                    break;
+                case "r":
+                case "reset":
+                case "release":
+                    ReleaseAllModifiers();
+                    mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+                    mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, UIntPtr.Zero);
+                    mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, UIntPtr.Zero);
                     break;
                 default:
                     throw new ArgumentException("Unknown action: " + action);
@@ -291,50 +349,58 @@ namespace InputHelper {
             List<byte> modifiersToRelease = new List<byte>();
             List<byte> mainKeys = new List<byte>();
 
-            for (int i = 0; i < parts.Length; i++) {
-                string p = parts[i].Trim().ToLowerInvariant();
-                if (string.IsNullOrEmpty(p)) continue;
+            // Arm safety watchdog to auto-release any modifier keys after 450ms
+            ArmWatchdog(450);
 
-                if (p == "ctrl" || p == "control") {
-                    keybd_event(0x11, 0, 0, UIntPtr.Zero);
-                    modifiersToRelease.Add(0x11);
-                } else if (p == "alt") {
-                    keybd_event(0x12, 0, 0, UIntPtr.Zero);
-                    modifiersToRelease.Add(0x12);
-                } else if (p == "shift") {
-                    keybd_event(0x10, 0, 0, UIntPtr.Zero);
-                    modifiersToRelease.Add(0x10);
-                } else if (p == "win" || p == "windows" || p == "lwin") {
-                    keybd_event(0x5B, 0, 0, UIntPtr.Zero);
-                    modifiersToRelease.Add(0x5B);
-                } else {
-                    if (KeyMap.ContainsKey(p)) {
-                        mainKeys.Add(KeyMap[p]);
-                    } else if (p.Length == 1) {
-                        char c = p[0];
-                        if (c >= 'a' && c <= 'z') mainKeys.Add((byte)('A' + (c - 'a')));
-                        else if (c >= '0' && c <= '9') mainKeys.Add((byte)c);
+            try {
+                for (int i = 0; i < parts.Length; i++) {
+                    string p = parts[i].Trim().ToLowerInvariant();
+                    if (string.IsNullOrEmpty(p)) continue;
+
+                    if (p == "ctrl" || p == "control") {
+                        SendKeyDown(0x11);
+                        modifiersToRelease.Add(0x11);
+                    } else if (p == "alt") {
+                        SendKeyDown(0x12);
+                        modifiersToRelease.Add(0x12);
+                    } else if (p == "shift") {
+                        SendKeyDown(0x10);
+                        modifiersToRelease.Add(0x10);
+                    } else if (p == "win" || p == "windows" || p == "lwin") {
+                        SendKeyDown(0x5B);
+                        modifiersToRelease.Add(0x5B);
+                    } else {
+                        if (KeyMap.ContainsKey(p)) {
+                            mainKeys.Add(KeyMap[p]);
+                        } else if (p.Length == 1) {
+                            char c = p[0];
+                            if (c >= 'a' && c <= 'z') mainKeys.Add((byte)('A' + (c - 'a')));
+                            else if (c >= '0' && c <= '9') mainKeys.Add((byte)c);
+                        }
                     }
                 }
-            }
 
-            if (mainKeys.Count > 0) {
-                Thread.Sleep(15);
-                foreach (byte k in mainKeys) {
-                    keybd_event(k, 0, 0, UIntPtr.Zero);
+                if (mainKeys.Count > 0) {
+                    Thread.Sleep(15);
+                    foreach (byte k in mainKeys) {
+                        SendKeyDown(k);
+                    }
+                    Thread.Sleep(30);
+                    for (int i = mainKeys.Count - 1; i >= 0; i--) {
+                        SendKeyUp(mainKeys[i]);
+                    }
+                    Thread.Sleep(15);
+                } else if (modifiersToRelease.Count > 0) {
+                    // If only modifier(s) were pressed (e.g. Win key or Alt key alone)
+                    Thread.Sleep(40);
                 }
-                Thread.Sleep(30);
-                for (int i = mainKeys.Count - 1; i >= 0; i--) {
-                    keybd_event(mainKeys[i], 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+            } finally {
+                // ALWAYS release specific modifiers in reverse order
+                for (int i = modifiersToRelease.Count - 1; i >= 0; i--) {
+                    SendKeyUp(modifiersToRelease[i]);
                 }
-                Thread.Sleep(15);
-            } else if (modifiersToRelease.Count > 0) {
-                // If only modifier(s) were pressed (e.g. Win key or Alt key alone)
-                Thread.Sleep(40);
-            }
-
-            for (int i = modifiersToRelease.Count - 1; i >= 0; i--) {
-                keybd_event(modifiersToRelease[i], 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+                // Complete safety sweep: ensure all modifier variants (L/R) are released
+                ReleaseAllModifiers();
             }
         }
     }
