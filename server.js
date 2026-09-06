@@ -258,6 +258,50 @@ function loadSimulationState() {
 let ngrokUrl = '';
 let ngrokListener = null;
 
+// ==========================================
+// NATIVE INPUT HELPER (Trackpad, Mouse & Keystrokes)
+// ==========================================
+let inputHelperProcess = null;
+
+function getInputHelper() {
+  if (inputHelperProcess && !inputHelperProcess.killed && inputHelperProcess.exitCode === null) {
+    return inputHelperProcess;
+  }
+  const helperPath = path.join(__dirname, 'InputHelper.exe');
+  if (!fs.existsSync(helperPath)) {
+    log('Aviso: InputHelper.exe no encontrado en el directorio raíz.');
+    return null;
+  }
+  try {
+    inputHelperProcess = spawn(helperPath, ['--pipe'], {
+      stdio: ['pipe', 'ignore', 'ignore'],
+      windowsHide: true
+    });
+    inputHelperProcess.on('error', (err) => {
+      log(`InputHelper error: ${err.message}`);
+      inputHelperProcess = null;
+    });
+    inputHelperProcess.on('exit', () => {
+      inputHelperProcess = null;
+    });
+    return inputHelperProcess;
+  } catch (err) {
+    log(`Error al iniciar InputHelper: ${err.message}`);
+    return null;
+  }
+}
+
+function sendInputCommand(cmd) {
+  const proc = getInputHelper();
+  if (proc && proc.stdin && proc.stdin.writable) {
+    proc.stdin.write(cmd + '\n');
+    return true;
+  }
+  const helperPath = path.join(__dirname, 'InputHelper.exe');
+  exec(`"${helperPath}" ${cmd}`, () => {});
+  return false;
+}
+
 // Middleware de Autenticación para rutas de la API (interviene en /browser, /sistema, y /gateway/status)
 app.use((req, res, next) => {
   if (req.path === '/' || req.path === '/favicon.ico' || req.path === '/gateway/login' || req.path === '/gateway/restart' || req.path === '/system/restart') {
@@ -1790,6 +1834,85 @@ app.post(['/system/execute', '/system/run', '/sistema/ejecutar'], (req, res) => 
   });
 });
 
+// Endpoint POST /system/mouse (and legacy /sistema/mouse) - Mover, clics y scroll
+app.post(['/system/mouse', '/sistema/mouse'], (req, res) => {
+  let action = req.body.action || req.body.accion;
+  if (!action) {
+    return res.status(400).json({ error: 'Bad Request', message: "Missing 'action' parameter." });
+  }
+  action = String(action).toLowerCase();
+
+  if (action === 'move' || action === 'mover') {
+    const dx = parseInt(req.body.dx || req.body.x || 0);
+    const dy = parseInt(req.body.dy || req.body.y || 0);
+    sendInputCommand(`m ${dx} ${dy}`);
+    return res.json({ status: 'ok', action: 'move', dx, dy });
+  }
+
+  if (action === 'click' || action === 'clic') {
+    let button = req.body.button || req.body.boton || 'left';
+    if (button === 'izquierdo') button = 'left';
+    if (button === 'derecho') button = 'right';
+    if (button === 'medio') button = 'middle';
+    sendInputCommand(`c ${button}`);
+    return res.json({ status: 'ok', action: 'click', button });
+  }
+
+  if (action === 'double-click' || action === 'doble-clic' || action === 'doubleclick') {
+    let button = req.body.button || req.body.boton || 'left';
+    sendInputCommand(`dc ${button}`);
+    return res.json({ status: 'ok', action: 'double-click', button });
+  }
+
+  if (action === 'down' || action === 'presionar' || action === 'hold') {
+    let button = req.body.button || req.body.boton || 'left';
+    if (button === 'izquierdo') button = 'left';
+    if (button === 'derecho') button = 'right';
+    sendInputCommand(`d ${button}`);
+    return res.json({ status: 'ok', action: 'down', button });
+  }
+
+  if (action === 'up' || action === 'soltar' || action === 'release') {
+    let button = req.body.button || req.body.boton || 'left';
+    if (button === 'izquierdo') button = 'left';
+    if (button === 'derecho') button = 'right';
+    sendInputCommand(`u ${button}`);
+    return res.json({ status: 'ok', action: 'up', button });
+  }
+
+  if (action === 'scroll' || action === 'rueda') {
+    const deltaY = parseInt(req.body.deltaY || req.body.delta || req.body.dy || 0);
+    sendInputCommand(`s ${deltaY}`);
+    return res.json({ status: 'ok', action: 'scroll', deltaY });
+  }
+
+  return res.status(400).json({
+    error: 'Bad Request',
+    message: "Invalid action. Allowed: 'move', 'click', 'double-click', 'down', 'up', 'scroll'."
+  });
+});
+
+// Endpoint POST /system/keyboard/type (and legacy /sistema/teclado/escribir, /sistema/escribir) - Escribir texto Unicode
+app.post(['/system/keyboard/type', '/system/type', '/sistema/teclado/escribir', '/sistema/escribir'], (req, res) => {
+  const text = req.body.text !== undefined ? req.body.text : req.body.texto;
+  if (text === undefined || text === null || String(text).length === 0) {
+    return res.status(400).json({ error: 'Bad Request', message: "Missing 'text' ('texto') parameter." });
+  }
+  const cleanText = String(text).replace(/[\r\n]+/g, ' ');
+  sendInputCommand(`t ${cleanText}`);
+  return res.json({ status: 'ok', message: 'Text typed successfully.', text: cleanText });
+});
+
+// Endpoint POST /system/keyboard/key (and legacy /sistema/teclado/tecla, /sistema/tecla) - Presionar teclas de PC y atajos
+app.post(['/system/keyboard/key', '/system/key', '/sistema/teclado/tecla', '/sistema/tecla'], (req, res) => {
+  const key = req.body.key !== undefined ? req.body.key : req.body.tecla;
+  if (!key) {
+    return res.status(400).json({ error: 'Bad Request', message: "Missing 'key' ('tecla') parameter." });
+  }
+  sendInputCommand(`k ${key}`);
+  return res.json({ status: 'ok', message: `Key ${key} injected successfully.`, key });
+});
+
 // Endpoint POST /system/close (and legacy /sistema/cerrar)
 app.post(['/system/close', '/sistema/cerrar'], (req, res) => {
   let programa = req.body.program || req.body.programa;
@@ -1828,7 +1951,7 @@ const LOGIN_HTML = `
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Acceso requerido - Gateway</title>
+  <title>Access Required - Gateway Control Center</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -2009,6 +2132,376 @@ const LOGIN_HTML = `
         errorDiv.style.display = 'block';
       }
     }
+
+    // ==========================================
+    // INTERNATIONALIZATION (I18N) SYSTEM
+    // ==========================================
+    const I18N = {
+      en: {
+        appTitle: "Gateway Control Center",
+        appDesc: "API Gateway & Automation Server",
+        editModeBanner: "Edit Mode: Drag ⠿ to reorder or use 👁️ to hide/show.",
+        btnReset: "Reset",
+        btnDone: "Done",
+        trackpadTitle: "Virtual Trackpad & Mouse",
+        trackpadDesc: "Touchpad navigation, gestures, drag lock, and clicking",
+        trackpadSpeed: "Speed:",
+        touchpadHint: "Slide 1 finger to move • Tap for Left Click • 2 fingers for Right Click",
+        scrollStrip: "SCROLL",
+        btnLeftClick: "Left Click",
+        btnRightClick: "Right Click",
+        dragLock: "Drag Lock (Hold Down)",
+        dragLockActive: "Drag Lock (Active)",
+        doubleClick: "Double Click",
+        sensitivity: "Sensitivity:",
+        keyboardTitle: "Remote Keyboard & Keystrokes",
+        keyboardDesc: "Type phone text at PC cursor and send computer keys",
+        typePlaceholder: "Type or dictate text to send to PC...",
+        btnSendText: "Send",
+        sendOnEnter: "Send on Enter",
+        clearOnSend: "Clear after send",
+        specialKeys: "Special Computer Keys",
+        fnKeysSummary: "Function Keys (F1 - F12)",
+        browserCardTitle: "Active Browser Keepalive",
+        browserCardDesc: "Persistent session and display sleep prevention",
+        systemCardTitle: "System & Diagnostics",
+        systemCardDesc: "ScreenGuard and Windows native controls",
+        mediaCardTitle: "Media & Audio Controls",
+        mediaCardDesc: "Playback, master volume, and voice synthesis (TTS)",
+        powerCardTitle: "Power & Brightness",
+        powerCardDesc: "Display brightness and PC power states",
+        restartCardTitle: "Gateway Server",
+        restartCardDesc: "Safe decoupled server restart"
+      },
+      es: {
+        appTitle: "Gateway Control Center",
+        appDesc: "API Gateway & Automatizaciones",
+        editModeBanner: "Modo Edición: Arrastra ⠿ para mover o usa 👁️ para ocultar/mostrar.",
+        btnReset: "Restablecer",
+        btnDone: "Listo",
+        trackpadTitle: "Trackpad y Mouse Virtual",
+        trackpadDesc: "Navegación táctil, gestos, arrastre y clics",
+        trackpadSpeed: "Velocidad:",
+        touchpadHint: "Desliza 1 dedo para mover • 1 toque para Clic • 2 dedos para Clic Derecho",
+        scrollStrip: "SCROLL",
+        btnLeftClick: "Clic Izquierdo",
+        btnRightClick: "Clic Derecho",
+        dragLock: "Mantener Clic (Arrastrar)",
+        dragLockActive: "Clic Bloqueado (Activo)",
+        doubleClick: "Doble Clic",
+        sensitivity: "Sensibilidad:",
+        keyboardTitle: "Teclado y Escritura Remota",
+        keyboardDesc: "Escribe desde el móvil en el cursor de la PC y pulsa teclas",
+        typePlaceholder: "Escribe o dicta texto para enviar a la PC...",
+        btnSendText: "Enviar",
+        sendOnEnter: "Enviar con Enter",
+        clearOnSend: "Borrar al enviar",
+        specialKeys: "Teclas Especiales de PC",
+        fnKeysSummary: "Teclas de Función (F1 - F12)",
+        browserCardTitle: "Navegador Activo",
+        browserCardDesc: "Sesión persistente y prevención de inactividad de pantalla",
+        systemCardTitle: "Sistema & Diagnóstico",
+        systemCardDesc: "ScreenGuard y utilidades nativas de Windows",
+        mediaCardTitle: "Controles Multimedia & Audio",
+        mediaCardDesc: "Reproducción, volumen maestro y voz sintetizada (TTS)",
+        powerCardTitle: "Energía & Pantalla",
+        powerCardDesc: "Brillo del monitor y suspensión de la PC",
+        restartCardTitle: "Gateway Server",
+        restartCardDesc: "Reinicio seguro del proceso desacoplado"
+      }
+    };
+
+    let currentLang = localStorage.getItem('dashboard_lang') || 'en';
+
+    function setLanguage(lang) {
+      currentLang = lang || 'en';
+      localStorage.setItem('dashboard_lang', currentLang);
+      const dict = I18N[currentLang] || I18N.en;
+
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (dict[key]) {
+          if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+            el.placeholder = dict[key];
+          } else {
+            el.innerText = dict[key];
+          }
+        }
+      });
+
+      const btn = document.getElementById('btnLangToggle');
+      if (btn) btn.innerText = currentLang === 'en' ? '🌐 EN' : '🌐 ES';
+
+      if (isEditModeActive) {
+        document.querySelectorAll('.card-edit-title').forEach(span => {
+          const card = span.closest('.card');
+          if (card && CARD_TITLES[card.id]) {
+            const titles = CARD_TITLES[card.id];
+            span.textContent = (titles && (titles[currentLang] || titles.en)) || card.id;
+          }
+        });
+      }
+    }
+
+    function toggleLanguage() {
+      setLanguage(currentLang === 'en' ? 'es' : 'en');
+    }
+
+    // ==========================================
+    // VIRTUAL TRACKPAD & MOUSE LOGIC
+    // ==========================================
+    let trackpadSensitivity = parseFloat(localStorage.getItem('trackpad_sensitivity') || '1.2');
+    let isDragLocked = false;
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartTime = 0;
+    let lastTouchX = 0;
+    let lastTouchY = 0;
+    let touchMovedTotal = 0;
+    let moveAccumDx = 0;
+    let moveAccumDy = 0;
+    let moveFlushTimer = null;
+
+    function initTrackpad() {
+      const surface = document.getElementById('touchpadSurface');
+      const scrollStrip = document.getElementById('touchpadScrollStrip');
+      const slider = document.getElementById('sliderSensitivity');
+      const label = document.getElementById('trackpadSpeedLabel');
+
+      if (slider) slider.value = trackpadSensitivity;
+      if (label) label.innerText = trackpadSensitivity.toFixed(1) + 'x';
+
+      if (surface) {
+        surface.addEventListener('touchstart', handleTouchStart, { passive: false });
+        surface.addEventListener('touchmove', handleTouchMove, { passive: false });
+        surface.addEventListener('touchend', handleTouchEnd, { passive: false });
+        surface.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+      }
+
+      if (scrollStrip) {
+        let scrollStartY = 0;
+        scrollStrip.addEventListener('touchstart', (e) => {
+          e.stopPropagation();
+          if (e.touches.length > 0) scrollStartY = e.touches[0].clientY;
+        }, { passive: true });
+
+        scrollStrip.addEventListener('touchmove', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          if (e.touches.length > 0) {
+            const curY = e.touches[0].clientY;
+            const deltaY = scrollStartY - curY;
+            if (Math.abs(deltaY) > 8) {
+              sendMouseScroll(Math.round(deltaY * 5));
+              scrollStartY = curY;
+            }
+          }
+        }, { passive: false });
+      }
+    }
+
+    function changeTrackpadSensitivity(val) {
+      trackpadSensitivity = parseFloat(val) || 1.2;
+      localStorage.setItem('trackpad_sensitivity', trackpadSensitivity);
+      const label = document.getElementById('trackpadSpeedLabel');
+      if (label) label.innerText = trackpadSensitivity.toFixed(1) + 'x';
+    }
+
+    function handleTouchStart(e) {
+      e.preventDefault();
+      if (e.touches.length === 1) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        lastTouchX = touchStartX;
+        lastTouchY = touchStartY;
+        touchStartTime = Date.now();
+        touchMovedTotal = 0;
+      } else if (e.touches.length === 2) {
+        touchStartX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        touchStartY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        lastTouchX = touchStartX;
+        lastTouchY = touchStartY;
+        touchStartTime = Date.now();
+        touchMovedTotal = 0;
+      }
+    }
+
+    function handleTouchMove(e) {
+      e.preventDefault();
+      if (e.touches.length === 1) {
+        const curX = e.touches[0].clientX;
+        const curY = e.touches[0].clientY;
+        const dx = (curX - lastTouchX) * trackpadSensitivity;
+        const dy = (curY - lastTouchY) * trackpadSensitivity;
+        touchMovedTotal += Math.abs(curX - lastTouchX) + Math.abs(curY - lastTouchY);
+        lastTouchX = curX;
+        lastTouchY = curY;
+
+        moveAccumDx += dx;
+        moveAccumDy += dy;
+
+        if (!moveFlushTimer) {
+          moveFlushTimer = setTimeout(flushMouseMove, 22);
+        }
+      } else if (e.touches.length === 2) {
+        const curY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const deltaY = lastTouchY - curY;
+        touchMovedTotal += Math.abs(deltaY);
+        lastTouchY = curY;
+
+        if (Math.abs(deltaY) > 4) {
+          sendMouseScroll(Math.round(deltaY * 6));
+        }
+      }
+    }
+
+    function flushMouseMove() {
+      moveFlushTimer = null;
+      if (Math.abs(moveAccumDx) >= 0.5 || Math.abs(moveAccumDy) >= 0.5) {
+        const sendX = Math.round(moveAccumDx);
+        const sendY = Math.round(moveAccumDy);
+        moveAccumDx -= sendX;
+        moveAccumDy -= sendY;
+
+        fetch('/system/mouse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'move', dx: sendX, dy: sendY })
+        }).catch(() => {});
+      }
+    }
+
+    function handleTouchEnd(e) {
+      e.preventDefault();
+      const elapsed = Date.now() - touchStartTime;
+
+      if (moveFlushTimer) {
+        clearTimeout(moveFlushTimer);
+        flushMouseMove();
+      }
+
+      if (elapsed < 240 && touchMovedTotal < 8) {
+        if (e.changedTouches.length === 1) {
+          sendMouseClick('left');
+        } else if (e.changedTouches.length === 2) {
+          sendMouseClick('right');
+        }
+      }
+    }
+
+    async function sendMouseClick(button) {
+      try {
+        await fetch('/system/mouse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'click', button })
+        });
+      } catch (e) {}
+    }
+
+    async function sendMouseDoubleClick() {
+      try {
+        await fetch('/system/mouse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'double-click', button: 'left' })
+        });
+      } catch (e) {}
+    }
+
+    async function sendMouseScroll(deltaY) {
+      try {
+        await fetch('/system/mouse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'scroll', deltaY })
+        });
+      } catch (e) {}
+    }
+
+    async function toggleDragLock() {
+      isDragLocked = !isDragLocked;
+      const btn = document.getElementById('btnDragLock');
+      const icon = document.getElementById('dragLockIcon');
+      const text = document.getElementById('dragLockText');
+      const dict = I18N[currentLang] || I18N.en;
+
+      if (isDragLocked) {
+        if (btn) btn.style.background = 'rgba(245, 158, 11, 0.25)';
+        if (btn) btn.style.borderColor = '#f59e0b';
+        if (icon) icon.innerText = '🔒';
+        if (text) text.innerText = dict.dragLockActive || 'Drag Lock (Active)';
+        await fetch('/system/mouse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'down', button: 'left' })
+        }).catch(() => {});
+        showToast(currentLang === 'es' ? 'Arrastre bloqueado: cursor presionado.' : 'Drag lock active: mouse held down.', 'info');
+      } else {
+        if (btn) btn.style.background = '';
+        if (btn) btn.style.borderColor = '';
+        if (icon) icon.innerText = '🔓';
+        if (text) text.innerText = dict.dragLock || 'Drag Lock (Hold Down)';
+        await fetch('/system/mouse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'up', button: 'left' })
+        }).catch(() => {});
+        showToast(currentLang === 'es' ? 'Arrastre liberado.' : 'Drag lock released.', 'info');
+      }
+    }
+
+    // ==========================================
+    // REMOTE KEYBOARD & KEYSTROKES LOGIC
+    // ==========================================
+    async function sendRemoteText() {
+      const input = document.getElementById('inputRemoteText');
+      if (!input || !input.value) return;
+      const text = input.value;
+
+      try {
+        const res = await fetch('/system/keyboard/type', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        if (res.ok) {
+          const chkClear = document.getElementById('chkClearOnSend');
+          if (chkClear && chkClear.checked) {
+            input.value = '';
+          }
+          showToast(currentLang === 'es' ? 'Texto enviado a la PC.' : 'Text sent to PC.', 'success');
+        } else {
+          showToast(currentLang === 'es' ? 'Error al enviar texto.' : 'Error sending text.', 'error');
+        }
+      } catch (e) {
+        showToast(currentLang === 'es' ? 'Error de conexión.' : 'Connection error.', 'error');
+      }
+    }
+
+    function handleRemoteTextKeyDown(e) {
+      if (e.key === 'Enter') {
+        const chkSend = document.getElementById('chkSendOnEnter');
+        if (chkSend && chkSend.checked) {
+          e.preventDefault();
+          sendRemoteText();
+        }
+      }
+    }
+
+    async function sendKey(key) {
+      try {
+        const res = await fetch('/system/keyboard/key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key })
+        });
+        if (res.ok) {
+          showToast(key.toUpperCase(), 'info');
+        }
+      } catch (e) {}
+    }
+
   </script>
 </body>
 </html>
@@ -2837,10 +3330,13 @@ const DASHBOARD_HTML = `
   <header>
     <div class="logo-container" id="logoContainer" onclick="handleSecretHeaderClick()" style="cursor: pointer; user-select: none;" title="Gateway Control Center">
       <h1>Gateway Control Center</h1>
-      <p>API Gateway & Automatizaciones</p>
+      <p data-i18n="appDesc">API Gateway & Automation Server</p>
     </div>
     <div class="header-buttons">
-      <button class="btn-icon" id="btnToggleEditMode" onclick="toggleEditMode()" title="Editar y ordenar secciones">
+      <button class="btn btn-sm btn-outline" id="btnLangToggle" onclick="toggleLanguage()" style="font-weight: 600; padding: 4px 10px; border-radius: 8px; font-size: 0.8rem; margin-right: 6px; letter-spacing: 0.5px;" title="Switch Language (English / Español)">
+        🌐 EN
+      </button>
+      <button class="btn-icon" id="btnToggleEditMode" onclick="toggleEditMode()" title="Edit and rearrange sections">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
       </button>
       <button class="btn-icon" onclick="logout()" title="Cerrar Sesión">
@@ -2854,28 +3350,28 @@ const DASHBOARD_HTML = `
     <div id="editModeBanner" class="edit-mode-banner">
       <div class="edit-banner-info">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 9.5-9.5z"/></svg>
-        <span><strong>Modo Edición:</strong> Arrastra ⠿ para mover o usa 👁️ para ocultar/mostrar.</span>
+        <span data-i18n="editModeBanner"><strong>Edit Mode:</strong> Drag ⠿ to reorder or use 👁️ to hide/show.</span>
       </div>
       <div class="edit-banner-actions">
-        <button class="btn btn-sm btn-outline" onclick="resetDashboardLayout()">Restablecer</button>
-        <button class="btn btn-sm btn-primary" onclick="toggleEditMode()">Listo</button>
+        <button class="btn btn-sm btn-outline" onclick="resetDashboardLayout()" data-i18n="btnReset">Reset</button>
+        <button class="btn btn-sm btn-primary" onclick="toggleEditMode()" data-i18n="btnDone">Done</button>
       </div>
     </div>
     <!-- CARD 1: NAVEGADOR ACTIVO -->
     <div class="card secret-hidden" id="cardBrowser">
       <div class="card-header">
         <div class="card-title-group">
-          <h2>Navegador Activo</h2>
-          <p>Sesión persistente y prevención de inactividad de pantalla</p>
+          <h2 data-i18n="browserCardTitle">Active Browser Keepalive</h2>
+          <p data-i18n="browserCardDesc">Persistent session and display sleep prevention</p>
         </div>
         <div class="status-badge-container">
           <div class="status-badge" id="browserBadge">
             <div class="dot"></div>
-            <span id="browserBadgeText">Navegador: Cerrado</span>
+            <span id="browserBadgeText" data-i18n="browserClosedBadge">Browser: Closed</span>
           </div>
           <div class="status-badge" id="presenciaBadge">
             <div class="dot"></div>
-            <span id="presenciaBadgeText">Mantener Activo: Off</span>
+            <span id="presenciaBadgeText" data-i18n="keepaliveOffBadge">Keepalive: Off</span>
           </div>
         </div>
       </div>
@@ -3053,26 +3549,174 @@ const DASHBOARD_HTML = `
           <button class="btn" id="btnTestTipeo" onclick="enviarAccionPrueba('tipear-buscador')" style="padding: 8px; font-size: 0.75rem;">
             Probar Enfoque
           </button>
-          <button class="btn" id="btnTestShift" onclick="enviarAccionPrueba('pulsar-shift')" style="padding: 8px; font-size: 0.75rem;">
-            Pulsar Shift
+          <button class="btn" id="btnTestShift" onclick="enviarAccionPrueba('press-shift')" style="padding: 8px; font-size: 0.75rem;" data-i18n="btnPressShift">
+            Press Shift
           </button>
         </div>
       </div>
+    </div>
+
+
+    <!-- CARD: VIRTUAL TRACKPAD & MOUSE -->
+    <div class="card" id="cardMousePad">
+      <div class="card-header">
+        <div class="card-title-group">
+          <h2 data-i18n="trackpadTitle">Virtual Trackpad & Mouse</h2>
+          <p data-i18n="trackpadDesc">Touchpad navigation, gestures, drag lock, and clicking</p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 0.72rem; color: var(--text-muted);" data-i18n="trackpadSpeed">Speed:</span>
+          <span id="trackpadSpeedLabel" style="font-size: 0.75rem; font-weight: 600; color: var(--accent-primary);">1.2x</span>
+        </div>
+      </div>
+
+      <!-- TRACKPAD TOUCH SURFACE -->
+      <div style="position: relative; width: 100%; height: 260px; background: rgba(15, 23, 42, 0.6); border: 1.5px solid rgba(255, 255, 255, 0.1); border-radius: 14px; overflow: hidden; margin-bottom: 12px; touch-action: none; user-select: none;" id="touchpadSurface">
+        <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; opacity: 0.35;">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 8px;"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          <span style="font-size: 0.8rem; font-weight: 500; text-align: center; max-width: 80%; line-height: 1.4;" data-i18n="touchpadHint">Slide 1 finger to move • Tap for Left Click • 2 fingers for Right Click</span>
+        </div>
+        <!-- RIGHT EDGE SCROLL STRIP -->
+        <div id="touchpadScrollStrip" style="position: absolute; right: 0; top: 0; bottom: 0; width: 44px; background: rgba(255, 255, 255, 0.03); border-left: 1px dashed rgba(255, 255, 255, 0.1); display: flex; flex-direction: column; align-items: center; justify-content: center; touch-action: none;">
+          <span style="font-size: 0.68rem; color: var(--text-muted); writing-mode: vertical-rl; transform: rotate(180deg); letter-spacing: 2px;" data-i18n="scrollStrip">SCROLL</span>
+        </div>
+      </div>
+
+      <!-- MOUSE BUTTONS -->
+      <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+        <button class="btn btn-outline" id="btnMouseLeft" onclick="sendMouseClick('left')" style="flex: 1; padding: 12px 6px; font-weight: 600; font-size: 0.82rem;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 5px; vertical-align: text-bottom;"><path d="M12 2a5 5 0 0 0-5 5v10a5 5 0 0 0 10 0V7a5 5 0 0 0-5-5z"/><line x1="12" y1="2" x2="12" y2="8"/></svg>
+          <span data-i18n="btnLeftClick">Left Click</span>
+        </button>
+        <button class="btn btn-outline" id="btnMouseMiddle" onclick="sendMouseClick('middle')" style="flex: 0 0 46px; padding: 12px 0;" title="Middle Click">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto;"><circle cx="12" cy="7" r="1.5"/><rect x="5" y="2" width="14" height="20" rx="7"/></svg>
+        </button>
+        <button class="btn btn-outline" id="btnMouseRight" onclick="sendMouseClick('right')" style="flex: 1; padding: 12px 6px; font-weight: 600; font-size: 0.82rem;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 5px; vertical-align: text-bottom;"><path d="M12 2a5 5 0 0 0-5 5v10a5 5 0 0 0 10 0V7a5 5 0 0 0-5-5z"/><line x1="12" y1="2" x2="12" y2="8"/></svg>
+          <span data-i18n="btnRightClick">Right Click</span>
+        </button>
+      </div>
+
+      <!-- DRAG LOCK & DOUBLE CLICK ROW -->
+      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+        <button class="btn btn-outline" id="btnDragLock" onclick="toggleDragLock()" style="flex: 1; padding: 10px; font-size: 0.8rem; font-weight: 600;">
+          <span id="dragLockIcon">🔓</span> <span id="dragLockText" data-i18n="dragLock">Drag Lock (Hold Down)</span>
+        </button>
+        <button class="btn btn-outline" onclick="sendMouseDoubleClick()" style="flex: 1; padding: 10px; font-size: 0.8rem; font-weight: 600;" data-i18n="doubleClick">
+          Double Click
+        </button>
+      </div>
+
+      <!-- SENSITIVITY SLIDER -->
+      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: rgba(255, 255, 255, 0.03); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.06);">
+        <span style="font-size: 0.75rem; color: var(--text-muted); min-width: 70px;" data-i18n="sensitivity">Sensitivity:</span>
+        <input type="range" id="sliderSensitivity" min="0.4" max="2.5" step="0.1" value="1.2" oninput="changeTrackpadSensitivity(this.value)" style="flex: 1; accent-color: var(--accent-primary);">
+      </div>
+    </div>
+
+    <!-- CARD: REMOTE KEYBOARD & KEYSTROKES -->
+    <div class="card" id="cardTeclado">
+      <div class="card-header">
+        <div class="card-title-group">
+          <h2 data-i18n="keyboardTitle">Remote Keyboard & Keystrokes</h2>
+          <p data-i18n="keyboardDesc">Type phone text at PC cursor and send computer keys</p>
+        </div>
+      </div>
+
+      <!-- TEXT INPUT BAR -->
+      <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+        <input type="text" id="inputRemoteText" placeholder="Type or dictate text to send to PC..." data-i18n="typePlaceholder" onkeydown="handleRemoteTextKeyDown(event)" style="flex: 1; padding: 11px 14px; font-size: 0.88rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; color: #fff; outline: none;">
+        <button class="btn btn-primary" onclick="sendRemoteText()" style="padding: 11px 16px; font-weight: 600;" data-i18n="btnSendText">
+          Send
+        </button>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding: 0 4px;">
+        <label style="font-size: 0.75rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <input type="checkbox" id="chkSendOnEnter" checked style="accent-color: var(--accent-primary);">
+          <span data-i18n="sendOnEnter">Send on Enter</span>
+        </label>
+        <label style="font-size: 0.75rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <input type="checkbox" id="chkClearOnSend" checked style="accent-color: var(--accent-primary);">
+          <span data-i18n="clearOnSend">Clear after send</span>
+        </label>
+      </div>
+
+      <!-- COMMON COMPUTER KEYS -->
+      <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;" data-i18n="specialKeys">
+        Special Computer Keys
+      </div>
+
+      <!-- ROW 1: CORE KEYS -->
+      <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 6px;">
+        <button class="btn btn-outline btn-sm" onclick="sendKey('Escape')">Esc</button>
+        <button class="btn btn-outline btn-sm" onclick="sendKey('Tab')">Tab</button>
+        <button class="btn btn-outline btn-sm" onclick="sendKey('Win')">⊞ Win</button>
+        <button class="btn btn-outline btn-sm" onclick="sendKey('Backspace')" title="Backspace">⌫ Del</button>
+        <button class="btn btn-outline btn-sm" onclick="sendKey('Enter')" style="font-weight: 700; color: var(--accent-primary);">↵ Enter</button>
+      </div>
+
+      <!-- ROW 2: SHORTCUTS -->
+      <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 6px;">
+        <button class="btn btn-outline btn-sm" onclick="sendKey('ctrl+c')">Ctrl+C</button>
+        <button class="btn btn-outline btn-sm" onclick="sendKey('ctrl+v')">Ctrl+V</button>
+        <button class="btn btn-outline btn-sm" onclick="sendKey('ctrl+z')">Ctrl+Z</button>
+        <button class="btn btn-outline btn-sm" onclick="sendKey('ctrl+a')">Ctrl+A</button>
+        <button class="btn btn-outline btn-sm" onclick="sendKey('alt+tab')">Alt+Tab</button>
+      </div>
+
+      <!-- ROW 3: NAVIGATION & EDIT -->
+      <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 8px;">
+        <button class="btn btn-outline btn-sm" onclick="sendKey('Delete')">Supr</button>
+        <button class="btn btn-outline btn-sm" onclick="sendKey('Home')">Home</button>
+        <button class="btn btn-outline btn-sm" onclick="sendKey('End')">End</button>
+        <button class="btn btn-outline btn-sm" onclick="sendKey('PageUp')">PgUp</button>
+        <button class="btn btn-outline btn-sm" onclick="sendKey('PageDown')">PgDn</button>
+      </div>
+
+      <!-- ROW 4: ARROWS -->
+      <div style="display: flex; justify-content: center; gap: 6px; margin-bottom: 10px;">
+        <button class="btn btn-outline btn-sm" onclick="sendKey('ArrowLeft')" style="width: 52px; font-size: 1rem;">◄</button>
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          <button class="btn btn-outline btn-sm" onclick="sendKey('ArrowUp')" style="width: 52px; font-size: 1rem;">▲</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('ArrowDown')" style="width: 52px; font-size: 1rem;">▼</button>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="sendKey('ArrowRight')" style="width: 52px; font-size: 1rem;">►</button>
+      </div>
+
+      <!-- EXPANDABLE F1-F12 SECTION -->
+      <details style="background: rgba(255, 255, 255, 0.02); border-radius: 8px; padding: 6px 10px; border: 1px solid rgba(255, 255, 255, 0.05);">
+        <summary style="font-size: 0.72rem; color: var(--text-muted); cursor: pointer; user-select: none;" data-i18n="fnKeysSummary">Function Keys (F1 - F12)</summary>
+        <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; margin-top: 8px;">
+          <button class="btn btn-outline btn-sm" onclick="sendKey('F1')">F1</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('F2')">F2</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('F3')">F3</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('F4')">F4</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('F5')">F5</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('F6')">F6</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('F7')">F7</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('F8')">F8</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('F9')">F9</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('F10')">F10</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('F11')">F11</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('F12')">F12</button>
+        </div>
+      </details>
     </div>
 
     <!-- CARD 2: ACCIONES DE SISTEMA -->
     <div class="card" id="cardSistema">
       <div class="card-header">
         <div class="card-title-group">
-          <h2>Acciones de Sistema</h2>
-          <p>Ejecutar programas y scripts en la PC</p>
+          <h2 data-i18n="systemCardTitle">System & Diagnostics</h2>
+          <p data-i18n="systemCardDesc">ScreenGuard, clipboard, screenshots, and native tools</p>
         </div>
       </div>
 
       <!-- SUB 2.A: EMULADOR -->
       <div class="sub-section" id="sub_emulador" data-sub-title="Emulador Android">
         <div class="sub-section-header">
-          <div class="card-section-title" style="margin-bottom: 0;">Emulador Android</div>
+          <div class="card-section-title" style="margin-bottom: 0;" data-i18n="subEmulator">Android Emulator</div>
         </div>
         <div class="form-group" style="margin-bottom: 10px; margin-top: 6px;">
           <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.4;">
@@ -3127,7 +3771,7 @@ const DASHBOARD_HTML = `
           <div class="card-section-title" style="margin-bottom: 0;">Portapapeles de la PC</div>
         </div>
         <div style="display: flex; gap: 8px; margin-top: 5px;">
-          <input type="text" id="inputPortapapeles" placeholder="Texto para enviar a la PC..." style="flex: 2; padding: 10px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 0;">
+          <input type="text" id="inputPortapapeles" placeholder="Text to send to Windows clipboard..." data-i18n="clipPlaceholder" style="flex: 2; padding: 10px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 0;">
           <button class="btn" onclick="enviarPortapapeles()" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.75rem;">
             Copiar a PC
           </button>
@@ -3159,7 +3803,7 @@ const DASHBOARD_HTML = `
     <div class="card" id="cardReiniciar" style="margin-top: 10px; border-color: rgba(239, 68, 68, 0.15);">
       <div class="card-header" style="margin-bottom: 0; display: flex; align-items: center; justify-content: space-between;">
         <div class="card-title-group" style="flex: 1;">
-          <h2>Reiniciar Servidor</h2>
+          <h2 data-i18n="restartCardTitle">Gateway Server</h2>
           <p>Reinicia el gateway y reconecta el túnel</p>
         </div>
         <button class="btn btn-danger" onclick="confirmarReinicio()" style="padding: 10px 16px; font-size: 0.85rem; flex: 0 0 auto; width: auto; margin-top: 0; display: inline-flex; align-items: center; gap: 4px;">
@@ -3173,7 +3817,7 @@ const DASHBOARD_HTML = `
     <div class="card" id="cardMultimedia" style="margin-top: 10px;">
       <div class="card-header" style="margin-bottom: 15px;">
         <div class="card-title-group">
-          <h2>Controles Multimedia, Brillo & Voz</h2>
+          <h2 data-i18n="mediaCardTitle">Media & Audio Controls</h2>
           <p>Audio, brillo del sistema y Lector de voz (TTS)</p>
         </div>
       </div>
@@ -3182,7 +3826,7 @@ const DASHBOARD_HTML = `
       <div class="sub-section" id="sub_media_audio" data-sub-title="Audio y Reproducción">
         <div class="sub-section-header">
           <div class="card-section-title" style="margin-bottom: 0;">Control de Audio y Reproducción</div>
-          <div id="audioStatusText" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500; letter-spacing: 0.3px; margin-right: 8px;">Volumen: --% | --</div>
+          <div id="audioStatusText" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500; letter-spacing: 0.3px; margin-right: 8px;">Volume: --% | --</div>
         </div>
         <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 8px;">
           <div style="display: flex; gap: 8px; width: 100%;">
@@ -3236,7 +3880,7 @@ const DASHBOARD_HTML = `
           <div class="card-section-title" style="margin-bottom: 0;">Lector de Voz Remoto (TTS)</div>
         </div>
         <div style="display: flex; gap: 8px; margin-top: 8px;">
-          <input type="text" id="inputTTS" placeholder="Texto para reproducir con voz..." style="flex: 2; padding: 10px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 0;" onkeydown="checkTTSEnter(event)">
+          <input type="text" id="inputTTS" placeholder="Text to speak aloud on PC..." data-i18n="ttsPlaceholder" style="flex: 2; padding: 10px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 0;" onkeydown="checkTTSEnter(event)">
           <button class="btn" onclick="enviarTTS()" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.75rem;">
             Hablar
           </button>
@@ -3248,7 +3892,7 @@ const DASHBOARD_HTML = `
     <div class="card" id="cardEnergia" style="margin-top: 10px; border-color: rgba(239, 68, 68, 0.15);">
       <div class="card-header" style="margin-bottom: 15px;">
         <div class="card-title-group">
-          <h2>Energía y Sesión de PC</h2>
+          <h2 data-i18n="powerCardTitle">Power & Brightness</h2>
           <p>Bloquear o suspender la computadora</p>
         </div>
       </div>
@@ -3318,8 +3962,8 @@ const DASHBOARD_HTML = `
         </details>
       </div>
       <div class="modal-footer" style="display: flex; gap: 10px;">
-        <button class="btn" onclick="cerrarModalPausaTemporal()" style="flex: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border);">Cancelar</button>
-        <button class="btn" onclick="confirmarPausaTemporal()" style="flex: 1; background: #f59e0b; border-color: #f59e0b; color: #fff; font-weight: 700; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);">Confirmar Pausa</button>
+        <button class="btn" onclick="cerrarModalPausaTemporal()" style="flex: 1; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border);" data-i18n="btnCancel">Cancel</button>
+        <button class="btn" onclick="confirmarPausaTemporal()" style="flex: 1; background: #f59e0b; border-color: #f59e0b; color: #fff; font-weight: 700; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);" data-i18n="btnConfirmPause">Confirm Pause</button>
       </div>
     </div>
   </div>
@@ -3345,6 +3989,8 @@ const DASHBOARD_HTML = `
     let currentBrowserInterval = 4.0;
 
     document.addEventListener('DOMContentLoaded', () => {
+      setLanguage(currentLang);
+      initTrackpad();
       initDashboardCustomizer();
       pollGatewayStatus();
       setInterval(pollGatewayStatus, 5000);
@@ -3571,9 +4217,10 @@ const DASHBOARD_HTML = `
         const testTipeoBtn = document.getElementById('btnTestTipeo');
         const testShiftBtn = document.getElementById('btnTestShift');
 
+        const isEs = currentLang === 'es';
         if (data.browserAbierto) {
           browserBadge.className = 'status-badge active';
-          browserBadgeText.innerText = 'Navegador: Abierto';
+          browserBadgeText.innerText = isEs ? 'Navegador: Abierto' : 'Browser: Open';
           btnBrowserOpen.className = 'btn btn-primary btn-disabled';
           btnBrowserClose.className = 'btn btn-danger';
           
@@ -3585,7 +4232,7 @@ const DASHBOARD_HTML = `
           testShiftBtn.classList.remove('btn-disabled');
         } else {
           browserBadge.className = 'status-badge';
-          browserBadgeText.innerText = 'Navegador: Cerrado';
+          browserBadgeText.innerText = isEs ? 'Navegador: Cerrado' : 'Browser: Closed';
           btnBrowserOpen.className = 'btn btn-primary';
           btnBrowserClose.className = 'btn btn-disabled';
 
@@ -3621,7 +4268,7 @@ const DASHBOARD_HTML = `
           const timeStr = mins + 'm ' + formattedSecs + 's';
 
           presenciaBadge.className = 'status-badge warning';
-          presenciaBadgeText.innerText = 'Pausa Temp: ' + mins + 'm';
+          presenciaBadgeText.innerText = (isEs ? 'Pausa Temp: ' : 'Temp Pause: ') + mins + 'm';
           cardBrowser.classList.add('active-state');
 
           if (pausaBanner) {
@@ -3638,14 +4285,14 @@ const DASHBOARD_HTML = `
 
           if (data.browserPresenciaActiva) {
             presenciaBadge.className = 'status-badge active';
-            presenciaBadgeText.innerText = 'Mantener Activo: On';
+            presenciaBadgeText.innerText = isEs ? 'Mantener Activo: On' : 'Keepalive: On';
             cardBrowser.classList.add('active-state');
             btnPlay.classList.add('btn-disabled');
             btnPause.classList.remove('btn-disabled');
             if (btnPausaTemp) btnPausaTemp.classList.remove('btn-disabled');
           } else {
             presenciaBadge.className = 'status-badge';
-            presenciaBadgeText.innerText = 'Mantener Activo: Off';
+            presenciaBadgeText.innerText = isEs ? 'Mantener Activo: Off' : 'Keepalive: Off';
             if (!data.browserAbierto) {
               cardBrowser.classList.remove('active-state');
             }
@@ -3720,9 +4367,9 @@ const DASHBOARD_HTML = `
           const vol = data.audioVolume;
           const muted = data.audioMuted;
           const playing = data.audioPlaying;
-          let statusStr = 'Volumen: ' + vol + '%';
+          let statusStr = (isEs ? 'Volumen: ' : 'Volume: ') + vol + '%';
           if (muted) {
-            statusStr += ' (Silenciado)';
+            statusStr += isEs ? ' (Silenciado)' : ' (Muted)';
           }
           statusStr += ' | ' + (playing ? '▶ Reproduciendo' : '⏸ Pausado');
           audioTextEl.innerText = statusStr;
@@ -4843,6 +5490,376 @@ const DASHBOARD_HTML = `
 
     document.addEventListener('DOMContentLoaded', applyWebToolsVisibility);
     setTimeout(applyWebToolsVisibility, 100);
+
+    // ==========================================
+    // INTERNATIONALIZATION (I18N) SYSTEM
+    // ==========================================
+    const I18N = {
+      en: {
+        appTitle: "Gateway Control Center",
+        appDesc: "API Gateway & Automation Server",
+        editModeBanner: "Edit Mode: Drag ⠿ to reorder or use 👁️ to hide/show.",
+        btnReset: "Reset",
+        btnDone: "Done",
+        trackpadTitle: "Virtual Trackpad & Mouse",
+        trackpadDesc: "Touchpad navigation, gestures, drag lock, and clicking",
+        trackpadSpeed: "Speed:",
+        touchpadHint: "Slide 1 finger to move • Tap for Left Click • 2 fingers for Right Click",
+        scrollStrip: "SCROLL",
+        btnLeftClick: "Left Click",
+        btnRightClick: "Right Click",
+        dragLock: "Drag Lock (Hold Down)",
+        dragLockActive: "Drag Lock (Active)",
+        doubleClick: "Double Click",
+        sensitivity: "Sensitivity:",
+        keyboardTitle: "Remote Keyboard & Keystrokes",
+        keyboardDesc: "Type phone text at PC cursor and send computer keys",
+        typePlaceholder: "Type or dictate text to send to PC...",
+        btnSendText: "Send",
+        sendOnEnter: "Send on Enter",
+        clearOnSend: "Clear after send",
+        specialKeys: "Special Computer Keys",
+        fnKeysSummary: "Function Keys (F1 - F12)",
+        browserCardTitle: "Active Browser Keepalive",
+        browserCardDesc: "Persistent session and display sleep prevention",
+        systemCardTitle: "System & Diagnostics",
+        systemCardDesc: "ScreenGuard and Windows native controls",
+        mediaCardTitle: "Media & Audio Controls",
+        mediaCardDesc: "Playback, master volume, and voice synthesis (TTS)",
+        powerCardTitle: "Power & Brightness",
+        powerCardDesc: "Display brightness and PC power states",
+        restartCardTitle: "Gateway Server",
+        restartCardDesc: "Safe decoupled server restart"
+      },
+      es: {
+        appTitle: "Gateway Control Center",
+        appDesc: "API Gateway & Automatizaciones",
+        editModeBanner: "Modo Edición: Arrastra ⠿ para mover o usa 👁️ para ocultar/mostrar.",
+        btnReset: "Restablecer",
+        btnDone: "Listo",
+        trackpadTitle: "Trackpad y Mouse Virtual",
+        trackpadDesc: "Navegación táctil, gestos, arrastre y clics",
+        trackpadSpeed: "Velocidad:",
+        touchpadHint: "Desliza 1 dedo para mover • 1 toque para Clic • 2 dedos para Clic Derecho",
+        scrollStrip: "SCROLL",
+        btnLeftClick: "Clic Izquierdo",
+        btnRightClick: "Clic Derecho",
+        dragLock: "Mantener Clic (Arrastrar)",
+        dragLockActive: "Clic Bloqueado (Activo)",
+        doubleClick: "Doble Clic",
+        sensitivity: "Sensibilidad:",
+        keyboardTitle: "Teclado y Escritura Remota",
+        keyboardDesc: "Escribe desde el móvil en el cursor de la PC y pulsa teclas",
+        typePlaceholder: "Escribe o dicta texto para enviar a la PC...",
+        btnSendText: "Enviar",
+        sendOnEnter: "Enviar con Enter",
+        clearOnSend: "Borrar al enviar",
+        specialKeys: "Teclas Especiales de PC",
+        fnKeysSummary: "Teclas de Función (F1 - F12)",
+        browserCardTitle: "Navegador Activo",
+        browserCardDesc: "Sesión persistente y prevención de inactividad de pantalla",
+        systemCardTitle: "Sistema & Diagnóstico",
+        systemCardDesc: "ScreenGuard y utilidades nativas de Windows",
+        mediaCardTitle: "Controles Multimedia & Audio",
+        mediaCardDesc: "Reproducción, volumen maestro y voz sintetizada (TTS)",
+        powerCardTitle: "Energía & Pantalla",
+        powerCardDesc: "Brillo del monitor y suspensión de la PC",
+        restartCardTitle: "Gateway Server",
+        restartCardDesc: "Reinicio seguro del proceso desacoplado"
+      }
+    };
+
+    let currentLang = localStorage.getItem('dashboard_lang') || 'en';
+
+    function setLanguage(lang) {
+      currentLang = lang || 'en';
+      localStorage.setItem('dashboard_lang', currentLang);
+      const dict = I18N[currentLang] || I18N.en;
+
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (dict[key]) {
+          if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+            el.placeholder = dict[key];
+          } else {
+            el.innerText = dict[key];
+          }
+        }
+      });
+
+      const btn = document.getElementById('btnLangToggle');
+      if (btn) btn.innerText = currentLang === 'en' ? '🌐 EN' : '🌐 ES';
+
+      if (isEditModeActive) {
+        document.querySelectorAll('.card-edit-title').forEach(span => {
+          const card = span.closest('.card');
+          if (card && CARD_TITLES[card.id]) {
+            const titles = CARD_TITLES[card.id];
+            span.textContent = (titles && (titles[currentLang] || titles.en)) || card.id;
+          }
+        });
+      }
+    }
+
+    function toggleLanguage() {
+      setLanguage(currentLang === 'en' ? 'es' : 'en');
+    }
+
+    // ==========================================
+    // VIRTUAL TRACKPAD & MOUSE LOGIC
+    // ==========================================
+    let trackpadSensitivity = parseFloat(localStorage.getItem('trackpad_sensitivity') || '1.2');
+    let isDragLocked = false;
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartTime = 0;
+    let lastTouchX = 0;
+    let lastTouchY = 0;
+    let touchMovedTotal = 0;
+    let moveAccumDx = 0;
+    let moveAccumDy = 0;
+    let moveFlushTimer = null;
+
+    function initTrackpad() {
+      const surface = document.getElementById('touchpadSurface');
+      const scrollStrip = document.getElementById('touchpadScrollStrip');
+      const slider = document.getElementById('sliderSensitivity');
+      const label = document.getElementById('trackpadSpeedLabel');
+
+      if (slider) slider.value = trackpadSensitivity;
+      if (label) label.innerText = trackpadSensitivity.toFixed(1) + 'x';
+
+      if (surface) {
+        surface.addEventListener('touchstart', handleTouchStart, { passive: false });
+        surface.addEventListener('touchmove', handleTouchMove, { passive: false });
+        surface.addEventListener('touchend', handleTouchEnd, { passive: false });
+        surface.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+      }
+
+      if (scrollStrip) {
+        let scrollStartY = 0;
+        scrollStrip.addEventListener('touchstart', (e) => {
+          e.stopPropagation();
+          if (e.touches.length > 0) scrollStartY = e.touches[0].clientY;
+        }, { passive: true });
+
+        scrollStrip.addEventListener('touchmove', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          if (e.touches.length > 0) {
+            const curY = e.touches[0].clientY;
+            const deltaY = scrollStartY - curY;
+            if (Math.abs(deltaY) > 8) {
+              sendMouseScroll(Math.round(deltaY * 5));
+              scrollStartY = curY;
+            }
+          }
+        }, { passive: false });
+      }
+    }
+
+    function changeTrackpadSensitivity(val) {
+      trackpadSensitivity = parseFloat(val) || 1.2;
+      localStorage.setItem('trackpad_sensitivity', trackpadSensitivity);
+      const label = document.getElementById('trackpadSpeedLabel');
+      if (label) label.innerText = trackpadSensitivity.toFixed(1) + 'x';
+    }
+
+    function handleTouchStart(e) {
+      e.preventDefault();
+      if (e.touches.length === 1) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        lastTouchX = touchStartX;
+        lastTouchY = touchStartY;
+        touchStartTime = Date.now();
+        touchMovedTotal = 0;
+      } else if (e.touches.length === 2) {
+        touchStartX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        touchStartY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        lastTouchX = touchStartX;
+        lastTouchY = touchStartY;
+        touchStartTime = Date.now();
+        touchMovedTotal = 0;
+      }
+    }
+
+    function handleTouchMove(e) {
+      e.preventDefault();
+      if (e.touches.length === 1) {
+        const curX = e.touches[0].clientX;
+        const curY = e.touches[0].clientY;
+        const dx = (curX - lastTouchX) * trackpadSensitivity;
+        const dy = (curY - lastTouchY) * trackpadSensitivity;
+        touchMovedTotal += Math.abs(curX - lastTouchX) + Math.abs(curY - lastTouchY);
+        lastTouchX = curX;
+        lastTouchY = curY;
+
+        moveAccumDx += dx;
+        moveAccumDy += dy;
+
+        if (!moveFlushTimer) {
+          moveFlushTimer = setTimeout(flushMouseMove, 22);
+        }
+      } else if (e.touches.length === 2) {
+        const curY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const deltaY = lastTouchY - curY;
+        touchMovedTotal += Math.abs(deltaY);
+        lastTouchY = curY;
+
+        if (Math.abs(deltaY) > 4) {
+          sendMouseScroll(Math.round(deltaY * 6));
+        }
+      }
+    }
+
+    function flushMouseMove() {
+      moveFlushTimer = null;
+      if (Math.abs(moveAccumDx) >= 0.5 || Math.abs(moveAccumDy) >= 0.5) {
+        const sendX = Math.round(moveAccumDx);
+        const sendY = Math.round(moveAccumDy);
+        moveAccumDx -= sendX;
+        moveAccumDy -= sendY;
+
+        fetch('/system/mouse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'move', dx: sendX, dy: sendY })
+        }).catch(() => {});
+      }
+    }
+
+    function handleTouchEnd(e) {
+      e.preventDefault();
+      const elapsed = Date.now() - touchStartTime;
+
+      if (moveFlushTimer) {
+        clearTimeout(moveFlushTimer);
+        flushMouseMove();
+      }
+
+      if (elapsed < 240 && touchMovedTotal < 8) {
+        if (e.changedTouches.length === 1) {
+          sendMouseClick('left');
+        } else if (e.changedTouches.length === 2) {
+          sendMouseClick('right');
+        }
+      }
+    }
+
+    async function sendMouseClick(button) {
+      try {
+        await fetch('/system/mouse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'click', button })
+        });
+      } catch (e) {}
+    }
+
+    async function sendMouseDoubleClick() {
+      try {
+        await fetch('/system/mouse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'double-click', button: 'left' })
+        });
+      } catch (e) {}
+    }
+
+    async function sendMouseScroll(deltaY) {
+      try {
+        await fetch('/system/mouse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'scroll', deltaY })
+        });
+      } catch (e) {}
+    }
+
+    async function toggleDragLock() {
+      isDragLocked = !isDragLocked;
+      const btn = document.getElementById('btnDragLock');
+      const icon = document.getElementById('dragLockIcon');
+      const text = document.getElementById('dragLockText');
+      const dict = I18N[currentLang] || I18N.en;
+
+      if (isDragLocked) {
+        if (btn) btn.style.background = 'rgba(245, 158, 11, 0.25)';
+        if (btn) btn.style.borderColor = '#f59e0b';
+        if (icon) icon.innerText = '🔒';
+        if (text) text.innerText = dict.dragLockActive || 'Drag Lock (Active)';
+        await fetch('/system/mouse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'down', button: 'left' })
+        }).catch(() => {});
+        showToast(currentLang === 'es' ? 'Arrastre bloqueado: cursor presionado.' : 'Drag lock active: mouse held down.', 'info');
+      } else {
+        if (btn) btn.style.background = '';
+        if (btn) btn.style.borderColor = '';
+        if (icon) icon.innerText = '🔓';
+        if (text) text.innerText = dict.dragLock || 'Drag Lock (Hold Down)';
+        await fetch('/system/mouse', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'up', button: 'left' })
+        }).catch(() => {});
+        showToast(currentLang === 'es' ? 'Arrastre liberado.' : 'Drag lock released.', 'info');
+      }
+    }
+
+    // ==========================================
+    // REMOTE KEYBOARD & KEYSTROKES LOGIC
+    // ==========================================
+    async function sendRemoteText() {
+      const input = document.getElementById('inputRemoteText');
+      if (!input || !input.value) return;
+      const text = input.value;
+
+      try {
+        const res = await fetch('/system/keyboard/type', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        if (res.ok) {
+          const chkClear = document.getElementById('chkClearOnSend');
+          if (chkClear && chkClear.checked) {
+            input.value = '';
+          }
+          showToast(currentLang === 'es' ? 'Texto enviado a la PC.' : 'Text sent to PC.', 'success');
+        } else {
+          showToast(currentLang === 'es' ? 'Error al enviar texto.' : 'Error sending text.', 'error');
+        }
+      } catch (e) {
+        showToast(currentLang === 'es' ? 'Error de conexión.' : 'Connection error.', 'error');
+      }
+    }
+
+    function handleRemoteTextKeyDown(e) {
+      if (e.key === 'Enter') {
+        const chkSend = document.getElementById('chkSendOnEnter');
+        if (chkSend && chkSend.checked) {
+          e.preventDefault();
+          sendRemoteText();
+        }
+      }
+    }
+
+    async function sendKey(key) {
+      try {
+        const res = await fetch('/system/keyboard/key', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key })
+        });
+        if (res.ok) {
+          showToast(key.toUpperCase(), 'info');
+        }
+      } catch (e) {}
+    }
+
   </script>
   <div id="restartOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(10, 10, 12, 0.9); z-index: 9999; align-items: center; justify-content: center; flex-direction: column; color: #fff; text-align: center; padding: 20px; box-sizing: border-box;">
     <div style="border: 4px solid rgba(255,255,255,0.1); border-left-color: var(--primary || #3b82f6); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px;"></div>
