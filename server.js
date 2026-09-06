@@ -3876,10 +3876,11 @@ const DASHBOARD_HTML = `
     function dismissToast(el) {
       if (!el || !el.parentNode || el._isDismissing) return;
       el._isDismissing = true;
-      el.style.animation = 'slideOutUp 0.2s ease forwards';
+      if (el._timer) clearTimeout(el._timer);
+      el.style.animation = 'slideOutUp 0.15s ease forwards';
       setTimeout(() => {
         if (el.parentNode) el.remove();
-      }, 200);
+      }, 150);
     }
 
     function showToast(message, type = 'info') {
@@ -3887,7 +3888,7 @@ const DASHBOARD_HTML = `
       if (!container) return;
 
       // Si ya hay un toast mostrando exactamente el mismo mensaje, no duplicar: reiniciar temporizador
-      const existing = Array.from(container.children).find(t => t._toastMsg === message);
+      const existing = Array.from(container.children).find(t => t._toastMsg === message && !t._isDismissing);
       if (existing) {
         if (existing._timer) clearTimeout(existing._timer);
         const duration = type === 'error' ? 3500 : (type === 'warning' ? 3000 : 2200);
@@ -3895,10 +3896,11 @@ const DASHBOARD_HTML = `
         return;
       }
 
-      // Limitar a máximo 1 notificación visible a la vez para no saturar la pantalla
-      while (container.children.length >= 1) {
-        dismissToast(container.children[0]);
-      }
+      // Limitar a máximo 1 notificación visible a la vez: eliminar toasts previos de forma síncrona sin bucles
+      Array.from(container.children).forEach(child => {
+        if (child._timer) clearTimeout(child._timer);
+        child.remove();
+      });
 
       const toast = document.createElement('div');
       toast.className = 'toast ' + type;
