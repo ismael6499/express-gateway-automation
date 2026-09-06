@@ -25,6 +25,7 @@ desktop_screenshot.png
 temp_screenshot.png
 screenguard_state.json
 simulation_state.json
+scratch/
 
 # Scripts auxiliares de inspección local
 find_profile.js
