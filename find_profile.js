@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const localAppData = process.env.LOCALAPPDATA;
-console.log('Escaneando de forma recursiva C:\\Users\\agust\\AppData\\Local\\ buscando perfiles...');
+console.log('Escaneando de forma recursiva buscando perfiles...');
 
 function searchPreferences(dir) {
   try {
@@ -29,12 +29,12 @@ function searchPreferences(dir) {
           const data = JSON.parse(content);
           const name = data.profile?.name || data.profile?.info_cache?.name || '';
           const email = data.profile?.email || data.google?.services?.username || '';
-          const containsWork = content.toLowerCase().includes('workspace') || content.toLowerCase().includes('user');
+          const containsWork = content.toLowerCase().includes('user') || content.toLowerCase().includes('profile');
           
           console.log(`\nArchivo: ${fullPath}`);
           console.log(` - Nombre Perfil: "${name}"`);
           console.log(` - Email/Usuario: "${email}"`);
-          console.log(` - Contiene workspace: ${containsWork ? 'SÍ' : 'NO'}`);
+          console.log(` - Coincidencia de perfil: ${containsWork ? 'SÍ' : 'NO'}`);
         } catch (e) {}
       }
     }
