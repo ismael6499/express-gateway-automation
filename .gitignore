@@ -36,6 +36,7 @@ copy_profile.js
 # IDE y Sistema Operativo
 .idea/
 .vscode/
+.agents/
 *.suo
 *.ntvs*
 *.njsproj
