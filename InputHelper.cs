@@ -74,6 +74,18 @@ namespace InputHelper {
         [DllImport("user32.dll")]
         private static extern uint MapVirtualKey(uint uCode, uint uMapType);
 
+        [StructLayout(LayoutKind.Sequential)]
+        private struct POINT {
+            public int X;
+            public int Y;
+        }
+
+        [DllImport("user32.dll")]
+        private static extern bool GetCursorPos(out POINT lpPoint);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetCursorPos(int X, int Y);
+
         private static System.Threading.Timer watchdogTimer = null;
         private static readonly object watchdogLock = new object();
 
@@ -261,6 +273,10 @@ namespace InputHelper {
             if (coords.Length < 2) return;
             int dx, dy;
             if (int.TryParse(coords[0], out dx) && int.TryParse(coords[1], out dy)) {
+                POINT pt;
+                if (GetCursorPos(out pt)) {
+                    SetCursorPos(pt.X + dx, pt.Y + dy);
+                }
                 mouse_event(MOUSEEVENTF_MOVE, dx, dy, 0, UIntPtr.Zero);
             }
         }
