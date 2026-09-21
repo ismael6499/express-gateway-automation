@@ -3611,76 +3611,83 @@ const DASHBOARD_HTML = `
     </div>
 
     <!-- CARD 5: AUDIO, MULTIMEDIA, BRILLO & VOZ -->
-    <div class="card" id="cardMultimedia" style="margin-top: 10px;">
-      <div class="card-header" style="margin-bottom: 15px;">
+    <div class="card is-collapsed" id="cardMultimedia" style="margin-top: 10px;">
+      <div class="card-header card-header-clickable" onclick="toggleCardCollapse('cardMultimedia', event)">
         <div class="card-title-group">
           <h2 data-i18n="mediaCardTitle">Media & Audio Controls</h2>
           <p data-i18n="mediaCardDesc">Audio, system brightness, and voice reader (TTS)</p>
         </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div class="collapse-chevron" title="Colapsar / Expandir">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
+        </div>
       </div>
       
-      <!-- SUB 5.A: AUDIO -->
-      <div class="sub-section" id="sub_media_audio" data-sub-title="Audio y Reproducción">
-        <div class="sub-section-header">
-          <div class="card-section-title" style="margin-bottom: 0;" data-i18n="audioSub">Audio & Playback Control</div>
-          <div id="audioStatusText" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500; letter-spacing: 0.3px; margin-right: 8px;">Volume: --% | --</div>
-        </div>
-        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 8px;">
-          <div style="display: flex; gap: 8px; width: 100%;">
-            <button class="btn" onclick="enviarMultimedia('vol-')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text);">
-              Vol -
-            </button>
-            <button class="btn" onclick="enviarMultimedia('mute')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68);">
-              Mute
-            </button>
-            <button class="btn" onclick="enviarMultimedia('vol+')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text);">
-              Vol +
-            </button>
+      <div class="card-collapsible-body">
+        <!-- SUB 5.A: AUDIO -->
+        <div class="sub-section" id="sub_media_audio" data-sub-title="Audio y Reproducción">
+          <div class="sub-section-header">
+            <div class="card-section-title" style="margin-bottom: 0;" data-i18n="audioSub">Audio & Playback Control</div>
+            <div id="audioStatusText" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500; letter-spacing: 0.3px; margin-right: 8px;">Volume: --% | --</div>
           </div>
-          
-          <div style="display: flex; gap: 8px; width: 100%;">
-            <button class="btn" onclick="enviarMultimedia('prev')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
-              Atrás
-            </button>
-            <button class="btn" onclick="enviarMultimedia('play-pausa')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: var(--primary);">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-              Play/Pausa
-            </button>
-            <button class="btn" onclick="enviarMultimedia('next')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
-              Siguiente
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
-            </button>
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 8px;">
+            <div style="display: flex; gap: 8px; width: 100%;">
+              <button class="btn" onclick="enviarMultimedia('vol-')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text);">
+                Vol -
+              </button>
+              <button class="btn" onclick="enviarMultimedia('mute')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68);">
+                Mute
+              </button>
+              <button class="btn" onclick="enviarMultimedia('vol+')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text);">
+                Vol +
+              </button>
+            </div>
+            
+            <div style="display: flex; gap: 8px; width: 100%;">
+              <button class="btn" onclick="enviarMultimedia('prev')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
+                Atrás
+              </button>
+              <button class="btn" onclick="enviarMultimedia('play-pausa')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: var(--primary);">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                Play/Pausa
+              </button>
+              <button class="btn" onclick="enviarMultimedia('next')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
+                Siguiente
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
+              </button>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- SUB 5.B: BRILLO -->
-      <div class="sub-section" id="sub_media_brillo" data-sub-title="Brillo de Pantalla">
-        <div style="border-top: 1px dashed rgba(255,255,255,0.15); margin: 15px 0 10px 0;"></div>
-        <div class="sub-section-header">
-          <div class="card-section-title" style="margin-bottom: 0;" data-i18n="brightnessSub">Display Brightness</div>
-        </div>
-        <div class="form-group" style="margin-bottom: 5px; margin-top: 8px;">
-          <div class="form-label-row">
-            <span data-i18n="brightnessLevel">Brightness Level</span>
-            <span id="brilloVal">--%</span>
+        <!-- SUB 5.B: BRILLO -->
+        <div class="sub-section" id="sub_media_brillo" data-sub-title="Brillo de Pantalla">
+          <div style="border-top: 1px dashed rgba(255,255,255,0.15); margin: 15px 0 10px 0;"></div>
+          <div class="sub-section-header">
+            <div class="card-section-title" style="margin-bottom: 0;" data-i18n="brightnessSub">Display Brightness</div>
           </div>
-          <input type="range" class="slider" id="brilloSlider" min="0" max="100" step="1" value="50" oninput="updateBrilloLabel(this.value)" onchange="cambiarBrillo(this.value)">
+          <div class="form-group" style="margin-bottom: 5px; margin-top: 8px;">
+            <div class="form-label-row">
+              <span data-i18n="brightnessLevel">Brightness Level</span>
+              <span id="brilloVal">--%</span>
+            </div>
+            <input type="range" class="slider" id="brilloSlider" min="0" max="100" step="1" value="50" oninput="updateBrilloLabel(this.value)" onchange="cambiarBrillo(this.value)">
+          </div>
         </div>
-      </div>
 
-      <!-- SUB 5.C: TTS -->
-      <div class="sub-section" id="sub_media_tts" data-sub-title="Lector de Voz (TTS)">
-        <div class="divider"></div>
-        <div class="sub-section-header">
-          <div class="card-section-title" style="margin-bottom: 0;" data-i18n="ttsSub">Remote Voice Reader (TTS)</div>
-        </div>
-        <div style="display: flex; gap: 8px; margin-top: 8px;">
-          <input type="text" id="inputTTS" placeholder="Text to speak aloud on PC..." data-i18n="ttsPlaceholder" style="flex: 2; padding: 10px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 0;" onkeydown="checkTTSEnter(event)">
-          <button class="btn" onclick="enviarTTS()" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.75rem;">
-            Hablar
-          </button>
+        <!-- SUB 5.C: TTS -->
+        <div class="sub-section" id="sub_media_tts" data-sub-title="Lector de Voz (TTS)">
+          <div class="divider"></div>
+          <div class="sub-section-header">
+            <div class="card-section-title" style="margin-bottom: 0;" data-i18n="ttsSub">Remote Voice Reader (TTS)</div>
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: 8px;">
+            <input type="text" id="inputTTS" placeholder="Text to speak aloud on PC..." data-i18n="ttsPlaceholder" style="flex: 2; padding: 10px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 0;" onkeydown="checkTTSEnter(event)">
+            <button class="btn" onclick="enviarTTS()" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.75rem;">
+              Hablar
+            </button>
+          </div>
         </div>
       </div>
     </div>
