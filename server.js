@@ -2328,6 +2328,44 @@ const DASHBOARD_HTML = `
       margin-bottom: 20px;
     }
 
+    .card.is-collapsed .card-header {
+      margin-bottom: 0;
+    }
+
+    .card.is-collapsed .card-collapsible-body {
+      display: none;
+    }
+
+    .card-header-clickable {
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      border-radius: 12px;
+    }
+
+    .collapse-chevron {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      transition: transform 0.25s ease, background 0.2s, color 0.2s;
+      flex-shrink: 0;
+      color: var(--text-muted);
+    }
+
+    .card-header-clickable:hover .collapse-chevron {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text);
+    }
+
+    .card:not(.is-collapsed) .collapse-chevron {
+      transform: rotate(180deg);
+    }
+
     .card-title-group h2 {
       font-size: 1.15rem;
       font-weight: 600;
@@ -3244,211 +3282,223 @@ const DASHBOARD_HTML = `
 
 
     <!-- CARD: VIRTUAL TRACKPAD & MOUSE -->
-    <div class="card" id="cardMousePad">
-      <div class="card-header">
+    <div class="card is-collapsed" id="cardMousePad">
+      <div class="card-header card-header-clickable" onclick="toggleCardCollapse('cardMousePad', event)">
         <div class="card-title-group">
           <h2 data-i18n="trackpadTitle">Virtual Trackpad & Mouse</h2>
           <p data-i18n="trackpadDesc">Touchpad navigation, gestures, drag lock, and clicking</p>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
-          <button class="btn btn-sm btn-outline" onclick="enterTrackpadFullscreen()" style="padding: 4px 10px; font-size: 0.75rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" data-i18n="btnFullscreen">
+          <button class="btn btn-sm btn-outline" onclick="event.stopPropagation(); enterTrackpadFullscreen()" style="padding: 4px 10px; font-size: 0.75rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" data-i18n="btnFullscreen">
             ⛶ Fullscreen
           </button>
           <span style="font-size: 0.72rem; color: var(--text-muted);" data-i18n="trackpadSpeed">Speed:</span>
           <span id="trackpadSpeedLabel" style="font-size: 0.75rem; font-weight: 600; color: var(--accent-primary);">1.2x</span>
+          <div class="collapse-chevron" title="Colapsar / Expandir">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
         </div>
       </div>
 
-      <!-- TRACKPAD TOUCH SURFACE -->
-      <div style="position: relative; width: 100%; height: 260px; background: rgba(15, 23, 42, 0.6); border: 1.5px solid rgba(255, 255, 255, 0.1); border-radius: 14px; overflow: hidden; margin-bottom: 12px; touch-action: none; user-select: none;" id="touchpadSurface">
-        <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; opacity: 0.35;">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 8px;"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-          <span style="font-size: 0.8rem; font-weight: 500; text-align: center; max-width: 80%; line-height: 1.4;" data-i18n="touchpadHint">Slide 1 finger to move • Tap for Left Click • Double-tap for 2x • 2 fingers for Right Click</span>
+      <div class="card-collapsible-body">
+        <!-- TRACKPAD TOUCH SURFACE -->
+        <div style="position: relative; width: 100%; height: 260px; background: rgba(15, 23, 42, 0.6); border: 1.5px solid rgba(255, 255, 255, 0.1); border-radius: 14px; overflow: hidden; margin-bottom: 12px; touch-action: none; user-select: none;" id="touchpadSurface">
+          <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; opacity: 0.35;">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom: 8px;"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            <span style="font-size: 0.8rem; font-weight: 500; text-align: center; max-width: 80%; line-height: 1.4;" data-i18n="touchpadHint">Slide 1 finger to move • Tap for Left Click • Double-tap for 2x • 2 fingers for Right Click</span>
+          </div>
+          <!-- RIGHT EDGE SCROLL STRIP -->
+          <div id="touchpadScrollStrip" style="position: absolute; right: 0; top: 0; bottom: 0; width: 44px; background: rgba(255, 255, 255, 0.03); border-left: 1px dashed rgba(255, 255, 255, 0.1); display: flex; flex-direction: column; align-items: center; justify-content: center; touch-action: none;">
+            <span style="font-size: 0.68rem; color: var(--text-muted); writing-mode: vertical-rl; transform: rotate(180deg); letter-spacing: 2px;" data-i18n="scrollStrip">SCROLL</span>
+          </div>
         </div>
-        <!-- RIGHT EDGE SCROLL STRIP -->
-        <div id="touchpadScrollStrip" style="position: absolute; right: 0; top: 0; bottom: 0; width: 44px; background: rgba(255, 255, 255, 0.03); border-left: 1px dashed rgba(255, 255, 255, 0.1); display: flex; flex-direction: column; align-items: center; justify-content: center; touch-action: none;">
-          <span style="font-size: 0.68rem; color: var(--text-muted); writing-mode: vertical-rl; transform: rotate(180deg); letter-spacing: 2px;" data-i18n="scrollStrip">SCROLL</span>
+
+        <!-- MOUSE BUTTONS -->
+        <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+          <button class="btn btn-outline" id="btnMouseLeft" onclick="sendMouseClick('left')" style="flex: 1; padding: 12px 6px; font-weight: 600; font-size: 0.82rem;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 5px; vertical-align: text-bottom;"><path d="M12 2a5 5 0 0 0-5 5v10a5 5 0 0 0 10 0V7a5 5 0 0 0-5-5z"/><line x1="12" y1="2" x2="12" y2="8"/></svg>
+            <span data-i18n="btnLeftClick">Left Click</span>
+          </button>
+          <button class="btn btn-outline" id="btnMouseMiddle" onclick="sendMouseClick('middle')" style="flex: 0 0 46px; padding: 12px 0;" title="Middle Click">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto;"><circle cx="12" cy="7" r="1.5"/><rect x="5" y="2" width="14" height="20" rx="7"/></svg>
+          </button>
+          <button class="btn btn-outline" id="btnMouseRight" onclick="sendMouseClick('right')" style="flex: 1; padding: 12px 6px; font-weight: 600; font-size: 0.82rem;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 5px; vertical-align: text-bottom;"><path d="M12 2a5 5 0 0 0-5 5v10a5 5 0 0 0 10 0V7a5 5 0 0 0-5-5z"/><line x1="12" y1="2" x2="12" y2="8"/></svg>
+            <span data-i18n="btnRightClick">Right Click</span>
+          </button>
         </div>
-      </div>
 
-      <!-- MOUSE BUTTONS -->
-      <div style="display: flex; gap: 8px; margin-bottom: 10px;">
-        <button class="btn btn-outline" id="btnMouseLeft" onclick="sendMouseClick('left')" style="flex: 1; padding: 12px 6px; font-weight: 600; font-size: 0.82rem;">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 5px; vertical-align: text-bottom;"><path d="M12 2a5 5 0 0 0-5 5v10a5 5 0 0 0 10 0V7a5 5 0 0 0-5-5z"/><line x1="12" y1="2" x2="12" y2="8"/></svg>
-          <span data-i18n="btnLeftClick">Left Click</span>
-        </button>
-        <button class="btn btn-outline" id="btnMouseMiddle" onclick="sendMouseClick('middle')" style="flex: 0 0 46px; padding: 12px 0;" title="Middle Click">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto;"><circle cx="12" cy="7" r="1.5"/><rect x="5" y="2" width="14" height="20" rx="7"/></svg>
-        </button>
-        <button class="btn btn-outline" id="btnMouseRight" onclick="sendMouseClick('right')" style="flex: 1; padding: 12px 6px; font-weight: 600; font-size: 0.82rem;">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 5px; vertical-align: text-bottom;"><path d="M12 2a5 5 0 0 0-5 5v10a5 5 0 0 0 10 0V7a5 5 0 0 0-5-5z"/><line x1="12" y1="2" x2="12" y2="8"/></svg>
-          <span data-i18n="btnRightClick">Right Click</span>
-        </button>
-      </div>
+        <!-- DRAG LOCK & DOUBLE CLICK ROW -->
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+          <button class="btn btn-outline" id="btnDragLock" onclick="toggleDragLock()" style="flex: 1; padding: 10px; font-size: 0.8rem; font-weight: 600;">
+            <span id="dragLockIcon">🔓</span> <span id="dragLockText" data-i18n="dragLock">Drag Lock (Hold Down)</span>
+          </button>
+          <button class="btn btn-outline" onclick="sendMouseDoubleClick()" style="flex: 1; padding: 10px; font-size: 0.8rem; font-weight: 600;" data-i18n="doubleClick">
+            Double Click
+          </button>
+        </div>
 
-      <!-- DRAG LOCK & DOUBLE CLICK ROW -->
-      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-        <button class="btn btn-outline" id="btnDragLock" onclick="toggleDragLock()" style="flex: 1; padding: 10px; font-size: 0.8rem; font-weight: 600;">
-          <span id="dragLockIcon">🔓</span> <span id="dragLockText" data-i18n="dragLock">Drag Lock (Hold Down)</span>
-        </button>
-        <button class="btn btn-outline" onclick="sendMouseDoubleClick()" style="flex: 1; padding: 10px; font-size: 0.8rem; font-weight: 600;" data-i18n="doubleClick">
-          Double Click
-        </button>
-      </div>
-
-      <!-- SENSITIVITY SLIDER -->
-      <div style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: rgba(255, 255, 255, 0.03); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.06);">
-        <span style="font-size: 0.75rem; color: var(--text-muted); min-width: 70px;" data-i18n="sensitivity">Sensitivity:</span>
-        <input type="range" id="sliderSensitivity" min="0.4" max="2.5" step="0.1" value="1.2" oninput="changeTrackpadSensitivity(this.value)" style="flex: 1; accent-color: var(--accent-primary);">
+        <!-- SENSITIVITY SLIDER -->
+        <div style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: rgba(255, 255, 255, 0.03); border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.06);">
+          <span style="font-size: 0.75rem; color: var(--text-muted); min-width: 70px;" data-i18n="sensitivity">Sensitivity:</span>
+          <input type="range" id="sliderSensitivity" min="0.4" max="2.5" step="0.1" value="1.2" oninput="changeTrackpadSensitivity(this.value)" style="flex: 1; accent-color: var(--accent-primary);">
+        </div>
       </div>
     </div>
 
     <!-- CARD: REMOTE KEYBOARD & KEYSTROKES -->
-    <div class="card" id="cardTeclado">
-      <div class="card-header">
+    <div class="card is-collapsed" id="cardTeclado">
+      <div class="card-header card-header-clickable" onclick="toggleCardCollapse('cardTeclado', event)">
         <div class="card-title-group">
           <h2 data-i18n="keyboardTitle">Remote Keyboard & Keystrokes</h2>
           <p data-i18n="keyboardDesc">Type phone text at PC cursor and send computer keys</p>
         </div>
-      </div>
-
-      <!-- TEXT INPUT BAR -->
-      <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-        <input type="text" id="inputRemoteText" placeholder="Type or dictate text to send to PC..." data-i18n="typePlaceholder" onkeydown="handleRemoteTextKeyDown(event)" style="flex: 1; padding: 11px 14px; font-size: 0.88rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; color: #fff; outline: none;">
-        <button class="btn btn-primary" onclick="sendRemoteText()" style="padding: 11px 16px; font-weight: 600;" data-i18n="btnSendText">
-          Send
-        </button>
-      </div>
-
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding: 0 4px;">
-        <label style="font-size: 0.75rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; cursor: pointer;">
-          <input type="checkbox" id="chkSendOnEnter" checked style="accent-color: var(--accent-primary);">
-          <span data-i18n="sendOnEnter">Send on Enter</span>
-        </label>
-        <label style="font-size: 0.75rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; cursor: pointer;">
-          <input type="checkbox" id="chkClearOnSend" checked style="accent-color: var(--accent-primary);">
-          <span data-i18n="clearOnSend">Clear after send</span>
-        </label>
-      </div>
-
-      <!-- CUSTOM COMBINATIONS BUILDER -->
-      <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 12px; margin-bottom: 14px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; flex-wrap: wrap; gap: 6px;">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span style="font-size: 0.78rem; font-weight: 600; color: var(--text);" data-i18n="customComboTitle">Custom Key Combinations</span>
-            <span id="modifierTimerBadge" style="display: none; font-size: 0.68rem; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); align-items: center; gap: 4px;">⏱️ 8s</span>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <div class="collapse-chevron" title="Colapsar / Expandir">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </div>
-          <button type="button" class="btn btn-outline btn-sm" onclick="resetStuckKeys()" style="font-size: 0.7rem; padding: 3px 8px; color: #f59e0b; border-color: rgba(245, 158, 11, 0.35);" title="Soltar Ctrl, Alt, Shift si quedaron presionadas" data-i18n="btnUnstickKeys">🔓 Unstick Keys</button>
         </div>
+      </div>
 
-        <!-- MODIFIERS SELECTOR -->
-        <div style="display: flex; gap: 6px; margin-bottom: 10px; margin-top: 8px;">
-          <button type="button" class="btn btn-outline btn-sm combo-mod-btn" id="modCtrl" onclick="toggleModifier('ctrl')" style="flex: 1; min-width: 50px; font-weight: 600;">Ctrl</button>
-          <button type="button" class="btn btn-outline btn-sm combo-mod-btn" id="modAlt" onclick="toggleModifier('alt')" style="flex: 1; min-width: 50px; font-weight: 600;">Alt</button>
-          <button type="button" class="btn btn-outline btn-sm combo-mod-btn" id="modShift" onclick="toggleModifier('shift')" style="flex: 1; min-width: 50px; font-weight: 600;">Shift</button>
-          <button type="button" class="btn btn-outline btn-sm combo-mod-btn" id="modWin" onclick="toggleModifier('win')" style="flex: 1; min-width: 50px; font-weight: 600;">Win</button>
-        </div>
-
-        <!-- KEY INPUT + SEND -->
+      <div class="card-collapsible-body">
+        <!-- TEXT INPUT BAR -->
         <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-          <input type="text" id="inputCustomKey" placeholder="Key (e.g. Esc, Tab, F4, D, W, Enter)..." data-i18n="comboKeyPlaceholder" onkeydown="if(event.key==='Enter') sendCustomCombination()" style="flex: 1; padding: 10px 12px; font-size: 0.84rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; color: #fff; outline: none;">
-          <button class="btn btn-primary btn-sm" onclick="sendCustomCombination()" style="padding: 10px 14px; font-weight: 600; font-size: 0.82rem;" data-i18n="btnSendCombo">
-            🚀 Send Combo
+          <input type="text" id="inputRemoteText" placeholder="Type or dictate text to send to PC..." data-i18n="typePlaceholder" onkeydown="handleRemoteTextKeyDown(event)" style="flex: 1; padding: 11px 14px; font-size: 0.88rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; color: #fff; outline: none;">
+          <button class="btn btn-primary" onclick="sendRemoteText()" style="padding: 11px 16px; font-weight: 600;" data-i18n="btnSendText">
+            Send
           </button>
         </div>
 
-        <!-- QUICK CHIPS -->
-        <div style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center;">
-          <span style="font-size: 0.7rem; color: var(--text-muted); margin-right: 4px;" data-i18n="comboPresets">Suggestions:</span>
-          <button type="button" class="chip-btn" onclick="setCustomKey('Esc')">Esc</button>
-          <button type="button" class="chip-btn" onclick="setCustomKey('Tab')">Tab</button>
-          <button type="button" class="chip-btn" onclick="setCustomKey('Enter')">Enter</button>
-          <button type="button" class="chip-btn" onclick="setCustomKey('F4')">F4</button>
-          <button type="button" class="chip-btn" onclick="setCustomKey('D')">D</button>
-          <button type="button" class="chip-btn" onclick="setCustomKey('R')">R</button>
-          <button type="button" class="chip-btn" onclick="setCustomKey('E')">E</button>
-          <button type="button" class="chip-btn" onclick="setCustomKey('W')">W</button>
-          <button type="button" class="chip-btn" onclick="setCustomKey('T')">T</button>
-          <button type="button" class="chip-btn" onclick="setCustomKey('L')">L</button>
-          <button type="button" class="chip-btn" onclick="setCustomKey('V')">V</button>
-          <button type="button" class="chip-btn" onclick="setCustomKey('Delete')">Del</button>
-          <button type="button" class="chip-btn" onclick="setCustomKey('Space')">Space</button>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; padding: 0 4px;">
+          <label style="font-size: 0.75rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; cursor: pointer;">
+            <input type="checkbox" id="chkSendOnEnter" checked style="accent-color: var(--accent-primary);">
+            <span data-i18n="sendOnEnter">Send on Enter</span>
+          </label>
+          <label style="font-size: 0.75rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; cursor: pointer;">
+            <input type="checkbox" id="chkClearOnSend" checked style="accent-color: var(--accent-primary);">
+            <span data-i18n="clearOnSend">Clear after send</span>
+          </label>
         </div>
 
-        <!-- POPULAR PRESETS -->
-        <div style="border-top: 1px dashed rgba(255, 255, 255, 0.08); margin-top: 10px; padding-top: 8px; display: flex; gap: 5px; flex-wrap: wrap;">
-          <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('ctrl+shift+esc')" style="font-size: 0.72rem; padding: 5px 8px;">Ctrl+Shift+Esc</button>
-          <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('alt+f4')" style="font-size: 0.72rem; padding: 5px 8px;">Alt+F4</button>
-          <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('win+d')" style="font-size: 0.72rem; padding: 5px 8px;">Win+D</button>
-          <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('win+r')" style="font-size: 0.72rem; padding: 5px 8px;">Win+R</button>
-          <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('win+e')" style="font-size: 0.72rem; padding: 5px 8px;">Win+E</button>
-          <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('win+l')" style="font-size: 0.72rem; padding: 5px 8px;">Win+L</button>
-          <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('win+v')" style="font-size: 0.72rem; padding: 5px 8px;">Win+V</button>
-          <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('ctrl+w')" style="font-size: 0.72rem; padding: 5px 8px;">Ctrl+W</button>
-          <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('ctrl+t')" style="font-size: 0.72rem; padding: 5px 8px;">Ctrl+T</button>
-          <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('ctrl+r')" style="font-size: 0.72rem; padding: 5px 8px;">Ctrl+R</button>
+        <!-- CUSTOM COMBINATIONS BUILDER -->
+        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 12px; margin-bottom: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; flex-wrap: wrap; gap: 6px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 0.78rem; font-weight: 600; color: var(--text);" data-i18n="customComboTitle">Custom Key Combinations</span>
+              <span id="modifierTimerBadge" style="display: none; font-size: 0.68rem; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); align-items: center; gap: 4px;">⏱️ 8s</span>
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" onclick="resetStuckKeys()" style="font-size: 0.7rem; padding: 3px 8px; color: #f59e0b; border-color: rgba(245, 158, 11, 0.35);" title="Soltar Ctrl, Alt, Shift si quedaron presionadas" data-i18n="btnUnstickKeys">🔓 Unstick Keys</button>
+          </div>
+
+          <!-- MODIFIERS SELECTOR -->
+          <div style="display: flex; gap: 6px; margin-bottom: 10px; margin-top: 8px;">
+            <button type="button" class="btn btn-outline btn-sm combo-mod-btn" id="modCtrl" onclick="toggleModifier('ctrl')" style="flex: 1; min-width: 50px; font-weight: 600;">Ctrl</button>
+            <button type="button" class="btn btn-outline btn-sm combo-mod-btn" id="modAlt" onclick="toggleModifier('alt')" style="flex: 1; min-width: 50px; font-weight: 600;">Alt</button>
+            <button type="button" class="btn btn-outline btn-sm combo-mod-btn" id="modShift" onclick="toggleModifier('shift')" style="flex: 1; min-width: 50px; font-weight: 600;">Shift</button>
+            <button type="button" class="btn btn-outline btn-sm combo-mod-btn" id="modWin" onclick="toggleModifier('win')" style="flex: 1; min-width: 50px; font-weight: 600;">Win</button>
+          </div>
+
+          <!-- KEY INPUT + SEND -->
+          <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+            <input type="text" id="inputCustomKey" placeholder="Key (e.g. Esc, Tab, F4, D, W, Enter)..." data-i18n="comboKeyPlaceholder" onkeydown="if(event.key==='Enter') sendCustomCombination()" style="flex: 1; padding: 10px 12px; font-size: 0.84rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; color: #fff; outline: none;">
+            <button class="btn btn-primary btn-sm" onclick="sendCustomCombination()" style="padding: 10px 14px; font-weight: 600; font-size: 0.82rem;" data-i18n="btnSendCombo">
+              🚀 Send Combo
+            </button>
+          </div>
+
+          <!-- QUICK CHIPS -->
+          <div style="display: flex; gap: 4px; flex-wrap: wrap; align-items: center;">
+            <span style="font-size: 0.7rem; color: var(--text-muted); margin-right: 4px;" data-i18n="comboPresets">Suggestions:</span>
+            <button type="button" class="chip-btn" onclick="setCustomKey('Esc')">Esc</button>
+            <button type="button" class="chip-btn" onclick="setCustomKey('Tab')">Tab</button>
+            <button type="button" class="chip-btn" onclick="setCustomKey('Enter')">Enter</button>
+            <button type="button" class="chip-btn" onclick="setCustomKey('F4')">F4</button>
+            <button type="button" class="chip-btn" onclick="setCustomKey('D')">D</button>
+            <button type="button" class="chip-btn" onclick="setCustomKey('R')">R</button>
+            <button type="button" class="chip-btn" onclick="setCustomKey('E')">E</button>
+            <button type="button" class="chip-btn" onclick="setCustomKey('W')">W</button>
+            <button type="button" class="chip-btn" onclick="setCustomKey('T')">T</button>
+            <button type="button" class="chip-btn" onclick="setCustomKey('L')">L</button>
+            <button type="button" class="chip-btn" onclick="setCustomKey('V')">V</button>
+            <button type="button" class="chip-btn" onclick="setCustomKey('Delete')">Del</button>
+            <button type="button" class="chip-btn" onclick="setCustomKey('Space')">Space</button>
+          </div>
+
+          <!-- POPULAR PRESETS -->
+          <div style="border-top: 1px dashed rgba(255, 255, 255, 0.08); margin-top: 10px; padding-top: 8px; display: flex; gap: 5px; flex-wrap: wrap;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('ctrl+shift+esc')" style="font-size: 0.72rem; padding: 5px 8px;">Ctrl+Shift+Esc</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('alt+f4')" style="font-size: 0.72rem; padding: 5px 8px;">Alt+F4</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('win+d')" style="font-size: 0.72rem; padding: 5px 8px;">Win+D</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('win+r')" style="font-size: 0.72rem; padding: 5px 8px;">Win+R</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('win+e')" style="font-size: 0.72rem; padding: 5px 8px;">Win+E</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('win+l')" style="font-size: 0.72rem; padding: 5px 8px;">Win+L</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('win+v')" style="font-size: 0.72rem; padding: 5px 8px;">Win+V</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('ctrl+w')" style="font-size: 0.72rem; padding: 5px 8px;">Ctrl+W</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('ctrl+t')" style="font-size: 0.72rem; padding: 5px 8px;">Ctrl+T</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="sendKey('ctrl+r')" style="font-size: 0.72rem; padding: 5px 8px;">Ctrl+R</button>
+          </div>
         </div>
-      </div>
-      <!-- COMMON COMPUTER KEYS -->
-      <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;" data-i18n="specialKeys">
-        Special Computer Keys
-      </div>
-
-      <!-- ROW 1: CORE KEYS -->
-      <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 6px;">
-        <button class="btn btn-outline btn-sm" onclick="sendKey('Escape')">Esc</button>
-        <button class="btn btn-outline btn-sm" onclick="sendKey('Tab')">Tab</button>
-        <button class="btn btn-outline btn-sm" onclick="sendKey('Win')">⊞ Win</button>
-        <button class="btn btn-outline btn-sm" onclick="sendKey('Backspace')" title="Backspace">⌫ Del</button>
-        <button class="btn btn-outline btn-sm" onclick="sendKey('Enter')" style="font-weight: 700; color: var(--accent-primary);">↵ Enter</button>
-      </div>
-
-      <!-- ROW 2: SHORTCUTS -->
-      <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 6px;">
-        <button class="btn btn-outline btn-sm" onclick="sendKey('ctrl+c')">Ctrl+C</button>
-        <button class="btn btn-outline btn-sm" onclick="sendKey('ctrl+v')">Ctrl+V</button>
-        <button class="btn btn-outline btn-sm" onclick="sendKey('ctrl+z')">Ctrl+Z</button>
-        <button class="btn btn-outline btn-sm" onclick="sendKey('ctrl+a')">Ctrl+A</button>
-        <button class="btn btn-outline btn-sm" onclick="sendKey('alt+tab')">Alt+Tab</button>
-      </div>
-
-      <!-- ROW 3: NAVIGATION & EDIT -->
-      <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 8px;">
-        <button class="btn btn-outline btn-sm" onclick="sendKey('Delete')">Supr</button>
-        <button class="btn btn-outline btn-sm" onclick="sendKey('Home')">Home</button>
-        <button class="btn btn-outline btn-sm" onclick="sendKey('End')">End</button>
-        <button class="btn btn-outline btn-sm" onclick="sendKey('PageUp')">PgUp</button>
-        <button class="btn btn-outline btn-sm" onclick="sendKey('PageDown')">PgDn</button>
-      </div>
-
-      <!-- ROW 4: ARROWS -->
-      <div style="display: flex; justify-content: center; gap: 6px; margin-bottom: 10px;">
-        <button class="btn btn-outline btn-sm" onclick="sendKey('ArrowLeft')" style="width: 52px; font-size: 1rem;">◄</button>
-        <div style="display: flex; flex-direction: column; gap: 4px;">
-          <button class="btn btn-outline btn-sm" onclick="sendKey('ArrowUp')" style="width: 52px; font-size: 1rem;">▲</button>
-          <button class="btn btn-outline btn-sm" onclick="sendKey('ArrowDown')" style="width: 52px; font-size: 1rem;">▼</button>
+        <!-- COMMON COMPUTER KEYS -->
+        <div style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;" data-i18n="specialKeys">
+          Special Computer Keys
         </div>
-        <button class="btn btn-outline btn-sm" onclick="sendKey('ArrowRight')" style="width: 52px; font-size: 1rem;">►</button>
-      </div>
 
-      <!-- EXPANDABLE F1-F12 SECTION -->
-      <details style="background: rgba(255, 255, 255, 0.02); border-radius: 8px; padding: 6px 10px; border: 1px solid rgba(255, 255, 255, 0.05);">
-        <summary style="font-size: 0.72rem; color: var(--text-muted); cursor: pointer; user-select: none;" data-i18n="fnKeysSummary">Function Keys (F1 - F12)</summary>
-        <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; margin-top: 8px;">
-          <button class="btn btn-outline btn-sm" onclick="sendKey('F1')">F1</button>
-          <button class="btn btn-outline btn-sm" onclick="sendKey('F2')">F2</button>
-          <button class="btn btn-outline btn-sm" onclick="sendKey('F3')">F3</button>
-          <button class="btn btn-outline btn-sm" onclick="sendKey('F4')">F4</button>
-          <button class="btn btn-outline btn-sm" onclick="sendKey('F5')">F5</button>
-          <button class="btn btn-outline btn-sm" onclick="sendKey('F6')">F6</button>
-          <button class="btn btn-outline btn-sm" onclick="sendKey('F7')">F7</button>
-          <button class="btn btn-outline btn-sm" onclick="sendKey('F8')">F8</button>
-          <button class="btn btn-outline btn-sm" onclick="sendKey('F9')">F9</button>
-          <button class="btn btn-outline btn-sm" onclick="sendKey('F10')">F10</button>
-          <button class="btn btn-outline btn-sm" onclick="sendKey('F11')">F11</button>
-          <button class="btn btn-outline btn-sm" onclick="sendKey('F12')">F12</button>
+        <!-- ROW 1: CORE KEYS -->
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 6px;">
+          <button class="btn btn-outline btn-sm" onclick="sendKey('Escape')">Esc</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('Tab')">Tab</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('Win')">⊞ Win</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('Backspace')" title="Backspace">⌫ Del</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('Enter')" style="font-weight: 700; color: var(--accent-primary);">↵ Enter</button>
         </div>
-      </details>
+
+        <!-- ROW 2: SHORTCUTS -->
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 6px;">
+          <button class="btn btn-outline btn-sm" onclick="sendKey('ctrl+c')">Ctrl+C</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('ctrl+v')">Ctrl+V</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('ctrl+z')">Ctrl+Z</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('ctrl+a')">Ctrl+A</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('alt+tab')">Alt+Tab</button>
+        </div>
+
+        <!-- ROW 3: NAVIGATION & EDIT -->
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 8px;">
+          <button class="btn btn-outline btn-sm" onclick="sendKey('Delete')">Supr</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('Home')">Home</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('End')">End</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('PageUp')">PgUp</button>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('PageDown')">PgDn</button>
+        </div>
+
+        <!-- ROW 4: ARROWS -->
+        <div style="display: flex; justify-content: center; gap: 6px; margin-bottom: 10px;">
+          <button class="btn btn-outline btn-sm" onclick="sendKey('ArrowLeft')" style="width: 52px; font-size: 1rem;">◄</button>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <button class="btn btn-outline btn-sm" onclick="sendKey('ArrowUp')" style="width: 52px; font-size: 1rem;">▲</button>
+            <button class="btn btn-outline btn-sm" onclick="sendKey('ArrowDown')" style="width: 52px; font-size: 1rem;">▼</button>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="sendKey('ArrowRight')" style="width: 52px; font-size: 1rem;">►</button>
+        </div>
+
+        <!-- EXPANDABLE F1-F12 SECTION -->
+        <details style="background: rgba(255, 255, 255, 0.02); border-radius: 8px; padding: 6px 10px; border: 1px solid rgba(255, 255, 255, 0.05);">
+          <summary style="font-size: 0.72rem; color: var(--text-muted); cursor: pointer; user-select: none;" data-i18n="fnKeysSummary">Function Keys (F1 - F12)</summary>
+          <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; margin-top: 8px;">
+            <button class="btn btn-outline btn-sm" onclick="sendKey('F1')">F1</button>
+            <button class="btn btn-outline btn-sm" onclick="sendKey('F2')">F2</button>
+            <button class="btn btn-outline btn-sm" onclick="sendKey('F3')">F3</button>
+            <button class="btn btn-outline btn-sm" onclick="sendKey('F4')">F4</button>
+            <button class="btn btn-outline btn-sm" onclick="sendKey('F5')">F5</button>
+            <button class="btn btn-outline btn-sm" onclick="sendKey('F6')">F6</button>
+            <button class="btn btn-outline btn-sm" onclick="sendKey('F7')">F7</button>
+            <button class="btn btn-outline btn-sm" onclick="sendKey('F8')">F8</button>
+            <button class="btn btn-outline btn-sm" onclick="sendKey('F9')">F9</button>
+            <button class="btn btn-outline btn-sm" onclick="sendKey('F10')">F10</button>
+            <button class="btn btn-outline btn-sm" onclick="sendKey('F11')">F11</button>
+            <button class="btn btn-outline btn-sm" onclick="sendKey('F12')">F12</button>
+          </div>
+        </details>
+      </div>
     </div>
 
     <!-- CARD 2: ACCIONES DE SISTEMA -->
@@ -4879,6 +4929,8 @@ const DASHBOARD_HTML = `
     const DEFAULT_CARD_ORDER = ['cardBrowser', 'cardMousePad', 'cardTeclado', 'cardSistema', 'cardReiniciar', 'cardMultimedia', 'cardEnergia'];
     const CARD_TITLES = {
       'cardBrowser': 'Navegador Activo',
+      'cardMousePad': 'Trackpad & Mouse',
+      'cardTeclado': 'Teclado Remoto',
       'cardSistema': 'Acciones de Sistema',
       'cardReiniciar': 'Reiniciar Servidor',
       'cardMultimedia': 'Controles Multimedia, Brillo & Voz',
@@ -5789,6 +5841,16 @@ const DASHBOARD_HTML = `
       btn.addEventListener('pointercancel', endPress, { passive: false });
       btn.addEventListener('pointerleave', endPress, { passive: false });
       btn.addEventListener('contextmenu', (e) => e.preventDefault());
+    }
+
+    function toggleCardCollapse(cardId, e) {
+      if (typeof isEditModeActive !== 'undefined' && isEditModeActive) return;
+      if (e && e.target && e.target.closest('button, input, select, a, .card-edit-bar')) {
+        return;
+      }
+      const card = document.getElementById(cardId);
+      if (!card) return;
+      card.classList.toggle('is-collapsed');
     }
 
     function enterTrackpadFullscreen() {
