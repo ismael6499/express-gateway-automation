@@ -3666,11 +3666,7 @@ const DASHBOARD_HTML = `
             <span data-i18n="brightnessLevel">Brightness Level</span>
             <span id="brilloVal">--%</span>
           </div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <button type="button" class="btn btn-sm btn-outline" onclick="ajustarBrilloPaso(-1)" style="padding: 6px 10px; font-size: 0.78rem; font-weight: 600; min-width: 44px; display: inline-flex; align-items: center; justify-content: center;" title="Bajar 1%">-1%</button>
-            <input type="range" class="slider" id="brilloSlider" min="0" max="100" step="1" value="50" oninput="updateBrilloLabel(this.value)" onchange="cambiarBrillo(this.value)" style="flex: 1; margin: 0;">
-            <button type="button" class="btn btn-sm btn-outline" onclick="ajustarBrilloPaso(1)" style="padding: 6px 10px; font-size: 0.78rem; font-weight: 600; min-width: 44px; display: inline-flex; align-items: center; justify-content: center;" title="Subir 1%">+1%</button>
-          </div>
+          <input type="range" class="slider" id="brilloSlider" min="0" max="100" step="1" value="50" oninput="updateBrilloLabel(this.value)" onchange="cambiarBrillo(this.value)">
         </div>
       </div>
 
@@ -3862,15 +3858,6 @@ const DASHBOARD_HTML = `
       document.getElementById('brilloVal').innerText = val + '%';
     }
 
-    async function ajustarBrilloPaso(delta) {
-      const slider = document.getElementById('brilloSlider');
-      let current = parseInt(slider.value, 10);
-      if (isNaN(current)) current = 50;
-      const newVal = Math.max(0, Math.min(100, current + delta));
-      slider.value = newVal;
-      updateBrilloLabel(newVal);
-      await cambiarBrillo(newVal);
-    }
 
     async function obtenerBrillo() {
       try {
