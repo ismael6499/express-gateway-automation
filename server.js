@@ -27,6 +27,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Servir archivos estáticos de PWA (manifest, service worker, iconos)
+app.use(express.static(path.join(__dirname, 'public')));
+
 // Helper para logs formateados con timestamp [HH:MM:SS]
 const logFile = path.join(__dirname, 'gateway_server.log');
 function log(message) {
@@ -304,7 +307,7 @@ function sendInputCommand(cmd) {
 
 // Middleware de Autenticación para rutas de la API (interviene en /browser, /sistema, y /gateway/status)
 app.use((req, res, next) => {
-  if (req.path === '/' || req.path === '/favicon.ico' || req.path === '/gateway/login' || req.path === '/gateway/restart' || req.path === '/system/restart') {
+  if (req.path === '/' || req.path === '/favicon.ico' || req.path === '/manifest.json' || req.path === '/sw.js' || req.path.startsWith('/icon-') || req.path === '/gateway/login' || req.path === '/gateway/restart' || req.path === '/system/restart') {
     return next();
   }
 
@@ -1990,6 +1993,15 @@ const LOGIN_HTML = `
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Access Required - Gateway Control Center</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0b0f19">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Gateway">
+  <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -2170,6 +2182,12 @@ const LOGIN_HTML = `
         errorDiv.style.display = 'block';
       }
     }
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function() {});
+      });
+    }
   </script>
 </body>
 </html>
@@ -2182,6 +2200,15 @@ const DASHBOARD_HTML = `
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gateway Control Center</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0b0f19">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Gateway">
+  <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -3057,6 +3084,9 @@ const DASHBOARD_HTML = `
       <p data-i18n="appDesc">API Gateway & Automation Server</p>
     </div>
     <div class="header-buttons">
+      <button class="btn btn-sm btn-outline" id="btnInstallPwa" onclick="triggerPwaInstall()" style="display: none; font-weight: 600; padding: 4px 10px; border-radius: 8px; font-size: 0.8rem; margin-right: 6px; letter-spacing: 0.5px; border-color: var(--primary); color: var(--text);" title="Instalar WebApp en el celular">
+        📲 <span data-i18n="installApp">Install App</span>
+      </button>
       <button class="btn btn-sm btn-outline" id="btnLangToggle" onclick="toggleLanguage()" style="font-weight: 600; padding: 4px 10px; border-radius: 8px; font-size: 0.8rem; margin-right: 6px; letter-spacing: 0.5px;" title="Switch Language (English / Español)">
         🌐 EN
       </button>
@@ -5393,6 +5423,7 @@ const DASHBOARD_HTML = `
       en: {
         appTitle: "Gateway Control Center",
         appDesc: "API Gateway & Automation Server",
+        installApp: "Install App",
         editModeBanner: "Edit Mode: Drag ⠿ to reorder or use 👁️ to hide/show.",
         btnReset: "Reset",
         btnDone: "Done",
@@ -5497,6 +5528,7 @@ const DASHBOARD_HTML = `
       es: {
         appTitle: "Centro de Control Gateway",
         appDesc: "API Gateway y Servidor de Automatización",
+        installApp: "Instalar App",
         editModeBanner: "Modo Edición: Arrastra ⠿ para reordenar o usa 👁️ para ocultar/mostrar.",
         btnReset: "Restablecer",
         btnDone: "Listo",
@@ -6261,6 +6293,47 @@ const DASHBOARD_HTML = `
       }
     }
 
+    // === PWA & SERVICE WORKER INSTALLATION ===
+    let deferredInstallPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      const btnInstall = document.getElementById('btnInstallPwa');
+      if (btnInstall) {
+        btnInstall.style.display = 'inline-flex';
+      }
+    });
+
+    window.addEventListener('appinstalled', () => {
+      deferredInstallPrompt = null;
+      const btnInstall = document.getElementById('btnInstallPwa');
+      if (btnInstall) btnInstall.style.display = 'none';
+      showToast(currentLang === 'es' ? 'App instalada con éxito' : 'App installed successfully', 'success');
+    });
+
+    function triggerPwaInstall() {
+      if (deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+        deferredInstallPrompt.userChoice.then((choiceResult) => {
+          if (choiceResult && choiceResult.outcome === 'accepted') {
+            console.log('PWA installation accepted');
+          }
+          deferredInstallPrompt = null;
+          const btnInstall = document.getElementById('btnInstallPwa');
+          if (btnInstall) btnInstall.style.display = 'none';
+        });
+      } else {
+        showToast(currentLang === 'es' ? 'Usa el menú de Brave (...) y toca "Instalar aplicación" o "Agregar a inicio"' : 'Use Brave menu (...) and tap "Install app" or "Add to Home screen"', 'info');
+      }
+    }
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' })
+          .then((reg) => console.log('Gateway PWA ServiceWorker registered with scope:', reg.scope))
+          .catch((err) => console.error('Gateway PWA ServiceWorker registration failed:', err));
+      });
+    }
   </script>
   <div id="restartOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(10, 10, 12, 0.9); z-index: 9999; align-items: center; justify-content: center; flex-direction: column; color: #fff; text-align: center; padding: 20px; box-sizing: border-box;">
     <div style="border: 4px solid rgba(255,255,255,0.1); border-left-color: var(--primary || #3b82f6); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px;"></div>
