@@ -27,8 +27,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Servir archivos estáticos de PWA (manifest, service worker, iconos)
-app.use(express.static(path.join(__dirname, 'public')));
 
 // Helper para logs formateados con timestamp [HH:MM:SS]
 const logFile = path.join(__dirname, 'gateway_server.log');
@@ -307,7 +305,7 @@ function sendInputCommand(cmd) {
 
 // Middleware de Autenticación para rutas de la API (interviene en /browser, /sistema, y /gateway/status)
 app.use((req, res, next) => {
-  if (req.path === '/' || req.path === '/favicon.ico' || req.path === '/manifest.json' || req.path === '/sw.js' || req.path.startsWith('/icon-') || req.path === '/gateway/login' || req.path === '/gateway/restart' || req.path === '/system/restart') {
+  if (req.path === '/' || req.path === '/favicon.ico' || req.path === '/gateway/login' || req.path === '/gateway/restart' || req.path === '/system/restart') {
     return next();
   }
 
@@ -326,6 +324,9 @@ app.use((req, res, next) => {
 
   next();
 });
+
+// Servir archivos estáticos de PWA (manifest, service worker, iconos) estrictamente protegidos tras autenticación
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Endpoint POST /gateway/login para autenticación web segura con Set-Cookie de servidor
 app.post('/gateway/login', (req, res) => {
@@ -1993,15 +1994,6 @@ const LOGIN_HTML = `
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Access Required - Gateway Control Center</title>
-  <link rel="manifest" href="/manifest.json">
-  <meta name="theme-color" content="#0b0f19">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Gateway">
-  <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png">
-  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
-  <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -2183,11 +2175,6 @@ const LOGIN_HTML = `
       }
     }
 
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function() {
-        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function() {});
-      });
-    }
   </script>
 </body>
 </html>
@@ -2200,7 +2187,7 @@ const DASHBOARD_HTML = `
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gateway Control Center</title>
-  <link rel="manifest" href="/manifest.json">
+  <link rel="manifest" href="/manifest.json" crossorigin="use-credentials">
   <meta name="theme-color" content="#0b0f19">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
