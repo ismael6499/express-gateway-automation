@@ -6,6 +6,10 @@ const ngrok = require('@ngrok/ngrok');
 const fs = require('fs');
 const { exec, spawn } = require('child_process');
 
+// Diccionarios centralizados de internacionalización (i18n)
+const i18nEn = JSON.parse(fs.readFileSync(path.join(__dirname, 'locales', 'en.json'), 'utf8'));
+const i18nEs = JSON.parse(fs.readFileSync(path.join(__dirname, 'locales', 'es.json'), 'utf8'));
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const API_KEY = process.env.API_KEY;
@@ -1989,11 +1993,11 @@ app.post(['/system/close', '/sistema/cerrar'], (req, res) => {
 // HTML para la Pantalla de Login Segura (Glassmorphism)
 const LOGIN_HTML = `
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Access Required - Gateway Control Center</title>
+  <title data-i18n="loginTitle">Gateway Access - Gateway Control Center</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -2112,20 +2116,44 @@ const LOGIN_HTML = `
 <body>
 
   <div class="login-container">
-    <h1>Acceso al Gateway</h1>
-    <p class="subtitle">Introduce tu X-API-KEY para continuar</p>
+    <h1 data-i18n="loginTitle">Gateway Access</h1>
+    <p class="subtitle" data-i18n="loginSubtitle">Enter your X-API-KEY to continue</p>
     
     <div class="form-group">
-      <label for="apiKeyInput">Clave X-API-KEY</label>
-      <input type="password" id="apiKeyInput" placeholder="Introduce la API Key del servidor" onkeydown="if(event.key === 'Enter') login()">
+      <label for="apiKeyInput" data-i18n="loginLabel">X-API-KEY Key</label>
+      <input type="password" id="apiKeyInput" data-i18n-placeholder="loginPlaceholder" placeholder="Enter server API Key" onkeydown="if(event.key === 'Enter') login()">
     </div>
     
-    <button class="btn" onclick="login()">Acceder</button>
-    <div id="errorMsg" class="error-msg">Clave API incorrecta. Inténtalo de nuevo.</div>
+    <button class="btn" onclick="login()" data-i18n="loginBtn">Sign In</button>
+    <div id="errorMsg" class="error-msg" data-i18n="loginErrorInvalid">Incorrect API Key. Please try again.</div>
   </div>
 
   <script>
+    const I18N = {
+      en: \${JSON.stringify(i18nEn)},
+      es: \${JSON.stringify(i18nEs)}
+    };
+    let currentLang = localStorage.getItem('dashboard_lang') || 'en';
+
+    function t(key, fallback = '') {
+      const dict = I18N[currentLang] || I18N.en || {};
+      return dict[key] !== undefined ? dict[key] : (fallback || key);
+    }
+
+    function applyLoginI18n() {
+      const dict = I18N[currentLang] || I18N.en;
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (dict[key]) el.innerText = dict[key];
+      });
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (dict[key]) el.placeholder = dict[key];
+      });
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
+      applyLoginI18n();
       const savedKey = localStorage.getItem('X-API-KEY');
       if (savedKey) {
         document.getElementById('apiKeyInput').value = savedKey;
@@ -2140,7 +2168,7 @@ const LOGIN_HTML = `
       const errorDiv = document.getElementById('errorMsg');
       
       if (!key) {
-        errorDiv.innerText = 'Por favor, ingresa una clave.';
+        errorDiv.innerText = t('loginErrorEmpty', 'Please enter an API key.');
         errorDiv.style.display = 'block';
         return;
       }
@@ -2163,14 +2191,14 @@ const LOGIN_HTML = `
           if (isAutoLogin) {
             sessionStorage.setItem('auto_login_failed', 'true');
           }
-          errorDiv.innerText = 'Clave API incorrecta o rechazada por el servidor.';
+          errorDiv.innerText = t('loginErrorInvalid', 'Incorrect API Key. Please try again.');
           errorDiv.style.display = 'block';
         }
       } catch (err) {
         if (isAutoLogin) {
           sessionStorage.setItem('auto_login_failed', 'true');
         }
-        errorDiv.innerText = 'Error al comunicar con el servidor.';
+        errorDiv.innerText = t('loginErrorNetwork', 'Error communicating with the server.');
         errorDiv.style.display = 'block';
       }
     }
@@ -2182,7 +2210,7 @@ const LOGIN_HTML = `
 
 const DASHBOARD_HTML = `
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -3066,21 +3094,21 @@ const DASHBOARD_HTML = `
 <body>
 
   <header>
-    <div class="logo-container" id="logoContainer" onclick="handleSecretHeaderClick()" style="cursor: pointer; user-select: none;" title="Gateway Control Center">
-      <h1>Gateway Control Center</h1>
+    <div class="logo-container" id="logoContainer" onclick="handleSecretHeaderClick()" style="cursor: pointer; user-select: none;" data-i18n-title="appTitle" title="Gateway Control Center">
+      <h1 data-i18n="appTitle">Gateway Control Center</h1>
       <p data-i18n="appDesc">API Gateway & Automation Server</p>
     </div>
     <div class="header-buttons">
-      <button class="btn btn-sm btn-outline" id="btnInstallPwa" onclick="triggerPwaInstall()" style="display: none; font-weight: 600; padding: 4px 10px; border-radius: 8px; font-size: 0.8rem; margin-right: 6px; letter-spacing: 0.5px; border-color: var(--primary); color: var(--text);" title="Instalar WebApp en el celular">
+      <button class="btn btn-sm btn-outline" id="btnInstallPwa" onclick="triggerPwaInstall()" style="display: none; font-weight: 600; padding: 4px 10px; border-radius: 8px; font-size: 0.8rem; margin-right: 6px; letter-spacing: 0.5px; border-color: var(--primary); color: var(--text);" data-i18n-title="installAppTitle" title="Install WebApp on mobile device">
         📲 <span data-i18n="installApp">Install App</span>
       </button>
-      <button class="btn btn-sm btn-outline" id="btnLangToggle" onclick="toggleLanguage()" style="font-weight: 600; padding: 4px 10px; border-radius: 8px; font-size: 0.8rem; margin-right: 6px; letter-spacing: 0.5px;" title="Switch Language (English / Español)">
+      <button class="btn btn-sm btn-outline" id="btnLangToggle" onclick="toggleLanguage()" style="font-weight: 600; padding: 4px 10px; border-radius: 8px; font-size: 0.8rem; margin-right: 6px; letter-spacing: 0.5px;" data-i18n-title="switchLangTitle" title="Switch Language (English / Spanish)">
         🌐 EN
       </button>
-      <button class="btn-icon" id="btnToggleEditMode" onclick="toggleEditMode()" title="Edit and rearrange sections">
+      <button class="btn-icon" id="btnToggleEditMode" onclick="toggleEditMode()" data-i18n-title="editModeTitle" title="Edit and rearrange sections">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
       </button>
-      <button class="btn-icon" onclick="logout()" title="Cerrar Sesión">
+      <button class="btn-icon" onclick="logout()" data-i18n-title="logoutTitle" title="Log Out">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
       </button>
     </div>
@@ -3118,40 +3146,40 @@ const DASHBOARD_HTML = `
       </div>
 
       <!-- SECCIÓN 1.A: NAVEGADOR -->
-      <div class="sub-section" id="sub_browser_window" data-sub-title="Ventana del Navegador">
+      <div class="sub-section" id="sub_browser_window" data-sub-title="Browser Window" data-i18n-sub-title="subBrowserWindow">
         <div class="sub-section-header">
           <div class="card-section-title" style="margin-bottom: 0;" data-i18n="subBrowserWindow">Browser Window</div>
         </div>
         <div class="btn-row" style="margin-top: 8px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 8px;">
           <button class="btn btn-primary" id="btnBrowserOpen" onclick="controlBrowser('abrir')" style="flex: 1 1 calc(50% - 4px); min-width: 120px; margin-top: 0;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-            Abrir Ventana
+            <span data-i18n="btnBrowserOpen">Open Window</span>
           </button>
           <button class="btn btn-danger" id="btnBrowserClose" onclick="controlBrowser('cerrar')" style="flex: 1 1 calc(50% - 4px); min-width: 120px; margin-top: 0;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="9" x2="15" y2="15"></line><line x1="15" y1="9" x2="9" y2="15"></line></svg>
-            Cerrar Ventana
+            <span data-i18n="btnCloseWindow">Close Window</span>
           </button>
           <button class="btn" id="btnBrowserMinimize" onclick="controlBrowser('minimizar')" style="flex: 1 1 calc(50% - 4px); min-width: 120px; margin-top: 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text);">
-            Minimizar
+            <span data-i18n="btnMinimize">Minimize</span>
           </button>
           <button class="btn" id="btnBrowserRestore" onclick="controlBrowser('restaurar')" style="flex: 1 1 calc(50% - 4px); min-width: 120px; margin-top: 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text);">
-            Restaurar/Ver
+            <span data-i18n="btnRestore">Restore/View</span>
           </button>
         </div>
       </div>
 
       <!-- SECCIÓN 1.B: AUTOMATIZACIÓN DE ACTIVIDAD -->
-      <div class="sub-section" id="sub_browser_presencia" data-sub-title="Mantener Sesión Activa">
+      <div class="sub-section" id="sub_browser_presencia" data-sub-title="Keep Active Session" data-i18n-sub-title="subKeepalive">
         <div class="divider"></div>
         <div class="sub-section-header" style="margin-bottom: 5px;">
           <div class="card-section-title" style="margin-bottom: 0;" data-i18n="subKeepalive">Keep Active Session</div>
-          <div id="lastActivityLabel" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500; letter-spacing: 0.3px;">Última: Sin actividad</div>
+          <div id="lastActivityLabel" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500; letter-spacing: 0.3px;">Last: No activity</div>
         </div>
         
         <div class="form-group">
           <div class="form-label-row">
             <span data-i18n="activityIntervalLabel">Activity Interval (minutes)</span>
-            <span id="browserIntervalVal">4 minutos</span>
+            <span id="browserIntervalVal">4 minutes</span>
           </div>
           <input type="number" class="number-input" id="browserIntervalInput" min="1" max="9999" step="1" value="4" onchange="cambiarIntervaloEnCaliente(this.value)">
         </div>
@@ -3159,15 +3187,15 @@ const DASHBOARD_HTML = `
         <div class="btn-row" style="display: flex; gap: 8px; flex-wrap: wrap;">
           <button class="btn btn-success" id="btnPresenciaPlay" onclick="controlPresencia('iniciar')" style="flex: 1 1 calc(33% - 6px); min-width: 100px;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-            Iniciar
+            <span data-i18n="btnStart">Start</span>
           </button>
           <button class="btn" id="btnPresenciaPausaTemporal" onclick="abrirModalPausaTemporal()" style="flex: 1 1 calc(33% - 6px); min-width: 110px; background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.4); color: #f59e0b;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-            Pausa Temp
+            <span data-i18n="btnTempPause">Temp Pause</span>
           </button>
           <button class="btn" id="btnPresenciaPause" onclick="controlPresencia('pausar')" style="flex: 1 1 calc(33% - 6px); min-width: 100px;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
-            Pausar
+            <span data-i18n="btnPause">Pause</span>
           </button>
         </div>
 
@@ -3181,7 +3209,7 @@ const DASHBOARD_HTML = `
       </div>
 
       <!-- SECCIÓN 1.C: PLANIFICACIÓN Y CONTROL HORARIO -->
-      <div class="sub-section" id="sub_browser_schedule" data-sub-title="Programación Horaria">
+      <div class="sub-section" id="sub_browser_schedule" data-sub-title="Scheduled Hours" data-i18n-sub-title="subSchedule">
         <div class="divider"></div>
         <div class="sub-section-header">
           <div class="card-section-title" style="margin-bottom: 0;" data-i18n="subSchedule">Scheduled Hours</div>
@@ -3202,22 +3230,22 @@ const DASHBOARD_HTML = `
             <label style="font-size: 0.75rem; color: var(--text-muted); display: block; margin-bottom: 6px;" data-i18n="lblAllowedDays">Allowed Days</label>
             <div style="display: flex; justify-content: space-between; gap: 4px;">
               <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-0">
-                <input type="checkbox" class="day-checkbox" value="0" style="display:none;" onchange="updateSchedule()">D
+                <input type="checkbox" class="day-checkbox" value="0" style="display:none;" onchange="updateSchedule()">S
               </label>
               <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-1">
-                <input type="checkbox" class="day-checkbox" value="1" style="display:none;" onchange="updateSchedule()">L
+                <input type="checkbox" class="day-checkbox" value="1" style="display:none;" onchange="updateSchedule()">M
               </label>
               <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-2">
-                <input type="checkbox" class="day-checkbox" value="2" style="display:none;" onchange="updateSchedule()">M
+                <input type="checkbox" class="day-checkbox" value="2" style="display:none;" onchange="updateSchedule()">T
               </label>
               <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-3">
-                <input type="checkbox" class="day-checkbox" value="3" style="display:none;" onchange="updateSchedule()">M
+                <input type="checkbox" class="day-checkbox" value="3" style="display:none;" onchange="updateSchedule()">W
               </label>
               <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-4">
-                <input type="checkbox" class="day-checkbox" value="4" style="display:none;" onchange="updateSchedule()">J
+                <input type="checkbox" class="day-checkbox" value="4" style="display:none;" onchange="updateSchedule()">T
               </label>
               <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-5">
-                <input type="checkbox" class="day-checkbox" value="5" style="display:none;" onchange="updateSchedule()">V
+                <input type="checkbox" class="day-checkbox" value="5" style="display:none;" onchange="updateSchedule()">F
               </label>
               <label style="flex: 1; text-align: center; font-size: 0.75rem; padding: 6px 0; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 8px; cursor: pointer; display: block;" id="lbl-day-6">
                 <input type="checkbox" class="day-checkbox" value="6" style="display:none;" onchange="updateSchedule()">S
@@ -3228,7 +3256,7 @@ const DASHBOARD_HTML = `
       </div>
 
       <!-- SUB 1.D: AUTO-CIERRE DEL NAVEGADOR -->
-      <div class="sub-section" id="sub_browser_autoclose" data-sub-title="Auto-Cierre del Navegador">
+      <div class="sub-section" id="sub_browser_autoclose" data-sub-title="Browser Auto-Close" data-i18n-sub-title="subAutoClose">
         <div style="border-top: 1px dashed rgba(255,255,255,0.15); margin: 20px 0 15px 0;"></div>
         <div class="sub-section-header">
           <div class="card-section-title" style="margin-bottom: 0;" data-i18n="subAutoClose">Browser Auto-Close</div>
@@ -3251,7 +3279,7 @@ const DASHBOARD_HTML = `
       </div>
 
       <!-- SUB 1.E: CIERRE FLEX -->
-      <div class="sub-section" id="sub_browser_flexclose" data-sub-title="Cierre Flex">
+      <div class="sub-section" id="sub_browser_flexclose" data-sub-title="Flex Close" data-i18n-sub-title="subFlexClose">
         <div style="border-top: 1px dashed rgba(255,255,255,0.15); margin: 20px 0 15px 0;"></div>
         <div class="sub-section-header">
           <div class="card-section-title" style="margin-bottom: 0;" data-i18n="subFlexClose">Flex Close</div>
@@ -3267,7 +3295,7 @@ const DASHBOARD_HTML = `
           </div>
           <div style="flex: 0.8; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; margin-top: 14px; min-width: 120px;">
             <div class="switch-container" style="margin-top: 0; justify-content: flex-end; gap: 10px;">
-              <span style="font-size: 0.85rem; color: var(--text-muted);">Cierre Flex</span>
+              <span style="font-size: 0.85rem; color: var(--text-muted);" data-i18n="subFlexClose">Flex Close</span>
               <label class="switch">
                 <input type="checkbox" id="browserFlexCloseEnabled" onchange="updateSchedule()">
                 <span class="slider-toggle"></span>
@@ -3278,17 +3306,17 @@ const DASHBOARD_HTML = `
       </div>
 
       <!-- SECCIÓN 1.F: PRUEBAS MANUALES EN CALIENTE -->
-      <div class="sub-section" id="sub_browser_manualtests" data-sub-title="Pruebas de Entrada">
+      <div class="sub-section" id="sub_browser_manualtests" data-sub-title="Input Tests (Instant Actions)" data-i18n-sub-title="subInputTests">
         <div class="divider"></div>
         <div class="sub-section-header">
           <div class="card-section-title" style="margin-bottom: 0;" data-i18n="subInputTests">Input Tests (Instant Actions)</div>
         </div>
         <div class="btn-row" style="gap: 8px; margin-top: 10px;">
           <button class="btn" id="btnTestMouse" onclick="enviarAccionPrueba('mover-mouse')" style="padding: 8px; font-size: 0.75rem;">
-            Mover Cursor
+            <span data-i18n="btnMoveCursor">Move Cursor</span>
           </button>
           <button class="btn" id="btnTestTipeo" onclick="enviarAccionPrueba('tipear-buscador')" style="padding: 8px; font-size: 0.75rem;">
-            Probar Enfoque
+            <span data-i18n="btnTestFocus">Test Focus</span>
           </button>
           <button class="btn" id="btnTestShift" onclick="enviarAccionPrueba('press-shift')" style="padding: 8px; font-size: 0.75rem;" data-i18n="btnPressShift">
             Press Shift
@@ -3311,7 +3339,7 @@ const DASHBOARD_HTML = `
           </button>
           <span style="font-size: 0.72rem; color: var(--text-muted);" data-i18n="trackpadSpeed">Speed:</span>
           <span id="trackpadSpeedLabel" style="font-size: 0.75rem; font-weight: 600; color: var(--accent-primary);">1.2x</span>
-          <div class="collapse-chevron" title="Colapsar / Expandir">
+          <div class="collapse-chevron" data-i18n-title="collapseChevronTitle" title="Collapse / Expand">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </div>
         </div>
@@ -3371,7 +3399,7 @@ const DASHBOARD_HTML = `
           <p data-i18n="keyboardDesc">Type phone text at PC cursor and send computer keys</p>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
-          <div class="collapse-chevron" title="Colapsar / Expandir">
+          <div class="collapse-chevron" data-i18n-title="collapseChevronTitle" title="Collapse / Expand">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </div>
         </div>
@@ -3404,7 +3432,7 @@ const DASHBOARD_HTML = `
               <span style="font-size: 0.78rem; font-weight: 600; color: var(--text);" data-i18n="customComboTitle">Custom Key Combinations</span>
               <span id="modifierTimerBadge" style="display: none; font-size: 0.68rem; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); align-items: center; gap: 4px;">⏱️ 8s</span>
             </div>
-            <button type="button" class="btn btn-outline btn-sm" onclick="resetStuckKeys()" style="font-size: 0.7rem; padding: 3px 8px; color: #f59e0b; border-color: rgba(245, 158, 11, 0.35);" title="Soltar Ctrl, Alt, Shift si quedaron presionadas" data-i18n="btnUnstickKeys">🔓 Unstick Keys</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="resetStuckKeys()" style="font-size: 0.7rem; padding: 3px 8px; color: #f59e0b; border-color: rgba(245, 158, 11, 0.35);" data-i18n-title="unstickKeysTitle" title="Release Ctrl, Alt, Shift if stuck" data-i18n="btnUnstickKeys">🔓 Unstick Keys</button>
           </div>
 
           <!-- MODIFIERS SELECTOR -->
@@ -3534,23 +3562,23 @@ const DASHBOARD_HTML = `
         </div>
         <div class="form-group" style="margin-bottom: 10px; margin-top: 6px;">
           <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.4;">
-            <span data-i18n="emulatorDesc">Launch or stop the Android emulator configured in .env from your phone.</span>
+            <span data-i18n="emulatorDesc">Launch or stop the configured Android emulator from your phone.</span>
           </p>
         </div>
         <div style="display: flex; gap: 8px; margin-top: 5px; width: 100%;">
           <button class="btn btn-primary" id="btnEmulador" style="flex: 1; margin-top: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="ejecutarPrograma('emulador')">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-            Iniciar
+            <span data-i18n="btnStartEmulator">Launch</span>
           </button>
           <button class="btn btn-danger" id="btnCerrarEmulador" style="flex: 1; margin-top: 0; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68); display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="cerrarPrograma('emulador')">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></svg>
-            Cerrar
+            <span data-i18n="btnCloseEmulator">Close</span>
           </button>
         </div>
       </div>
 
       <!-- SUB 2.B: CONTROL DE PANTALLA -->
-      <div class="sub-section" id="sub_pantalla" data-sub-title="Control de Pantalla">
+      <div class="sub-section" id="sub_pantalla" data-sub-title="Display Control (Physical PC)" data-i18n-sub-title="displayControlSub">
         <div class="divider"></div>
         <div class="sub-section-header" style="display: flex; align-items: center; justify-content: space-between;">
           <div class="card-section-title" style="margin-bottom: 0;" data-i18n="displayControlSub">Display Control (Physical PC)</div>
@@ -3560,26 +3588,26 @@ const DASHBOARD_HTML = `
         </div>
         <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px; width: 100%;">
           <div style="display: flex; gap: 8px; width: 100%;">
-            <button class="btn" id="btnGuardiaToggle" style="flex: 1.2; margin-top: 0; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.4); color: rgb(216, 180, 254); display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="toggleGuardia()" title="Apaga la pantalla física y la mantiene apagada ante notificaciones o ScreenConnect. Despierta con teclado/mouse físico o tocando este botón.">
+            <button class="btn" id="btnGuardiaToggle" style="flex: 1.2; margin-top: 0; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.4); color: rgb(216, 180, 254); display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="toggleGuardia()" title="Turns off physical display and keeps it off during notifications or ScreenConnect. Wakes on physical key/mouse or by tapping this button.">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
               <span id="btnGuardiaToggleText" data-i18n="btnGuardToggleOn">Turn Off (Guard)</span>
             </button>
-            <button class="btn btn-success" style="flex: 1; margin-top: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="controlarTeclado('encender-pantalla')" title="Enciende la pantalla y desactiva el guardián">
+            <button class="btn btn-success" style="flex: 1; margin-top: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="controlarTeclado('encender-pantalla')" title="Turns on physical display and disables guard">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
-              Encender (Ctrl)
+              <span data-i18n="btnTurnOnCtrl">Turn On (Ctrl)</span>
             </button>
           </div>
           <div style="display: flex; gap: 8px; width: 100%;">
-            <button class="btn btn-danger" style="flex: 1; margin-top: 0; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.25); color: rgb(248, 113, 113); display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.78rem; padding: 7px 10px;" onclick="controlarTeclado('apagar-pantalla')" title="Apagado tradicional mediante combinación Alt+X">
+            <button class="btn btn-danger" style="flex: 1; margin-top: 0; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.25); color: rgb(248, 113, 113); display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.78rem; padding: 7px 10px;" onclick="controlarTeclado('apagar-pantalla')" title="Traditional display power-off via Alt+X shortcut">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
-              Apagar Tradicional (Alt+X)
+              <span data-i18n="btnTurnOffAltX">Traditional Off (Alt+X)</span>
             </button>
           </div>
         </div>
       </div>
 
       <!-- SUB 2.C: PORTAPAPELES -->
-      <div class="sub-section" id="sub_portapapeles" data-sub-title="Portapapeles de la PC">
+      <div class="sub-section" id="sub_portapapeles" data-sub-title="PC Clipboard" data-i18n-sub-title="clipboardSub">
         <div class="divider"></div>
         <div class="sub-section-header">
           <div class="card-section-title" style="margin-bottom: 0;" data-i18n="clipboardSub">PC Clipboard</div>
@@ -3587,29 +3615,29 @@ const DASHBOARD_HTML = `
         <div style="display: flex; gap: 8px; margin-top: 5px;">
           <input type="text" id="inputPortapapeles" placeholder="Text to send to Windows clipboard..." data-i18n="clipPlaceholder" style="flex: 2; padding: 10px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 0;">
           <button class="btn" onclick="enviarPortapapeles()" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.75rem;">
-            Copiar a PC
+            <span data-i18n="btnCopyToPC">Copy to PC</span>
           </button>
           <button class="btn" onclick="obtenerPortapapeles()" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.75rem;">
-            Leer de PC
+            <span data-i18n="btnReadFromPC">Read from PC</span>
           </button>
         </div>
       </div>
 
       <!-- SUB 2.D: CAPTURA & LATENCIA -->
-      <div class="sub-section" id="sub_captura" data-sub-title="Captura de Pantalla & Latencia">
+      <div class="sub-section" id="sub_captura" data-sub-title="Screenshot & Latency" data-i18n-sub-title="screenshotSub">
         <div class="divider"></div>
         <div class="sub-section-header">
           <div class="card-section-title" style="margin-bottom: 0;" data-i18n="screenshotSub">Screenshot & Latency</div>
         </div>
         <div style="display: flex; gap: 8px; margin-top: 5px;">
           <button class="btn" onclick="tomarScreenshot()" style="flex: 1; padding: 10px 12px; font-size: 0.75rem; margin-top: 0;">
-            Capturar Pantalla
+            <span data-i18n="btnCaptureScreen">Capture Screen</span>
           </button>
           <button class="btn" onclick="probarPing()" style="flex: 1; padding: 10px 12px; font-size: 0.75rem; display: inline-flex; align-items: center; gap: 4px; justify-content: center; margin-top: 0;">
             Test Ping: <span id="pingResultText" style="color: var(--success); font-weight: 700;">--</span>
           </button>
         </div>
-        <img id="screenshotPreview" class="screenshot-preview" alt="Captura de Pantalla" style="width: 100%; border-radius: 10px; border: 1px solid var(--card-border); margin-top: 10px; display: none; cursor: pointer;" onclick="window.open(this.src, '_blank')">
+        <img id="screenshotPreview" class="screenshot-preview" alt="Screenshot Preview" style="width: 100%; border-radius: 10px; border: 1px solid var(--card-border); margin-top: 10px; display: none; cursor: pointer;" onclick="window.open(this.src, '_blank')">
       </div>
     </div>
 
@@ -3622,7 +3650,7 @@ const DASHBOARD_HTML = `
         </div>
         <button class="btn btn-danger" onclick="confirmarReinicio()" style="padding: 10px 16px; font-size: 0.85rem; flex: 0 0 auto; width: auto; margin-top: 0; display: inline-flex; align-items: center; gap: 4px;">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-          Reiniciar
+          <span data-i18n="btnRestartServer">Restart</span>
         </button>
       </div>
     </div>
@@ -3635,7 +3663,7 @@ const DASHBOARD_HTML = `
           <p data-i18n="mediaCardDesc">Audio, system brightness, and voice reader (TTS)</p>
         </div>
         <div style="display: flex; align-items: center; gap: 8px;">
-          <div class="collapse-chevron" title="Colapsar / Expandir">
+          <div class="collapse-chevron" data-i18n-title="collapseChevronTitle" title="Collapse / Expand">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </div>
         </div>
@@ -3643,7 +3671,7 @@ const DASHBOARD_HTML = `
       
       <div class="card-collapsible-body">
         <!-- SUB 5.A: AUDIO -->
-        <div class="sub-section" id="sub_media_audio" data-sub-title="Audio y Reproducción">
+        <div class="sub-section" id="sub_media_audio" data-sub-title="Audio & Playback Control" data-i18n-sub-title="audioSub">
           <div class="sub-section-header">
             <div class="card-section-title" style="margin-bottom: 0;" data-i18n="audioSub">Audio & Playback Control</div>
             <div id="audioStatusText" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500; letter-spacing: 0.3px; margin-right: 8px;">Volume: --% | --</div>
@@ -3651,27 +3679,27 @@ const DASHBOARD_HTML = `
           <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 8px;">
             <div style="display: flex; gap: 8px; width: 100%;">
               <button class="btn" onclick="enviarMultimedia('vol-')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text);">
-                Vol -
+                <span data-i18n="btnVolDown">Vol -</span>
               </button>
               <button class="btn" onclick="enviarMultimedia('mute')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68);">
-                Mute
+                <span data-i18n="btnMute">Mute</span>
               </button>
               <button class="btn" onclick="enviarMultimedia('vol+')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); color: var(--text);">
-                Vol +
+                <span data-i18n="btnVolUp">Vol +</span>
               </button>
             </div>
             
             <div style="display: flex; gap: 8px; width: 100%;">
               <button class="btn" onclick="enviarMultimedia('prev')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" y1="19" x2="5" y2="5"></line></svg>
-                Atrás
+                <span data-i18n="btnPrev">⏮ Prev</span>
               </button>
               <button class="btn" onclick="enviarMultimedia('play-pausa')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: var(--primary);">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                Play/Pausa
+                <span data-i18n="btnPlayPause">⏯ Play/Pause</span>
               </button>
               <button class="btn" onclick="enviarMultimedia('next')" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.8rem; display: inline-flex; align-items: center; justify-content: center; gap: 4px;">
-                Siguiente
+                <span data-i18n="btnNext">⏭ Next</span>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
               </button>
             </div>
@@ -3679,7 +3707,7 @@ const DASHBOARD_HTML = `
         </div>
 
         <!-- SUB 5.B: BRILLO -->
-        <div class="sub-section" id="sub_media_brillo" data-sub-title="Brillo de Pantalla">
+        <div class="sub-section" id="sub_media_brillo" data-sub-title="Display Brightness" data-i18n-sub-title="brightnessSub">
           <div style="border-top: 1px dashed rgba(255,255,255,0.15); margin: 15px 0 10px 0;"></div>
           <div class="sub-section-header">
             <div class="card-section-title" style="margin-bottom: 0;" data-i18n="brightnessSub">Display Brightness</div>
@@ -3694,15 +3722,15 @@ const DASHBOARD_HTML = `
         </div>
 
         <!-- SUB 5.C: TTS -->
-        <div class="sub-section" id="sub_media_tts" data-sub-title="Lector de Voz (TTS)">
+        <div class="sub-section" id="sub_media_tts" data-sub-title="Remote Voice Reader (TTS)" data-i18n-sub-title="ttsSub">
           <div class="divider"></div>
           <div class="sub-section-header">
             <div class="card-section-title" style="margin-bottom: 0;" data-i18n="ttsSub">Remote Voice Reader (TTS)</div>
           </div>
           <div style="display: flex; gap: 8px; margin-top: 8px;">
-            <input type="text" id="inputTTS" placeholder="Text to speak aloud on PC..." data-i18n="ttsPlaceholder" style="flex: 2; padding: 10px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 0;" onkeydown="checkTTSEnter(event)">
+            <input type="text" id="inputTTS" placeholder="Text to speak aloud on PC..." data-i18n-placeholder="ttsPlaceholder" style="flex: 2; padding: 10px 12px; font-size: 0.85rem; background: rgba(255,255,255,0.05); border: 1px solid var(--card-border); border-radius: 12px; color: var(--text); outline: none; margin-top: 0;" onkeydown="checkTTSEnter(event)">
             <button class="btn" onclick="enviarTTS()" style="flex: 1; margin-top: 0; padding: 10px; font-size: 0.75rem;">
-              Hablar
+              <span data-i18n="btnSpeak">Speak</span>
             </button>
           </div>
         </div>
@@ -3713,26 +3741,26 @@ const DASHBOARD_HTML = `
     <div class="card" id="cardEnergia" style="margin-top: 10px; border-color: rgba(239, 68, 68, 0.15);">
       <div class="card-header" style="margin-bottom: 15px;">
         <div class="card-title-group">
-          <h2 data-i18n="powerCardTitle">Power & Brightness</h2>
+          <h2 data-i18n="powerCardTitle">Power & Session</h2>
           <p data-i18n="powerCardDesc">Lock or sleep the computer</p>
         </div>
       </div>
       <div style="display: flex; gap: 8px; width: 100%;">
         <button class="btn btn-danger" style="flex: 1; margin-top: 0; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68); display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="controlarEnergia('bloquear')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-          Bloquear PC
+          <span data-i18n="btnLockPC">Lock PC</span>
         </button>
         <button class="btn btn-danger" style="flex: 1; margin-top: 0; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); color: rgb(239, 68, 68); display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="controlarEnergia('suspender')">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-          Suspender PC
+          <span data-i18n="btnSleepPC">Sleep PC</span>
         </button>
       </div>
     </div>
 
     <!-- Barra de info de túnel ngrok -->
     <div class="tunnel-bar" id="tunnelBar" style="display: none;">
-      <span class="badge">Remoto</span>
-      <span>Túnel seguro activo: <a id="tunnelLink" href="#" target="_blank">Cargando...</a></span>
+      <span class="badge" data-i18n="tunnelBadgeRemote">Remote</span>
+      <span><span data-i18n="tunnelActiveLabel">Secure tunnel active:</span> <a id="tunnelLink" href="#" target="_blank" data-i18n="loading">Loading...</a></span>
     </div>
   <!-- FULLSCREEN TRACKPAD OVERLAY -->
   <div id="trackpadFullscreenOverlay" style="display: none; position: fixed; inset: 0; width: 100vw; height: 100vh; background: #0b0f19; z-index: 999999; flex-direction: column; touch-action: none; user-select: none;">
@@ -3801,16 +3829,16 @@ const DASHBOARD_HTML = `
       <div class="modal-header">
         <h3>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-          Pausa Temporal Programada
+          <span data-i18n="pauseModalTitle">Schedule Temporary Pause</span>
         </h3>
         <button class="modal-close-btn" onclick="cerrarModalPausaTemporal()">&times;</button>
       </div>
       <div class="modal-body">
-        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px; line-height: 1.4;">
-          Ingresa la cantidad de minutos para pausar temporalmente la actividad del navegador. Al terminar el tiempo, la actividad se reanudará automáticamente.
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px; line-height: 1.4;" data-i18n="pauseModalDesc">
+          Select or enter the duration to pause keepalive automation
         </p>
         <div class="form-group">
-          <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;">Minutos de Pausa</label>
+          <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 500;" data-i18n="lblPauseMinutes">Minutes:</label>
           <input type="number" id="pausaTemporalMinsInput" class="number-input" value="25" min="1" max="480" step="1" style="font-size: 1.15rem; font-weight: 600; text-align: center; margin-top: 6px;" onkeydown="if(event.key === 'Enter') confirmarPausaTemporal()">
         </div>
         
@@ -3824,7 +3852,7 @@ const DASHBOARD_HTML = `
         </div>
 
         <details style="margin-bottom: 15px; font-size: 0.75rem; color: var(--text-muted);" id="detailsPauseIntervals">
-          <summary style="cursor: pointer; user-select: none; font-weight: 500; opacity: 0.85; margin-bottom: 8px;">⚙️ Configurar intervalos de pausa programada (Hasta 4)</summary>
+          <summary style="cursor: pointer; user-select: none; font-weight: 500; opacity: 0.85; margin-bottom: 8px;" data-i18n="pauseIntervalsSummary">⚙️ Configure scheduled pause intervals (Up to 4)</summary>
           <div style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 10px; border: 1px solid var(--card-border);">
             <div id="pauseIntervalsList" style="display: flex; flex-direction: column; gap: 8px;">
               <!-- Filas generadas dinámicamente -->
@@ -3832,10 +3860,10 @@ const DASHBOARD_HTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 8px;">
               <button type="button" id="btnAddPauseInterval" class="btn btn-sm btn-outline" onclick="agregarFilaIntervaloPausa()" style="font-size: 0.72rem; padding: 5px 8px; display: inline-flex; align-items: center; gap: 4px;">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                + Intervalo
+                <span data-i18n="btnAddInterval">+ Add Interval</span>
               </button>
               <button type="button" class="btn btn-sm btn-primary" onclick="guardarIntervalosPausa()" style="font-size: 0.72rem; padding: 5px 12px; background: #f59e0b; border-color: #f59e0b; color: #fff;">
-                Guardar Horarios
+                <span data-i18n="btnSaveSchedule">Save Schedule</span>
               </button>
             </div>
           </div>
@@ -3908,12 +3936,12 @@ const DASHBOARD_HTML = `
         });
         const data = await response.json();
         if (response.ok) {
-          showToast('Brillo ajustado al ' + val + '%.', 'success');
+          showToast(t('brightnessAdjusted') + val + '%.', 'success');
         } else {
-          showToast(data.message || 'Error al ajustar brillo', 'error');
+          showToast(data.message || (currentLang === 'es' ? 'Error al ajustar brillo' : 'Failed to adjust brightness'), 'error');
         }
       } catch (error) {
-        showToast('Error de conexión con el servidor', 'error');
+        showToast(t('connectionError'), 'error');
       }
     }
 
@@ -3936,7 +3964,7 @@ const DASHBOARD_HTML = `
       const texto = inputEl.value;
 
       if (!texto || texto.trim() === '') {
-        showToast('Por favor escribe algún texto para reproducir.', 'warning');
+        showToast(t('ttsEmpty'), 'warning');
         return;
       }
 
@@ -3951,10 +3979,10 @@ const DASHBOARD_HTML = `
           showToast(data.message, 'success');
           inputEl.value = '';
         } else {
-          showToast(data.message || 'Error en la reproducción', 'error');
+          showToast(data.message || (currentLang === 'es' ? 'Error en la reproducción' : 'Playback error'), 'error');
         }
       } catch (err) {
-        showToast('Error de conexión con el servidor', 'error');
+        showToast(t('connectionError'), 'error');
       }
     }
 
@@ -3969,17 +3997,17 @@ const DASHBOARD_HTML = `
         if (response.ok) {
           showToast(data.message, 'success');
         } else {
-          showToast(data.message || 'Error al ejecutar comando multimedia', 'error');
+          showToast(data.message || (currentLang === 'es' ? 'Error al ejecutar comando multimedia' : 'Media command failed'), 'error');
         }
       } catch (err) {
-        showToast('Error de conexión con el servidor', 'error');
+        showToast(t('connectionError'), 'error');
       }
     }
 
     function updateBrowserSliderLabel(val) {
       const labelEl = document.getElementById('browserIntervalVal');
       if (labelEl) {
-        labelEl.innerText = Math.round(parseFloat(val)) + ' minutos';
+        labelEl.innerText = Math.round(parseFloat(val)) + ' ' + t('minsUnit');
       }
     }
 
@@ -4314,10 +4342,16 @@ const DASHBOARD_HTML = `
     }
 
     function drawDayLabels() {
+      const letters = (I18N[currentLang] && I18N[currentLang].dayLetters) || (I18N.en && I18N.en.dayLetters) || ['S','M','T','W','T','F','S'];
       const checkboxes = document.querySelectorAll('.day-checkbox');
       checkboxes.forEach(cb => {
-        const lbl = document.getElementById('lbl-day-' + cb.value);
+        const val = Number(cb.value);
+        const lbl = document.getElementById('lbl-day-' + val);
         if (lbl) {
+          const input = lbl.querySelector('input');
+          lbl.innerHTML = '';
+          if (input) lbl.appendChild(input);
+          lbl.appendChild(document.createTextNode(letters[val] || ''));
           if (cb.checked) {
             lbl.style.background = 'rgba(16, 185, 129, 0.2)';
             lbl.style.borderColor = '#10b981';
@@ -4387,10 +4421,10 @@ const DASHBOARD_HTML = `
           showToast(data.message, 'success');
           pollGatewayStatus();
         } else {
-          showToast(data.message || 'Error en la petición', 'error');
+          showToast(data.message || (currentLang === 'es' ? 'Error en la petición' : 'Request error'), 'error');
         }
       } catch (error) {
-        showToast('Error de conexión con el servidor', 'error');
+        showToast(t('connectionError'), 'error');
       }
     }
 
@@ -4453,7 +4487,7 @@ const DASHBOARD_HTML = `
       const lblDe = document.createElement('span');
       lblDe.style.fontSize = '0.7rem';
       lblDe.style.color = 'var(--text-muted)';
-      lblDe.textContent = 'De';
+      lblDe.textContent = t('intervalFrom');
 
       const inStart = document.createElement('input');
       inStart.type = 'time';
@@ -4471,7 +4505,7 @@ const DASHBOARD_HTML = `
       const lblA = document.createElement('span');
       lblA.style.fontSize = '0.7rem';
       lblA.style.color = 'var(--text-muted)';
-      lblA.textContent = 'a';
+      lblA.textContent = t('intervalTo');
 
       const inEnd = document.createElement('input');
       inEnd.type = 'time';
@@ -4489,7 +4523,7 @@ const DASHBOARD_HTML = `
       const lblDef = document.createElement('span');
       lblDef.style.fontSize = '0.7rem';
       lblDef.style.color = 'var(--text-muted)';
-      lblDef.textContent = 'Default:';
+      lblDef.textContent = t('intervalDefault');
 
       const inMins = document.createElement('input');
       inMins.type = 'number';
@@ -4514,7 +4548,7 @@ const DASHBOARD_HTML = `
       const btnDel = document.createElement('button');
       btnDel.type = 'button';
       btnDel.className = 'btn-del-interval';
-      btnDel.title = 'Eliminar intervalo';
+      btnDel.title = t('deleteIntervalTitle');
       btnDel.style.background = 'transparent';
       btnDel.style.border = 'none';
       btnDel.style.color = '#ef4444';
@@ -4558,7 +4592,7 @@ const DASHBOARD_HTML = `
     function agregarFilaIntervaloPausa() {
       const rows = document.querySelectorAll('.pause-interval-row');
       if (rows.length >= 4) {
-        showToast('Máximo 4 intervalos permitidos.', 'warning');
+        showToast(t('maxIntervalsReached'), 'warning');
         return;
       }
       let newStart = '18:00';
@@ -4582,7 +4616,7 @@ const DASHBOARD_HTML = `
       });
 
       if (intervals.length === 0) {
-        showToast('Debe haber al menos 1 intervalo configurado.', 'warning');
+        showToast(t('minPauseIntervalWarning'), 'warning');
         return;
       }
 
@@ -4594,7 +4628,7 @@ const DASHBOARD_HTML = `
         });
         const data = await response.json();
         if (response.ok) {
-          showToast('Intervalos de pausa actualizados con éxito.', 'success');
+          showToast(t('pauseIntervalsSaved'), 'success');
           if (window.lastStatusData) {
             window.lastStatusData.mealPauseIntervals = intervals;
           }
@@ -4602,10 +4636,10 @@ const DASHBOARD_HTML = `
           document.getElementById('pausaTemporalMinsInput').value = defaultMins;
           setPresetPausa(defaultMins);
         } else {
-          showToast(data.message || 'Error al actualizar intervalos', 'error');
+          showToast(data.message || (currentLang === 'es' ? 'Error al actualizar intervalos' : 'Failed to update intervals'), 'error');
         }
       } catch (error) {
-        showToast('Error de conexión con el servidor', 'error');
+        showToast(t('connectionError'), 'error');
       }
     }
 
@@ -4670,10 +4704,10 @@ const DASHBOARD_HTML = `
           showToast(data.message, 'success');
           pollGatewayStatus();
         } else {
-          showToast(data.message || 'Error al activar pausa temporal', 'error');
+          showToast(data.message || (currentLang === 'es' ? 'Error al activar pausa temporal' : 'Failed to activate temporary pause'), 'error');
         }
       } catch (error) {
-        showToast('Error de conexión con el servidor', 'error');
+        showToast(t('connectionError'), 'error');
       }
     }
 
@@ -4698,10 +4732,10 @@ const DASHBOARD_HTML = `
           showToast(data.message, 'success');
           pollGatewayStatus();
         } else {
-          showToast(data.message || 'Error en la petición', 'error');
+          showToast(data.message || (currentLang === 'es' ? 'Error en la petición' : 'Request error'), 'error');
         }
       } catch (error) {
-        showToast('Error de conexión con el servidor', 'error');
+        showToast(t('connectionError'), 'error');
       }
     }
 
@@ -4730,13 +4764,13 @@ const DASHBOARD_HTML = `
         });
         const data = await response.json();
         if (response.ok) {
-          showToast(estaActiva ? 'Intervalo reconfigurado en caliente a ' + mins + ' minutos.' : 'Intervalo guardado: ' + mins + ' minutos.', 'success');
+          showToast(estaActiva ? (currentLang === 'es' ? 'Intervalo reconfigurado en caliente a ' + mins + ' minutos.' : 'Interval updated live to ' + mins + ' minutes.') : (currentLang === 'es' ? 'Intervalo guardado: ' + mins + ' minutos.' : 'Interval saved: ' + mins + ' minutes.'), 'success');
           pollGatewayStatus();
         } else {
-          showToast(data.message || 'Error al guardar intervalo', 'error');
+          showToast(data.message || (currentLang === 'es' ? 'Error al guardar intervalo' : 'Failed to save interval'), 'error');
         }
       } catch (error) {
-        showToast('Error de conexión con el servidor', 'error');
+        showToast(t('connectionError'), 'error');
       }
     }
 
@@ -4755,15 +4789,12 @@ const DASHBOARD_HTML = `
           showToast(data.message || 'Error en la prueba', 'error');
         }
       } catch (error) {
-        showToast('Error al conectar con la PC', 'error');
+        showToast(t('errorConnectPC'), 'error');
       }
     }
 
     async function ejecutarPrograma(programa) {
-      const msgs = {
-        'emulador': '¿Estás seguro de que deseas iniciar el emulador Android?'
-      };
-      const conf = confirm(msgs[programa] || '¿Deseas iniciar este programa?');
+      const conf = confirm(programa === 'emulador' ? t('confirmStartEmulator') : (currentLang === 'es' ? '¿Deseas iniciar este programa?' : 'Do you want to start this program?'));
       if (!conf) return;
 
       try {
@@ -4777,18 +4808,15 @@ const DASHBOARD_HTML = `
         if (response.ok) {
           showToast(data.message, 'success');
         } else {
-          showToast(data.message || 'Error al ejecutar programa', 'error');
+          showToast(data.message || t('errorExecuteProgram'), 'error');
         }
       } catch (error) {
-        showToast('Error al conectar con la PC', 'error');
+        showToast(t('errorConnectPC'), 'error');
       }
     }
 
     async function cerrarPrograma(programa) {
-      const msgs = {
-        'emulador': '¿Estás seguro de que deseas cerrar el emulador Android?'
-      };
-      const conf = confirm(msgs[programa] || '¿Deseas cerrar este programa?');
+      const conf = confirm(programa === 'emulador' ? t('confirmCloseEmulator') : (currentLang === 'es' ? '¿Deseas cerrar este programa?' : 'Do you want to close this program?'));
       if (!conf) return;
 
       try {
@@ -4802,10 +4830,10 @@ const DASHBOARD_HTML = `
         if (response.ok) {
           showToast(data.message, 'success');
         } else {
-          showToast(data.message || 'Error al cerrar programa', 'error');
+          showToast(data.message || t('errorCloseProgram'), 'error');
         }
       } catch (error) {
-        showToast('Error al conectar con la PC', 'error');
+        showToast(t('errorConnectPC'), 'error');
       }
     }
 
@@ -4822,7 +4850,7 @@ const DASHBOARD_HTML = `
           setTimeout(pollGatewayStatus, 300);
         }
       } catch (error) {
-        showToast('Error al conectar con la PC', 'error');
+        showToast(t('errorConnectPC'), 'error');
       }
     }
 
@@ -4836,8 +4864,8 @@ const DASHBOARD_HTML = `
 
     async function controlarEnergia(accion) {
       const confirmMsg = accion === 'bloquear' 
-        ? '¿Estás seguro de que deseas bloquear la PC?' 
-        : '¿Estás seguro de que deseas suspender la PC?';
+        ? t('confirmLockPC') 
+        : t('confirmSleepPC');
       
       if (!confirm(confirmMsg)) {
         return;
@@ -4852,14 +4880,14 @@ const DASHBOARD_HTML = `
         const data = await response.json();
         showToast(data.message, response.ok ? 'success' : 'error');
       } catch (error) {
-        showToast('Error al conectar con la PC', 'error');
+        showToast(t('errorConnectPC'), 'error');
       }
     }
 
     async function enviarPortapapeles() {
       const text = document.getElementById('inputPortapapeles').value;
       if (!text) {
-        showToast('Por favor escribe algún texto para enviar.', 'warning');
+        showToast(t('clipboardEmpty'), 'warning');
         return;
       }
       try {
@@ -4871,7 +4899,7 @@ const DASHBOARD_HTML = `
         const data = await response.json();
         showToast(data.message, response.ok ? 'success' : 'error');
       } catch (error) {
-        showToast('Error al conectar con la PC', 'error');
+        showToast(t('errorConnectPC'), 'error');
       }
     }
 
@@ -4881,19 +4909,19 @@ const DASHBOARD_HTML = `
         const data = await response.json();
         if (response.ok) {
           document.getElementById('inputPortapapeles').value = data.text;
-          showToast('Portapapeles leído con éxito.', 'success');
+          showToast(t('clipboardReadSuccess'), 'success');
         } else {
-          showToast(data.message || 'Error al leer portapapeles', 'error');
+          showToast(data.message || (currentLang === 'es' ? 'Error al leer portapapeles' : 'Failed to read clipboard'), 'error');
         }
       } catch (error) {
-        showToast('Error al conectar con la PC', 'error');
+        showToast(t('errorConnectPC'), 'error');
       }
     }
 
     function tomarScreenshot() {
       const preview = document.getElementById('screenshotPreview');
       preview.onload = () => {
-        showToast('Captura de pantalla actualizada.', 'success');
+        showToast(t('screenshotCaptured'), 'success');
       };
       preview.src = '/system/screenshot?t=' + Date.now();
       preview.style.display = 'block';
@@ -4917,11 +4945,11 @@ const DASHBOARD_HTML = `
     }
 
     async function confirmarReinicio() {
-      const confirmar = confirm("¿Estás seguro de que deseas reiniciar el Gateway Server? La conexión se perderá temporalmente.");
+      const confirmar = confirm(t('confirmRestartServer'));
       if (!confirmar) return;
 
       document.getElementById('restartOverlay').style.display = 'flex';
-      showToast('Enviando señal de reinicio...', 'info');
+      showToast(t('restartingServerToast'), 'info');
 
       try {
         fetch('/gateway/restart', {
@@ -4953,14 +4981,20 @@ const DASHBOARD_HTML = `
     // === GESTIÓN DE PERSONALIZACIÓN, ORDEN Y VISIBILIDAD DE SECCIONES ===
     const DEFAULT_CARD_ORDER = ['cardBrowser', 'cardMousePad', 'cardTeclado', 'cardSistema', 'cardReiniciar', 'cardMultimedia', 'cardEnergia'];
     const CARD_TITLES = {
-      'cardBrowser': 'Navegador Activo',
-      'cardMousePad': 'Trackpad & Mouse',
-      'cardTeclado': 'Teclado Remoto',
-      'cardSistema': 'Acciones de Sistema',
-      'cardReiniciar': 'Reiniciar Servidor',
-      'cardMultimedia': 'Controles Multimedia, Brillo & Voz',
-      'cardEnergia': 'Energía y Sesión de PC'
+      'cardBrowser': { en: 'Active Browser', es: 'Navegador Activo' },
+      'cardMousePad': { en: 'Virtual Trackpad & Mouse', es: 'Trackpad & Mouse' },
+      'cardTeclado': { en: 'Remote Keyboard & Keystrokes', es: 'Teclado Remoto' },
+      'cardSistema': { en: 'System Actions', es: 'Acciones de Sistema' },
+      'cardReiniciar': { en: 'Gateway Server', es: 'Reiniciar Servidor' },
+      'cardMultimedia': { en: 'Media & Audio Controls', es: 'Controles Multimedia, Brillo & Voz' },
+      'cardEnergia': { en: 'Power & PC Session', es: 'Energía y Sesión de PC' }
     };
+
+    function getCardTitle(cardId) {
+      const entry = CARD_TITLES[cardId];
+      if (!entry) return cardId;
+      return entry[currentLang] || entry.en || cardId;
+    }
 
     let isEditModeActive = false;
     let draggedCard = null;
@@ -5013,21 +5047,21 @@ const DASHBOARD_HTML = `
 
           const dragHandle = document.createElement('div');
           dragHandle.className = 'card-drag-handle';
-          dragHandle.title = 'Arrastrar para mover';
-          dragHandle.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg><span>Mover</span>';
+          dragHandle.title = t('dragHandleTitle');
+          dragHandle.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg><span>' + t('btnMove') + '</span>';
 
           const arrowsDiv = document.createElement('div');
           arrowsDiv.className = 'card-edit-arrows';
 
           const btnUp = document.createElement('button');
           btnUp.className = 'btn-arrow';
-          btnUp.title = 'Mover arriba';
+          btnUp.title = t('moveUpTitle');
           btnUp.textContent = '▲';
           btnUp.onclick = function() { moveCard(cardId, 'up'); };
 
           const btnDown = document.createElement('button');
           btnDown.className = 'btn-arrow';
-          btnDown.title = 'Mover abajo';
+          btnDown.title = t('moveDownTitle');
           btnDown.textContent = '▼';
           btnDown.onclick = function() { moveCard(cardId, 'down'); };
 
@@ -5039,8 +5073,8 @@ const DASHBOARD_HTML = `
           const btnVis = document.createElement('button');
           btnVis.className = 'btn-toggle-vis is-visible';
           btnVis.id = 'btnVis_' + cardId;
-          btnVis.title = 'Ocultar o mostrar';
-          btnVis.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>Visible</span>';
+          btnVis.title = t('toggleVisTitle');
+          btnVis.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>' + t('btnVisible') + '</span>';
           btnVis.onclick = function() { toggleCardVisibility(cardId); };
 
           editBar.appendChild(editLeft);
@@ -5084,8 +5118,8 @@ const DASHBOARD_HTML = `
           const btnSubVis = document.createElement('button');
           btnSubVis.className = 'btn-sub-vis is-visible';
           btnSubVis.id = 'btnSubVis_' + subId;
-          btnSubVis.title = 'Ocultar o mostrar este bloque';
-          btnSubVis.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>Visible</span>';
+          btnSubVis.title = t('toggleSubVisTitle');
+          btnSubVis.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>' + t('btnVisible') + '</span>';
           btnSubVis.onclick = function(e) {
             e.stopPropagation();
             toggleSubSectionVisibility(subId);
@@ -5144,10 +5178,10 @@ const DASHBOARD_HTML = `
       if (btnToggle) btnToggle.classList.toggle('active', isEditModeActive);
 
       if (isEditModeActive) {
-        showToast('Modo edición activado. Arrastra las tarjetas u oculta bloques específicos.', 'info');
+        showToast(t('editModeActivated'), 'info');
       } else {
         saveCurrentDOMState();
-        showToast('Cambios guardados correctamente.', 'success');
+        showToast(t('editModeSaved'), 'success');
       }
     }
 
@@ -5156,10 +5190,10 @@ const DASHBOARD_HTML = `
       if (!btn) return;
       if (isVisible) {
         btn.className = 'btn-toggle-vis is-visible';
-        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>Visible</span>';
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>' + t('btnVisible') + '</span>';
       } else {
         btn.className = 'btn-toggle-vis is-hidden';
-        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg><span>Oculto</span>';
+        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg><span>' + t('btnHidden') + '</span>';
       }
     }
 
@@ -5168,10 +5202,10 @@ const DASHBOARD_HTML = `
       if (!btn) return;
       if (isVisible) {
         btn.className = 'btn-sub-vis is-visible';
-        btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>Visible</span>';
+        btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg><span>' + t('btnVisible') + '</span>';
       } else {
         btn.className = 'btn-sub-vis is-hidden';
-        btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg><span>Oculto</span>';
+        btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg><span>' + t('btnHidden') + '</span>';
       }
     }
 
@@ -5186,7 +5220,7 @@ const DASHBOARD_HTML = `
       }
       updateVisibilityBtnUI(cardId, !willBeHidden);
       saveCurrentDOMState();
-      showToast((CARD_TITLES[cardId] || 'Sección') + ': ' + (willBeHidden ? 'Ocultada' : 'Visible'), 'info');
+      showToast(getCardTitle(cardId) + ': ' + (willBeHidden ? t('stateHidden') : t('stateVisible')), 'info');
     }
 
     function toggleSubSectionVisibility(subId) {
@@ -5200,8 +5234,8 @@ const DASHBOARD_HTML = `
       }
       updateSubVisibilityBtnUI(subId, !willBeHidden);
       saveCurrentDOMState();
-      const title = subEl.getAttribute('data-sub-title') || 'Bloque';
-      showToast(title + ': ' + (willBeHidden ? 'Ocultado' : 'Visible'), 'info');
+      const title = subEl.getAttribute('data-sub-title') || t('subSectionDefault');
+      showToast(title + ': ' + (willBeHidden ? t('stateHidden') : t('stateVisible')), 'info');
     }
 
     function moveCard(cardId, direction) {
@@ -5272,7 +5306,7 @@ const DASHBOARD_HTML = `
         subHidden: {}
       });
 
-      showToast('Secciones y orden restablecidos por defecto.', 'success');
+      showToast(t('resetLayoutSuccess'), 'success');
     }
 
     // Drag & Drop Desktop
@@ -5372,10 +5406,10 @@ const DASHBOARD_HTML = `
         const wasUnlocked = isWebToolsUnlocked();
         if (wasUnlocked) {
           localStorage.removeItem('gw_web_tools_unlocked');
-          showToast('Modo estándar activo.', 'info');
+          showToast(t('standardModeActive'), 'info');
         } else {
           localStorage.setItem('gw_web_tools_unlocked', '1');
-          showToast('Herramientas web activadas.', 'success');
+          showToast(t('advancedToolsUnlocked'), 'success');
         }
         applyWebToolsVisibility();
       }
@@ -5388,10 +5422,10 @@ const DASHBOARD_HTML = `
         const wasUnlocked = isWebToolsUnlocked();
         if (wasUnlocked) {
           localStorage.removeItem('gw_web_tools_unlocked');
-          showToast('Modo estándar activo.', 'info');
+          showToast(t('standardModeActive'), 'info');
         } else {
           localStorage.setItem('gw_web_tools_unlocked', '1');
-          showToast('Herramientas web activadas.', 'success');
+          showToast(t('advancedToolsUnlocked'), 'success');
         }
         applyWebToolsVisibility();
       }
@@ -5403,228 +5437,22 @@ const DASHBOARD_HTML = `
     // ==========================================
     // INTERNATIONALIZATION (I18N) SYSTEM
     // ==========================================
-        // ==========================================
-    // INTERNATIONALIZATION (I18N) SYSTEM
-    // ==========================================
     const I18N = {
-      en: {
-        appTitle: "Gateway Control Center",
-        appDesc: "API Gateway & Automation Server",
-        installApp: "Install App",
-        editModeBanner: "Edit Mode: Drag ⠿ to reorder or use 👁️ to hide/show.",
-        btnReset: "Reset",
-        btnDone: "Done",
-        trackpadTitle: "Virtual Trackpad & Mouse",
-        trackpadDesc: "Touchpad navigation, gestures, drag lock, and clicking",
-        trackpadSpeed: "Speed:",
-        btnFullscreen: "⛶ Fullscreen",
-        exitFullscreen: "✖ Exit Fullscreen",
-        touchpadHint: "Slide 1 finger to move • Tap for Left Click • Double-tap for 2x • 2 fingers for Right Click",
-        scrollStrip: "SCROLL",
-        btnLeftClick: "Left Click",
-        btnRightClick: "Right Click",
-        doubleClick: "Double Click",
-        dragLock: "Drag Lock (Hold Down)",
-        dragActive: "Drag Active (Click to Release)",
-        sensitivity: "Sensitivity:",
-        keyboardTitle: "Remote Keyboard & Keystrokes",
-        keyboardDesc: "Type phone text at PC cursor and send computer keys",
-        typePlaceholder: "Type or dictate text to send to PC...",
-        btnSendText: "Send",
-        sendOnEnter: "Send on Enter",
-        clearOnSend: "Clear after send",
-        specialKeys: "Special Computer Keys",
-        fnKeysSummary: "Function Keys (F1 - F12)",
-        customComboTitle: "Custom Key Combinations",
-        customComboDesc: "Combine modifiers with any key",
-        comboKeyPlaceholder: "Key (e.g. Esc, Tab, F4, D, W, Enter)...",
-        btnSendCombo: "🚀 Send Combo",
-        btnUnstickKeys: "🔓 Unstick Keys",
-        comboPresets: "Suggestions:",
-        browserCardTitle: "Active Browser Keepalive",
-        browserCardDesc: "Persistent session and display sleep prevention",
-        browserOpenBadge: "Browser: Open",
-        browserClosedBadge: "Browser: Closed",
-        keepaliveOnBadge: "Keepalive: On",
-        keepaliveOffBadge: "Keepalive: Off",
-        subBrowserWindow: "Browser Window",
-        btnBrowserOpen: "Open Window",
-        btnCloseWindow: "Close Window",
-        btnMinimize: "Minimize",
-        btnRestore: "Restore/View",
-        subKeepalive: "Keep Active Session",
-        activityIntervalLabel: "Activity Interval (minutes)",
-        btnStart: "Start",
-        btnTempPause: "Temp Pause",
-        btnPause: "Pause",
-        tempPauseActiveText: "Scheduled temporary pause:",
-        btnResumeNow: "Resume Now",
-        subSchedule: "Scheduled Hours",
-        lblStartHour: "Start Activity",
-        lblEndHour: "End Activity",
-        lblAllowedDays: "Allowed Days",
-        subAutoClose: "Browser Auto-Close",
-        lblCloseHour: "Close Hour",
-        lblAutoClose: "Auto-Close",
-        subFlexClose: "Flex Close",
-        lblDate: "Date",
-        subInputTests: "Input Tests (Instant Actions)",
-        btnMoveCursor: "Move Cursor",
-        btnTestFocus: "Test Focus",
-        btnPressShift: "Press Shift",
-        systemCardTitle: "System & Diagnostics",
-        systemCardDesc: "ScreenGuard, clipboard, screenshots, and native tools",
-        subEmulator: "Android Emulator",
-        emulatorDesc: "Launch or stop the Android emulator configured in .env from your phone.",
-        btnStartEmulator: "Launch",
-        btnCloseEmulator: "Close",
-        displayControlSub: "Display Control (Physical PC)",
-        screenGuardActiveBadge: "Guard Active",
-        screenGuardInactiveBadge: "Guard Inactive",
-        btnGuardToggleOff: "Disable Guard (Turn On)",
-        btnGuardToggleOn: "Turn Off (Guard)",
-        btnTurnOnCtrl: "Turn On (Ctrl)",
-        btnTurnOffAltX: "Traditional Off (Alt+X)",
-        clipboardSub: "PC Clipboard",
-        clipPlaceholder: "Text to send to Windows clipboard...",
-        btnCopyToPC: "Copy to PC",
-        btnReadFromPC: "Read from PC",
-        screenshotSub: "Screenshot & Latency",
-        btnCaptureScreen: "Capture Screen",
-        mediaCardTitle: "Media & Audio Controls",
-        mediaCardDesc: "Audio, system brightness, and voice reader (TTS)",
-        audioSub: "Audio & Playback Control",
-        brightnessSub: "Display Brightness",
-        brightnessLevel: "Brightness Level",
-        ttsSub: "Remote Voice Reader (TTS)",
-        ttsPlaceholder: "Text to speak aloud on PC...",
-        btnSpeak: "Speak",
-        powerCardTitle: "Power & Session",
-        powerCardDesc: "Lock or sleep the computer",
-        btnLockPC: "Lock PC",
-        btnSleepPC: "Sleep PC",
-        restartCardTitle: "Gateway Server",
-        restartCardDesc: "Restart gateway and reconnect tunnel",
-        btnRestartServer: "Restart",
-        fsPromptPlaceholder: "Type prompt for AI / PC cursor...",
-        btnSendPrompt: "🚀 Send",
-        fsBtnDelete: "Delete (Hold: Lines)",
-        fsBtnEnter: "Enter",
-        fsBtnShiftEnter: "New Line"
-      },
-      es: {
-        appTitle: "Centro de Control Gateway",
-        appDesc: "API Gateway y Servidor de Automatización",
-        installApp: "Instalar App",
-        editModeBanner: "Modo Edición: Arrastra ⠿ para reordenar o usa 👁️ para ocultar/mostrar.",
-        btnReset: "Restablecer",
-        btnDone: "Listo",
-        trackpadTitle: "Trackpad y Mouse Virtual",
-        trackpadDesc: "Navegación táctil, gestos, arrastre y clics",
-        trackpadSpeed: "Velocidad:",
-        btnFullscreen: "⛶ Pantalla Completa",
-        exitFullscreen: "✖ Salir de Pantalla Completa",
-        touchpadHint: "Desliza 1 dedo para mover • Tap para Clic Izq • Doble tap para 2x • 2 dedos para Clic Der",
-        scrollStrip: "RUEDA",
-        btnLeftClick: "Clic Izquierdo",
-        btnRightClick: "Clic Derecho",
-        doubleClick: "Doble Clic",
-        dragLock: "Bloquear Arrastre (Mantener)",
-        dragActive: "Arrastre Activo (Clic para Soltar)",
-        sensitivity: "Sensibilidad:",
-        keyboardTitle: "Teclado Remoto & Pulsaciones",
-        keyboardDesc: "Escribe desde el móvil en el cursor de la PC y envía teclas",
-        typePlaceholder: "Escribe o dicta texto para enviar a la PC...",
-        btnSendText: "Enviar",
-        sendOnEnter: "Enviar al pulsar Enter",
-        clearOnSend: "Borrar al enviar",
-        specialKeys: "Teclas Especiales de PC",
-        fnKeysSummary: "Teclas de Función (F1 - F12)",
-        customComboTitle: "Combinaciones de Teclas Personalizadas",
-        customComboDesc: "Combina modificadores con cualquier tecla",
-        comboKeyPlaceholder: "Tecla (ej: Esc, Tab, F4, D, W, Enter)...",
-        btnSendCombo: "🚀 Enviar Combinación",
-        btnUnstickKeys: "🔓 Soltar Teclas",
-        comboPresets: "Sugerencias:",
-        browserCardTitle: "Navegador Activo",
-        browserCardDesc: "Sesión persistente y prevención de inactividad de pantalla",
-        browserOpenBadge: "Navegador: Abierto",
-        browserClosedBadge: "Navegador: Cerrado",
-        keepaliveOnBadge: "Mantener Activo: On",
-        keepaliveOffBadge: "Mantener Activo: Off",
-        subBrowserWindow: "Ventana del Navegador",
-        btnBrowserOpen: "Abrir Ventana",
-        btnCloseWindow: "Cerrar Ventana",
-        btnMinimize: "Minimizar",
-        btnRestore: "Restaurar/Ver",
-        subKeepalive: "Mantener Sesión Activa",
-        activityIntervalLabel: "Intervalo de Actividad (minutos)",
-        btnStart: "Iniciar",
-        btnTempPause: "Pausa Temp",
-        btnPause: "Pausar",
-        tempPauseActiveText: "Pausa temporal programada:",
-        btnResumeNow: "Reanudar Ya",
-        subSchedule: "Programación Horaria",
-        lblStartHour: "Inicio Actividad",
-        lblEndHour: "Fin Actividad",
-        lblAllowedDays: "Días Permitidos",
-        subAutoClose: "Auto-Cierre del Navegador",
-        lblCloseHour: "Hora de Cierre",
-        lblAutoClose: "Auto-Cierre",
-        subFlexClose: "Cierre Flex",
-        lblDate: "Fecha",
-        subInputTests: "Pruebas de Entrada (Acciones al Instante)",
-        btnMoveCursor: "Mover Cursor",
-        btnTestFocus: "Probar Enfoque",
-        btnPressShift: "Presionar Shift",
-        systemCardTitle: "Sistema & Diagnóstico",
-        systemCardDesc: "ScreenGuard y utilidades nativas de Windows",
-        subEmulator: "Emulador Android",
-        emulatorDesc: "Permite iniciar o cerrar el emulador configurado en .env desde tu celular.",
-        btnStartEmulator: "Iniciar",
-        btnCloseEmulator: "Cerrar",
-        displayControlSub: "Control de Pantalla (PC Físico)",
-        screenGuardActiveBadge: "Guardián Activo",
-        screenGuardInactiveBadge: "Guardián Inactivo",
-        btnGuardToggleOff: "Desactivar Guardián (Encender)",
-        btnGuardToggleOn: "Apagar (Guardián)",
-        btnTurnOnCtrl: "Encender (Ctrl)",
-        btnTurnOffAltX: "Apagar Tradicional (Alt+X)",
-        clipboardSub: "Portapapeles de la PC",
-        clipPlaceholder: "Texto a enviar al portapapeles de Windows...",
-        btnCopyToPC: "Copiar a PC",
-        btnReadFromPC: "Leer de PC",
-        screenshotSub: "Captura de Pantalla & Latencia",
-        btnCaptureScreen: "Capturar Pantalla",
-        mediaCardTitle: "Controles Multimedia & Audio",
-        mediaCardDesc: "Audio, brillo del sistema y lector de voz (TTS)",
-        audioSub: "Control de Audio y Reproducción",
-        brightnessSub: "Brillo de Pantalla",
-        brightnessLevel: "Nivel de Brillo",
-        ttsSub: "Lector de Voz Remoto (TTS)",
-        ttsPlaceholder: "Texto para hablar en voz alta en PC...",
-        btnSpeak: "Hablar",
-        powerCardTitle: "Energía & Pantalla",
-        powerCardDesc: "Brillo del monitor y suspensión de la PC",
-        btnLockPC: "Bloquear PC",
-        btnSleepPC: "Suspender PC",
-        restartCardTitle: "Gateway Server",
-        restartCardDesc: "Reinicio seguro del proceso desacoplado",
-        btnRestartServer: "Reiniciar",
-        fsPromptPlaceholder: "Escribe prompt para IA / cursor de PC...",
-        btnSendPrompt: "🚀 Enviar",
-        fsBtnDelete: "Borrar (Mantener: Líneas)",
-        fsBtnEnter: "Enter",
-        fsBtnShiftEnter: "Salto Línea"
-      }
+      en: ${JSON.stringify(i18nEn)},
+      es: ${JSON.stringify(i18nEs)}
     };
 
     let currentLang = localStorage.getItem('dashboard_lang') || 'en';
 
+    function t(key, fallback = '') {
+      const dict = I18N[currentLang] || I18N.en || {};
+      return dict[key] || (I18N.en && I18N.en[key]) || fallback || key;
+    }
+
     function setLanguage(lang) {
       currentLang = lang || 'en';
       localStorage.setItem('dashboard_lang', currentLang);
-      const dict = I18N[currentLang] || I18N.en;
+      const dict = I18N[currentLang] || I18N.en || {};
 
       document.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');
@@ -5637,15 +5465,41 @@ const DASHBOARD_HTML = `
         }
       });
 
+      document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        if (dict[key]) {
+          el.placeholder = dict[key];
+        }
+      });
+
+      document.querySelectorAll('[data-i18n-title]').forEach(el => {
+        const key = el.getAttribute('data-i18n-title');
+        if (dict[key]) {
+          el.title = dict[key];
+        }
+      });
+
+      document.querySelectorAll('[data-i18n-sub-title]').forEach(el => {
+        const key = el.getAttribute('data-i18n-sub-title');
+        if (dict[key]) {
+          el.setAttribute('data-sub-title', dict[key]);
+        }
+      });
+
       const btn = document.getElementById('btnLangToggle');
       if (btn) btn.innerText = currentLang === 'en' ? '🌐 EN' : '🌐 ES';
+
+      if (typeof drawDayLabels === 'function') drawDayLabels();
+      if (typeof updateBrowserSliderLabel === 'function') {
+        const slider = document.getElementById('browserIntervalInput');
+        if (slider) updateBrowserSliderLabel(slider.value);
+      }
 
       if (isEditModeActive) {
         document.querySelectorAll('.card-edit-title').forEach(span => {
           const card = span.closest('.card');
           if (card && CARD_TITLES[card.id]) {
-            const titles = CARD_TITLES[card.id];
-            span.textContent = (titles && (titles[currentLang] || titles.en)) || card.id;
+            span.textContent = getCardTitle(card.id);
           }
         });
       }
@@ -6324,8 +6178,8 @@ const DASHBOARD_HTML = `
   </script>
   <div id="restartOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(10, 10, 12, 0.9); z-index: 9999; align-items: center; justify-content: center; flex-direction: column; color: #fff; text-align: center; padding: 20px; box-sizing: border-box;">
     <div style="border: 4px solid rgba(255,255,255,0.1); border-left-color: var(--primary || #3b82f6); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px;"></div>
-    <div style="font-weight: 600; font-size: 1.25rem; margin-bottom: 8px; font-family: 'Outfit', sans-serif;">Reiniciando Gateway Server...</div>
-    <div style="font-size: 0.9rem; color: var(--text-muted || #9ca3af); font-family: 'Outfit', sans-serif; max-width: 300px; line-height: 1.4;">La conexión se ha perdido temporalmente. Esperando a que el servidor vuelva a estar en línea.</div>
+    <div style="font-weight: 600; font-size: 1.25rem; margin-bottom: 8px; font-family: 'Outfit', sans-serif;" data-i18n="restartingServer">Restarting server...</div>
+    <div style="font-size: 0.9rem; color: var(--text-muted || #9ca3af); font-family: 'Outfit', sans-serif; max-width: 300px; line-height: 1.4;" data-i18n="restartingOverlayMessage">Connection temporarily lost. Waiting for the server to come back online.</div>
   </div>
   
   <style>
