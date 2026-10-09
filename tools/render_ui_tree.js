@@ -40,8 +40,9 @@ function extractTemplates() {
 
   const loginHtml = extractTemplateLiteral('LOGIN_HTML');
   const dashboardHtml = extractTemplateLiteral('DASHBOARD_HTML');
+  const mobileDropHtml = extractTemplateLiteral('MOBILE_DROP_HTML');
 
-  return { loginHtml, dashboardHtml, serverContent };
+  return { loginHtml, dashboardHtml, mobileDropHtml, serverContent };
 }
 
 // Void HTML elements that cannot have children
@@ -279,9 +280,11 @@ const SCREENS = {
   cardMousePad: { source: 'dashboardHtml', selector: 'cardMousePad' },
   cardTeclado: { source: 'dashboardHtml', selector: 'cardTeclado' },
   cardSistema: { source: 'dashboardHtml', selector: 'cardSistema' },
+  cardMobileDrop: { source: 'dashboardHtml', selector: 'cardMobileDrop' },
   cardMultimedia: { source: 'dashboardHtml', selector: 'cardMultimedia' },
   cardEnergia: { source: 'dashboardHtml', selector: 'cardEnergia' },
   cardReiniciar: { source: 'dashboardHtml', selector: 'cardReiniciar' },
+  mobileDropPage: { source: 'mobileDropHtml', selector: 'drop-wrapper' },
   modalPausaTemporal: { source: 'dashboardHtml', selector: 'modalPausaTemporal' },
   restartOverlay: { source: 'dashboardHtml', selector: 'restartOverlay' }
 };

@@ -203,5 +203,18 @@
   "minPauseIntervalWarning": "There must be at least 1 interval configured.",
   "minsUnit": "minutes",
   "days": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-  "dayLetters": ["S", "M", "T", "W", "T", "F", "S"]
+  "dayLetters": ["S", "M", "T", "W", "T", "F", "S"],
+  "mobileDropCardTitle": "Mobile Drop & Downloads",
+  "mobileDropCardDesc": "Direct file and APK downloads to mobile device",
+  "mobileDropEmptyTitle": "Mobile Drop is empty",
+  "mobileDropEmptyDesc": "Drop APKs or files into your Mobile Drop folder to download them on your phone.",
+  "btnRefreshFiles": "Refresh List",
+  "btnDownloadApk": "Download APK",
+  "btnDownloadFile": "Download File",
+  "mobileDropFilesCount": "files available",
+  "mobileDropStandaloneTitle": "Mobile Drop",
+  "mobileDropStandaloneDesc": "Download files and APKs directly to your device",
+  "mobileDropOpenStandalone": "Open Full View",
+  "btnBackToDashboard": "Back to Dashboard",
+  "mobileDropRefreshed": "File list updated."
 }

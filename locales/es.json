@@ -203,5 +203,18 @@
   "minPauseIntervalWarning": "Debe haber al menos 1 intervalo configurado.",
   "minsUnit": "minutos",
   "days": ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"],
-  "dayLetters": ["D", "L", "M", "M", "J", "V", "S"]
+  "dayLetters": ["D", "L", "M", "M", "J", "V", "S"],
+  "mobileDropCardTitle": "Mobile Drop y Descargas",
+  "mobileDropCardDesc": "Descarga directa de archivos y APKs a tu celular",
+  "mobileDropEmptyTitle": "Mobile Drop está vacío",
+  "mobileDropEmptyDesc": "Coloca APKs o archivos en tu carpeta Mobile Drop para descargarlos en tu teléfono.",
+  "btnRefreshFiles": "Actualizar lista",
+  "btnDownloadApk": "Descargar APK",
+  "btnDownloadFile": "Descargar Archivo",
+  "mobileDropFilesCount": "archivos disponibles",
+  "mobileDropStandaloneTitle": "Mobile Drop",
+  "mobileDropStandaloneDesc": "Descarga archivos y APKs directo a tu celular",
+  "mobileDropOpenStandalone": "Abrir Vista Completa",
+  "btnBackToDashboard": "Volver al Dashboard",
+  "mobileDropRefreshed": "Lista de archivos actualizada."
 }
