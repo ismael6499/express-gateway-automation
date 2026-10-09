@@ -16,6 +16,12 @@ const API_KEY = process.env.API_KEY;
 const TARGET_WEB_URL = process.env.TARGET_WEB_URL || 'https://example.com';
 const TARGET_ACCOUNT_EMAIL = process.env.TARGET_ACCOUNT_EMAIL || '';
 const USER_DATA_DIR = process.env.BROWSER_USER_DATA_DIR || path.join(__dirname, 'browser_user_data');
+const MOBILE_DROP_DIR = process.env.MOBILE_DROP_DIR || (process.env.USERPROFILE ? path.join(process.env.USERPROFILE, 'Documents', 'Mobile Drop') : path.join('C:', 'Users', 'agust', 'Documents', 'Mobile Drop'));
+if (!fs.existsSync(MOBILE_DROP_DIR)) {
+  try {
+    fs.mkdirSync(MOBILE_DROP_DIR, { recursive: true });
+  } catch (err) {}
+}
 let targetHost = '';
 try {
   targetHost = new URL(TARGET_WEB_URL).hostname;
@@ -58,6 +64,15 @@ function getApiKeyFromCookie(cookieHeader) {
     if (name === 'api_key') return decodeURIComponent(value);
   }
   return null;
+}
+
+// Helper para formatear peso de archivo en MB o KB legible
+function formatFileSize(bytes) {
+  if (!bytes || bytes <= 0) return '0 B';
+  if (bytes < 1000) return bytes + ' B';
+  if (bytes < 1000 * 1000) return (bytes / 1000).toFixed(1) + ' KB';
+  if (bytes < 1000 * 1000 * 1000) return (bytes / (1000 * 1000)).toFixed(1) + ' MB';
+  return (bytes / (1000 * 1000 * 1000)).toFixed(1) + ' GB';
 }
 
 // Variables de estado en Runtime
@@ -309,11 +324,11 @@ function sendInputCommand(cmd) {
 
 // Middleware de Autenticación para rutas de la API (interviene en /browser, /sistema, y /gateway/status)
 app.use((req, res, next) => {
-  if (req.path === '/' || req.path === '/favicon.ico' || req.path === '/gateway/login' || req.path === '/gateway/restart' || req.path === '/system/restart') {
+  if (req.path === '/' || req.path === '/drop' || req.path === '/drop.html' || req.path === '/favicon.ico' || req.path === '/gateway/login' || req.path === '/gateway/restart' || req.path === '/system/restart') {
     return next();
   }
 
-  const clientApiKey = req.headers['x-api-key'] || getApiKeyFromCookie(req.headers.cookie);
+  const clientApiKey = req.headers['x-api-key'] || getApiKeyFromCookie(req.headers.cookie) || req.query.key || req.query.api_key;
   if (req.path !== '/system/mouse' && req.path !== '/sistema/mouse' && req.path !== '/gateway/status' && req.path !== '/system/status') {
     log(`Solicitud API interceptada: ${req.method} ${req.originalUrl}`);
   }
@@ -1795,6 +1810,99 @@ app.get(['/system/ping', '/sistema/ping', '/gateway/ping'], (req, res) => {
       msg: latency ? `${latency} ms` : 'Desconocido'
     });
   });
+});
+
+// Endpoint GET /api/drop/files - Lista de archivos disponibles en Mobile Drop
+app.get(['/api/drop/files', '/drop/files'], (req, res) => {
+  try {
+    if (!fs.existsSync(MOBILE_DROP_DIR)) {
+      fs.mkdirSync(MOBILE_DROP_DIR, { recursive: true });
+    }
+
+    const fileNames = fs.readdirSync(MOBILE_DROP_DIR);
+    const files = [];
+
+    for (const name of fileNames) {
+      if (name.startsWith('.') || name.toLowerCase() === 'desktop.ini') continue;
+      const fullPath = path.join(MOBILE_DROP_DIR, name);
+      try {
+        const stats = fs.statSync(fullPath);
+        if (stats.isFile()) {
+          const ext = path.extname(name).toLowerCase();
+          const d = new Date(stats.mtime);
+          const pad = (n) => String(n).padStart(2, '0');
+          const updatedAt = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+          files.push({
+            name,
+            size: formatFileSize(stats.size),
+            sizeBytes: stats.size,
+            extension: ext,
+            updatedAt,
+            mtimeMs: stats.mtimeMs,
+            downloadUrl: `/api/drop/download/${encodeURIComponent(name)}`
+          });
+        }
+      } catch (err) {
+        log(`Mobile Drop: Error leyendo archivo ${name}: ${err.message}`);
+      }
+    }
+
+    // Ordenar de más reciente a más antiguo
+    files.sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+    return res.json({
+      status: 'ok',
+      success: true,
+      count: files.length,
+      files
+    });
+  } catch (err) {
+    log(`Mobile Drop: Error al listar archivos: ${err.message}`);
+    return res.status(500).json({ error: 'Server Error', message: err.message });
+  }
+});
+
+// Endpoint GET /api/drop/download/:filename - Descarga segura de archivos
+app.get(['/api/drop/download/:filename', '/drop/download/:filename'], (req, res) => {
+  try {
+    const rawFilename = req.params.filename;
+    const safeFilename = path.basename(rawFilename);
+    const filePath = path.join(MOBILE_DROP_DIR, safeFilename);
+
+    if (!fs.existsSync(filePath)) {
+      log(`Mobile Drop: Archivo no encontrado para descarga: ${safeFilename}`);
+      return res.status(404).json({ error: 'Not Found', message: 'Archivo no encontrado en Mobile Drop.' });
+    }
+
+    const stats = fs.statSync(filePath);
+    if (!stats.isFile()) {
+      return res.status(400).json({ error: 'Bad Request', message: 'El elemento solicitado no es un archivo.' });
+    }
+
+    log(`Mobile Drop: Descargando archivo ${safeFilename} (${formatFileSize(stats.size)})...`);
+
+    const ext = path.extname(safeFilename).toLowerCase();
+    if (ext === '.apk') {
+      res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+    }
+
+    res.download(filePath, safeFilename, (err) => {
+      if (err) {
+        if (!res.headersSent) {
+          log(`Mobile Drop: Error al descargar ${safeFilename}: ${err.message}`);
+          return res.status(500).json({ error: 'Download Error', message: err.message });
+        }
+      } else {
+        log(`Mobile Drop: Archivo transferido exitosamente: ${safeFilename}`);
+      }
+    });
+  } catch (err) {
+    log(`Mobile Drop: Error inesperado en descarga: ${err.message}`);
+    if (!res.headersSent) {
+      return res.status(500).json({ error: 'Server Error', message: err.message });
+    }
+  }
 });
 
 // Endpoint GET /browser/last-activity (and legacy /browser/ultima-actividad)
