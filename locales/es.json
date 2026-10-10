@@ -227,5 +227,11 @@
   "uploadCancelled": "Subida cancelada.",
   "uploadError": "Error al subir el archivo.",
   "uploadLimitError": "El archivo supera el límite de 4 GB.",
-  "btnCancelUpload": "Cancelar"
+  "btnCancelUpload": "Cancelar",
+  "btnViewUploadedFiles": "Archivos Subidos",
+  "uploadedModalTitle": "Archivos Subidos a la PC",
+  "uploadedModalDesc": "Archivos guardados en tu carpeta Mobile Upload",
+  "uploadedEmptyTitle": "Aún no subiste archivos",
+  "uploadedEmptyDesc": "Los archivos que subas desde tu celular aparecerán aquí.",
+  "btnCloseModal": "Cerrar"
 }

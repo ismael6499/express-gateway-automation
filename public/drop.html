@@ -327,16 +327,79 @@
       font-size: 0.8rem;
       color: var(--text-muted);
     }
-    .btn-cancel-upload {
-      background: rgba(239, 68, 68, 0.15);
-      border: 1px solid rgba(239, 68, 68, 0.3);
-      color: #f87171;
-      font-size: 0.78rem;
+    .btn-cancel-upload:hover {
+      background: rgba(239, 68, 68, 0.25);
+      border-color: rgba(239, 68, 68, 0.5);
+    }
+    .btn-drop-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: #e5e7eb !important;
+      padding: 12px 18px;
+      border-radius: 14px;
       font-weight: 700;
-      padding: 4px 10px;
-      border-radius: 8px;
+      font-size: 0.9rem;
       cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
       transition: all 0.15s ease;
+      box-sizing: border-box;
+      user-select: none;
+    }
+    .btn-drop-secondary:active {
+      transform: scale(0.98);
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .drop-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(10px);
+      z-index: 9999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+    .drop-modal-overlay.open {
+      display: flex;
+    }
+    .drop-modal-card {
+      background: #000000;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 22px;
+      width: 100%;
+      max-width: 520px;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.9);
+      overflow: hidden;
+      animation: modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes modalFadeIn {
+      from { opacity: 0; transform: scale(0.96); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .drop-modal-header {
+      padding: 18px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .drop-modal-body {
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 60vh;
     }
     .empty-state {
       display: none;
@@ -404,13 +467,17 @@
     </div>
 
     <div class="drop-upload-card" id="dropUploadCardMobile">
-      <div class="drop-upload-row">
+      <div class="drop-upload-row" style="flex-wrap: wrap;">
         <input type="file" id="dropFileInput" multiple style="display: none;" onchange="handleMobileUpload(this.files, 'drop')">
         <button type="button" class="btn-drop-upload" onclick="document.getElementById('dropFileInput').click()" id="btnUploadMobile">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="15" x2="12" y2="15"></line></svg>
           <span data-i18n="btnUploadToPc">Upload to PC</span>
         </button>
-        <span style="font-size: 0.76rem; color: var(--text-muted); flex: 1;">Stream: max 4 GB</span>
+        <button type="button" class="btn-drop-secondary" onclick="openUploadedFilesModal()" id="btnViewUploadedMobile">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+          <span data-i18n="btnViewUploadedFiles">Uploaded Files</span>
+        </button>
+        <span style="font-size: 0.76rem; color: var(--text-muted); margin-left: auto;">Stream: max 4 GB</span>
       </div>
       <div class="drop-progress-wrap" id="dropUploadProgress">
         <div class="drop-progress-bar-bg">
@@ -419,6 +486,25 @@
         <div class="drop-progress-meta">
           <span id="dropProgressText">Uploading to PC...</span>
           <button type="button" class="btn-cancel-upload" onclick="cancelCurrentUpload()" data-i18n="btnCancelUpload">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: ARCHIVOS SUBIDOS A LA PC (MOBILE UPLOAD) -->
+    <div class="drop-modal-overlay" id="uploadedFilesModal" onclick="handleUploadedModalOverlayClick(event)">
+      <div class="drop-modal-card">
+        <div class="drop-modal-header">
+          <div>
+            <div style="font-weight: 700; font-size: 1.05rem; color: #ffffff;" data-i18n="uploadedModalTitle">Files Uploaded to PC</div>
+            <div style="font-size: 0.76rem; color: var(--text-muted);" data-i18n="uploadedModalDesc">Files stored in your Mobile Upload folder</div>
+          </div>
+          <button type="button" class="btn-nav" onclick="closeUploadedFilesModal()" data-i18n="btnCloseModal" style="padding: 6px 12px; font-size: 0.78rem;">Close</button>
+        </div>
+        <div class="drop-modal-body" id="uploadedFilesContainer"></div>
+        <div id="uploadedEmptyState" style="display: none; text-align: center; padding: 36px 16px;">
+          <div style="font-size: 2.2rem; margin-bottom: 8px;">📂</div>
+          <div style="font-weight: 600; font-size: 0.95rem; color: #ffffff; margin-bottom: 4px;" data-i18n="uploadedEmptyTitle">No files uploaded yet</div>
+          <div style="font-size: 0.8rem; color: var(--text-muted); max-width: 340px; margin: 0 auto;" data-i18n="uploadedEmptyDesc">Files you upload from your phone will appear here.</div>
         </div>
       </div>
     </div>
@@ -779,6 +865,105 @@
       if (progressWrap) progressWrap.style.display = 'none';
       const fileInput = document.getElementById('dropFileInput');
       if (fileInput) fileInput.value = '';
+    }
+
+    let uploadedFilesCache = [];
+
+    function handleUploadedModalOverlayClick(e) {
+      if (e.target && e.target.id === 'uploadedFilesModal') {
+        closeUploadedFilesModal();
+      }
+    }
+
+    function openUploadedFilesModal() {
+      const modal = document.getElementById('uploadedFilesModal');
+      if (modal) {
+        modal.classList.add('open');
+        loadUploadedFiles();
+      }
+    }
+
+    function closeUploadedFilesModal() {
+      const modal = document.getElementById('uploadedFilesModal');
+      if (modal) {
+        modal.classList.remove('open');
+      }
+    }
+
+    function renderUploadedItem(file, idx) {
+      return '<div class="drop-card" style="padding: 14px 16px; gap: 8px;">' +
+        '<div style="display: flex; align-items: center; justify-content: space-between; gap: 10px;">' +
+          '<div style="flex: 1; min-width: 0;">' +
+            '<div style="font-weight: 700; font-size: 0.95rem; color: #ffffff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="' + file.name + '">' + file.name + '</div>' +
+            '<div style="font-size: 0.78rem; color: var(--text-muted); display: flex; gap: 8px; margin-top: 3px;">' +
+              '<span>' + file.size + '</span>' +
+              '<span>•</span>' +
+              '<span>' + file.updatedAt + '</span>' +
+            '</div>' +
+          '</div>' +
+          '<div style="display: flex; gap: 8px; align-items: center;">' +
+            '<a href="' + file.downloadUrl + '" download="' + file.name + '" class="drop-download-btn btn-drop-file" style="width: 42px; min-width: 42px; height: 42px; min-height: 42px; padding: 0; border-radius: 12px;" title="' + t('btnDownloadFile', 'Download File') + '">' +
+              '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>' +
+            '</a>' +
+            '<button type="button" class="drop-delete-btn" onclick="confirmDeleteUploadedFile(' + idx + ')" style="width: 42px; min-width: 42px; height: 42px; border-radius: 12px;" title="' + t('btnDeleteFile', 'Delete') + '" aria-label="' + t('btnDeleteFile', 'Delete') + '">' +
+              '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>' +
+            '</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }
+
+    async function loadUploadedFiles() {
+      const container = document.getElementById('uploadedFilesContainer');
+      const empty = document.getElementById('uploadedEmptyState');
+      if (!container) return;
+
+      try {
+        const res = await fetch('/api/upload/files');
+        if (!res.ok) throw new Error('Status ' + res.status);
+        const data = await res.json();
+        const files = data.files || [];
+        uploadedFilesCache = files;
+
+        if (files.length === 0) {
+          container.innerHTML = '';
+          if (empty) empty.style.display = 'block';
+        } else {
+          if (empty) empty.style.display = 'none';
+          container.innerHTML = files.map(renderUploadedItem).join('');
+        }
+      } catch (err) {
+        console.error('Error loading uploaded files:', err);
+      }
+    }
+
+    async function confirmDeleteUploadedFile(fileIdx) {
+      const file = uploadedFilesCache && uploadedFilesCache[fileIdx];
+      const fileName = file ? file.name : '';
+      if (!fileName) return;
+
+      const confirmMsg = t('confirmDeleteFile', 'Are you sure you want to delete') + ' "' + fileName + '"?';
+      if (!confirm(confirmMsg)) {
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/upload/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: fileName })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(t('fileDeletedSuccess', 'File deleted successfully.'));
+          await loadUploadedFiles();
+        } else {
+          alert((data && data.error) || t('fileDeleteError', 'Failed to delete file.'));
+        }
+      } catch (err) {
+        console.error('Error deleting file:', err);
+        alert(t('fileDeleteError', 'Failed to delete file.'));
+      }
     }
 
     document.addEventListener('DOMContentLoaded', () => {

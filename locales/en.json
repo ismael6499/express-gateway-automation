@@ -227,5 +227,11 @@
   "uploadCancelled": "Upload cancelled.",
   "uploadError": "Error uploading file.",
   "uploadLimitError": "File exceeds maximum size limit (4 GB).",
-  "btnCancelUpload": "Cancel"
+  "btnCancelUpload": "Cancel",
+  "btnViewUploadedFiles": "Uploaded Files",
+  "uploadedModalTitle": "Files Uploaded to PC",
+  "uploadedModalDesc": "Files stored in your Mobile Upload folder",
+  "uploadedEmptyTitle": "No files uploaded yet",
+  "uploadedEmptyDesc": "Files you upload from your phone will appear here.",
+  "btnCloseModal": "Close"
 }
