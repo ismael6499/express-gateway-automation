@@ -216,5 +216,9 @@
   "mobileDropStandaloneDesc": "Descarga archivos y APKs directo a tu celular",
   "mobileDropOpenStandalone": "Abrir Vista Completa",
   "btnBackToDashboard": "Volver al Dashboard",
-  "mobileDropRefreshed": "Lista de archivos actualizada."
+  "mobileDropRefreshed": "Lista de archivos actualizada.",
+  "btnDeleteFile": "Eliminar",
+  "confirmDeleteFile": "¿Estás seguro de que deseas eliminar",
+  "fileDeletedSuccess": "Archivo eliminado con éxito.",
+  "fileDeleteError": "Error al eliminar el archivo."
 }

@@ -1905,6 +1905,41 @@ app.get(['/api/drop/download/:filename', '/drop/download/:filename'], (req, res)
   }
 });
 
+// Endpoint POST /api/drop/delete - Eliminación segura de archivos con validación
+app.post(['/api/drop/delete', '/drop/delete'], (req, res) => {
+  try {
+    const rawFilename = req.body && (req.body.filename || req.body.name);
+    if (!rawFilename) {
+      return res.status(400).json({ error: 'Bad Request', message: 'Missing filename parameter.' });
+    }
+    const safeFilename = path.basename(rawFilename);
+    const filePath = path.join(MOBILE_DROP_DIR, safeFilename);
+
+    if (!fs.existsSync(filePath)) {
+      log(`Mobile Drop: Archivo a eliminar no encontrado: ${safeFilename}`);
+      return res.status(404).json({ error: 'Not Found', message: 'Archivo no encontrado en Mobile Drop.' });
+    }
+
+    const stats = fs.statSync(filePath);
+    if (!stats.isFile()) {
+      return res.status(400).json({ error: 'Bad Request', message: 'El elemento solicitado no es un archivo.' });
+    }
+
+    fs.unlinkSync(filePath);
+    log(`Mobile Drop: Archivo eliminado exitosamente: ${safeFilename}`);
+
+    return res.json({
+      status: 'ok',
+      success: true,
+      message: 'Archivo eliminado con éxito.',
+      filename: safeFilename
+    });
+  } catch (err) {
+    log(`Mobile Drop: Error al eliminar archivo: ${err.message}`);
+    return res.status(500).json({ error: 'Server Error', message: err.message });
+  }
+});
+
 // Endpoint GET /browser/last-activity (and legacy /browser/ultima-actividad)
 app.get(['/browser/last-activity', '/browser/ultima-actividad'], (req, res) => {
   if (!lastActivityTime) {
@@ -3310,6 +3345,38 @@ const DASHBOARD_HTML = `
     .btn-drop-file:hover {
       box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
     }
+    .drop-card-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+    }
+    .drop-delete-btn {
+      width: 48px;
+      min-width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.28);
+      color: #ef4444;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+      box-sizing: border-box;
+      padding: 0;
+    }
+    .drop-delete-btn:hover {
+      background: rgba(239, 68, 68, 0.22);
+      border-color: rgba(239, 68, 68, 0.5);
+      color: #f87171;
+    }
+    .drop-delete-btn:active {
+      transform: scale(0.95);
+      filter: brightness(0.9);
+    }
     .spin-active {
       animation: spin 0.75s linear infinite;
     }
@@ -3866,8 +3933,8 @@ const DASHBOARD_HTML = `
     </div>
 
     <!-- CARD: MOBILE DROP / DESCARGAS -->
-    <div class="card" id="cardMobileDrop" style="margin-top: 10px; border-color: rgba(16, 185, 129, 0.2);">
-      <div class="card-header" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+    <div class="card is-collapsed" id="cardMobileDrop" style="margin-top: 10px; border-color: rgba(16, 185, 129, 0.2);">
+      <div class="card-header card-header-clickable" onclick="toggleCardCollapse('cardMobileDrop', event)">
         <div class="card-title-group" style="flex: 1; min-width: 180px;">
           <h2 data-i18n="mobileDropCardTitle">Mobile Drop & Downloads</h2>
           <p data-i18n="mobileDropCardDesc">Direct file and APK downloads to mobile device</p>
@@ -3877,26 +3944,31 @@ const DASHBOARD_HTML = `
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
             <span data-i18n="mobileDropOpenStandalone">Open Full View</span>
           </a>
-          <button class="btn btn-primary btn-sm" id="btnRefreshMobileDrop" onclick="loadMobileDropFiles()" style="display: inline-flex; align-items: center; gap: 5px;">
+          <button class="btn btn-primary btn-sm" id="btnRefreshMobileDrop" onclick="loadMobileDropFiles(true)" style="display: inline-flex; align-items: center; gap: 5px;">
             <svg id="iconRefreshMobileDrop" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
             <span data-i18n="btnRefreshFiles">Refresh List</span>
           </button>
+          <div class="collapse-chevron" data-i18n-title="collapseChevronTitle" title="Collapse / Expand">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
         </div>
       </div>
 
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px; padding-bottom: 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); font-size: 0.76rem; color: var(--text-muted);">
-        <span id="mobileDropCountBadge" style="display: inline-flex; align-items: center; gap: 6px;">
-          <span class="status-dot online"></span>
-          <span id="mobileDropFilesCountText">0 files available</span>
-        </span>
-      </div>
+      <div class="card-collapsible-body">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px; padding-bottom: 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); font-size: 0.76rem; color: var(--text-muted);">
+          <span id="mobileDropCountBadge" style="display: inline-flex; align-items: center; gap: 6px;">
+            <span class="status-dot online"></span>
+            <span id="mobileDropFilesCountText">0 files available</span>
+          </span>
+        </div>
 
-      <div id="mobileDropContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-top: 12px;"></div>
+        <div id="mobileDropContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-top: 12px;"></div>
 
-      <div id="mobileDropEmptyState" style="display: none; text-align: center; padding: 28px 16px; background: rgba(255, 255, 255, 0.015); border: 1px dashed rgba(255, 255, 255, 0.08); border-radius: 12px; margin-top: 10px;">
-        <div style="font-size: 2rem; margin-bottom: 8px;">📦</div>
-        <div style="font-weight: 600; font-size: 0.95rem; color: #ffffff; margin-bottom: 4px;" data-i18n="mobileDropEmptyTitle">Mobile Drop is empty</div>
-        <div style="font-size: 0.8rem; color: var(--text-muted); max-width: 380px; margin: 0 auto;" data-i18n="mobileDropEmptyDesc">Drop APKs or files into your Mobile Drop folder to download them on your phone.</div>
+        <div id="mobileDropEmptyState" style="display: none; text-align: center; padding: 28px 16px; background: rgba(255, 255, 255, 0.015); border: 1px dashed rgba(255, 255, 255, 0.08); border-radius: 12px; margin-top: 10px;">
+          <div style="font-size: 2rem; margin-bottom: 8px;">📦</div>
+          <div style="font-weight: 600; font-size: 0.95rem; color: #ffffff; margin-bottom: 4px;" data-i18n="mobileDropEmptyTitle">Mobile Drop is empty</div>
+          <div style="font-size: 0.8rem; color: var(--text-muted); max-width: 380px; margin: 0 auto;" data-i18n="mobileDropEmptyDesc">Drop APKs or files into your Mobile Drop folder to download them on your phone.</div>
+        </div>
       </div>
     </div>
 
@@ -4254,11 +4326,51 @@ const DASHBOARD_HTML = `
             '<span>' + file.updatedAt + '</span>' +
           '</div>' +
         '</div>' +
-        '<a href="' + file.downloadUrl + '" download="' + file.name + '" class="drop-download-btn ' + btnClass + '">' +
-          '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>' +
-          '<span>' + btnLabel + '</span>' +
-        '</a>' +
+        '<div class="drop-card-actions">' +
+          '<a href="' + file.downloadUrl + '" download="' + file.name + '" class="drop-download-btn ' + btnClass + '" style="flex: 1;">' +
+            '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>' +
+            '<span>' + btnLabel + '</span>' +
+          '</a>' +
+          '<button type="button" class="drop-delete-btn" onclick="confirmDeleteDropFile(' + encodeURIComponent(JSON.stringify(file.name)) + ')" title="' + t('btnDeleteFile', 'Delete') + '" aria-label="' + t('btnDeleteFile', 'Delete') + '">' +
+            '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>' +
+          '</button>' +
+        '</div>' +
       '</div>';
+    }
+
+    async function confirmDeleteDropFile(encodedName) {
+      let fileName = '';
+      try {
+        fileName = JSON.parse(decodeURIComponent(encodedName));
+      } catch (e) {
+        fileName = decodeURIComponent(encodedName);
+      }
+      if (!fileName) return;
+
+      const confirmMsg = t('confirmDeleteFile', 'Are you sure you want to delete') + ' "' + fileName + '"?';
+      if (!confirm(confirmMsg)) {
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/drop/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: fileName })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          if (typeof showToast === 'function') {
+            showToast(t('fileDeletedSuccess', 'File deleted successfully.'), 'success');
+          }
+          await loadMobileDropFiles(false);
+        } else {
+          alert((data && data.error) || t('fileDeleteError', 'Failed to delete file.'));
+        }
+      } catch (err) {
+        console.error('Error deleting file:', err);
+        alert(t('fileDeleteError', 'Failed to delete file.'));
+      }
     }
 
     async function loadMobileDropFiles(showFeedback = false) {
@@ -6852,6 +6964,38 @@ const MOBILE_DROP_HTML = `
       color: #ffffff !important;
       box-shadow: 0 4px 16px rgba(59, 130, 246, 0.35);
     }
+    .drop-card-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+    }
+    .drop-delete-btn {
+      width: 50px;
+      min-width: 50px;
+      height: 50px;
+      border-radius: 14px;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.28);
+      color: #ef4444;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+      box-sizing: border-box;
+      padding: 0;
+    }
+    .drop-delete-btn:hover {
+      background: rgba(239, 68, 68, 0.22);
+      border-color: rgba(239, 68, 68, 0.5);
+      color: #f87171;
+    }
+    .drop-delete-btn:active {
+      transform: scale(0.95);
+      filter: brightness(0.9);
+    }
     .empty-state {
       display: none;
       text-align: center;
@@ -7058,11 +7202,49 @@ const MOBILE_DROP_HTML = `
             '<span>' + file.updatedAt + '</span>' +
           '</div>' +
         '</div>' +
-        '<a href="' + file.downloadUrl + '" download="' + file.name + '" class="drop-download-btn ' + btnClass + '">' +
-          '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>' +
-          '<span>' + btnLabel + '</span>' +
-        '</a>' +
+        '<div class="drop-card-actions">' +
+          '<a href="' + file.downloadUrl + '" download="' + file.name + '" class="drop-download-btn ' + btnClass + '" style="flex: 1;">' +
+            '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>' +
+            '<span>' + btnLabel + '</span>' +
+          '</a>' +
+          '<button type="button" class="drop-delete-btn" onclick="confirmDeleteDropFile(' + encodeURIComponent(JSON.stringify(file.name)) + ')" title="' + t('btnDeleteFile', 'Delete') + '" aria-label="' + t('btnDeleteFile', 'Delete') + '">' +
+            '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>' +
+          '</button>' +
+        '</div>' +
       '</div>';
+    }
+
+    async function confirmDeleteDropFile(encodedName) {
+      let fileName = '';
+      try {
+        fileName = JSON.parse(decodeURIComponent(encodedName));
+      } catch (e) {
+        fileName = decodeURIComponent(encodedName);
+      }
+      if (!fileName) return;
+
+      const confirmMsg = t('confirmDeleteFile', 'Are you sure you want to delete') + ' "' + fileName + '"?';
+      if (!confirm(confirmMsg)) {
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/drop/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: fileName })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(t('fileDeletedSuccess', 'File deleted successfully.'));
+          await loadDropFiles(false);
+        } else {
+          alert((data && data.error) || t('fileDeleteError', 'Failed to delete file.'));
+        }
+      } catch (err) {
+        console.error('Error deleting file:', err);
+        alert(t('fileDeleteError', 'Failed to delete file.'));
+      }
     }
 
     function renderFiles(files) {
