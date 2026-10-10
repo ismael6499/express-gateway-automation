@@ -22,6 +22,12 @@ if (!fs.existsSync(MOBILE_DROP_DIR)) {
     fs.mkdirSync(MOBILE_DROP_DIR, { recursive: true });
   } catch (err) {}
 }
+const MOBILE_UPLOAD_DIR = process.env.MOBILE_UPLOAD_DIR || (process.env.USERPROFILE ? path.join(process.env.USERPROFILE, 'Documents', 'Mobile Upload') : path.join('C:', 'Users', 'agust', 'Documents', 'Mobile Upload'));
+if (!fs.existsSync(MOBILE_UPLOAD_DIR)) {
+  try {
+    fs.mkdirSync(MOBILE_UPLOAD_DIR, { recursive: true });
+  } catch (err) {}
+}
 let targetHost = '';
 try {
   targetHost = new URL(TARGET_WEB_URL).hostname;
@@ -1940,6 +1946,108 @@ app.post(['/api/drop/delete', '/drop/delete'], (req, res) => {
   }
 });
 
+// Endpoint POST /api/upload/file - Subida de archivos por streaming optimizado (hasta 4 GB) a Mobile Upload
+app.post(['/api/upload/file', '/api/drop/upload'], (req, res) => {
+  try {
+    const rawFilename = req.query.filename || req.headers['x-filename'] || 'upload_' + Date.now();
+    let decodedFilename = 'archivo';
+    try {
+      decodedFilename = decodeURIComponent(rawFilename);
+    } catch (e) {
+      decodedFilename = rawFilename;
+    }
+    const safeFilename = path.basename(decodedFilename) || ('upload_' + Date.now());
+    const finalPath = path.join(MOBILE_UPLOAD_DIR, safeFilename);
+    const tempPath = path.join(MOBILE_UPLOAD_DIR, `.${safeFilename}.${Date.now()}.uploading`);
+
+    const MAX_UPLOAD_SIZE = 4 * 1024 * 1024 * 1024; // 4 GB
+    const contentLength = parseInt(req.headers['content-length'] || '0', 10);
+    if (contentLength > MAX_UPLOAD_SIZE) {
+      return res.status(413).json({ error: 'Payload Too Large', message: 'El archivo supera el límite de 4 GB.' });
+    }
+
+    let bytesReceived = 0;
+    let aborted = false;
+
+    log(`Mobile Upload: Iniciando subida en stream para ${safeFilename} (${contentLength ? formatFileSize(contentLength) : 'tamaño desconocido'})...`);
+
+    const writeStream = fs.createWriteStream(tempPath);
+
+    req.on('data', (chunk) => {
+      bytesReceived += chunk.length;
+      if (bytesReceived > MAX_UPLOAD_SIZE) {
+        aborted = true;
+        req.destroy();
+        writeStream.destroy();
+        try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch (e) {}
+        if (!res.headersSent) {
+          return res.status(413).json({ error: 'Payload Too Large', message: 'El archivo supera el límite de 4 GB.' });
+        }
+      }
+    });
+
+    req.on('aborted', () => {
+      aborted = true;
+      log(`Mobile Upload: Subida cancelada por el cliente para ${safeFilename}`);
+      writeStream.destroy();
+      try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch (e) {}
+    });
+
+    req.on('error', (err) => {
+      aborted = true;
+      log(`Mobile Upload: Error en stream de request para ${safeFilename}: ${err.message}`);
+      writeStream.destroy();
+      try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch (e) {}
+      if (!res.headersSent) {
+        return res.status(500).json({ error: 'Upload Error', message: err.message });
+      }
+    });
+
+    writeStream.on('error', (err) => {
+      aborted = true;
+      log(`Mobile Upload: Error de escritura en disco para ${safeFilename}: ${err.message}`);
+      try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch (e) {}
+      if (!res.headersSent) {
+        return res.status(500).json({ error: 'Disk Write Error', message: err.message });
+      }
+    });
+
+    writeStream.on('finish', () => {
+      if (aborted) return;
+      try {
+        if (fs.existsSync(finalPath)) {
+          fs.unlinkSync(finalPath);
+        }
+        fs.renameSync(tempPath, finalPath);
+        log(`Mobile Upload: Subida completada exitosamente: ${safeFilename} (${formatFileSize(bytesReceived)})`);
+        if (!res.headersSent) {
+          return res.json({
+            status: 'ok',
+            success: true,
+            message: 'Archivo subido exitosamente a Mobile Upload.',
+            filename: safeFilename,
+            size: formatFileSize(bytesReceived),
+            bytes: bytesReceived
+          });
+        }
+      } catch (err) {
+        log(`Mobile Upload: Error al finalizar archivo ${safeFilename}: ${err.message}`);
+        try { if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath); } catch (e) {}
+        if (!res.headersSent) {
+          return res.status(500).json({ error: 'Finalize Error', message: err.message });
+        }
+      }
+    });
+
+    req.pipe(writeStream);
+  } catch (err) {
+    log(`Mobile Upload: Error inesperado en endpoint de subida: ${err.message}`);
+    if (!res.headersSent) {
+      return res.status(500).json({ error: 'Server Error', message: err.message });
+    }
+  }
+});
+
 // Endpoint GET /browser/last-activity (and legacy /browser/ultima-actividad)
 app.get(['/browser/last-activity', '/browser/ultima-actividad'], (req, res) => {
   if (!lastActivityTime) {
@@ -3377,6 +3485,86 @@ const DASHBOARD_HTML = `
       transform: scale(0.95);
       filter: brightness(0.9);
     }
+    .drop-upload-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px dashed rgba(16, 185, 129, 0.35);
+      border-radius: 14px;
+      padding: 12px 14px;
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .drop-upload-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+    }
+    .btn-drop-upload {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.2) 100%);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #34d399 !important;
+      padding: 9px 16px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 0.84rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      transition: all 0.15s ease;
+      box-sizing: border-box;
+      user-select: none;
+    }
+    .btn-drop-upload:hover {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.3) 0%, rgba(5, 150, 105, 0.3) 100%);
+      border-color: rgba(16, 185, 129, 0.6);
+      color: #6ee7b7 !important;
+    }
+    .drop-progress-wrap {
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      width: 100%;
+    }
+    .drop-progress-bar-bg {
+      width: 100%;
+      height: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+    }
+    .drop-progress-bar-fill {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #10b981 0%, #34d399 100%);
+      border-radius: 999px;
+      transition: width 0.15s linear;
+    }
+    .drop-progress-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.74rem;
+      color: var(--text-muted);
+    }
+    .btn-cancel-upload {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #f87171;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .btn-cancel-upload:hover {
+      background: rgba(239, 68, 68, 0.25);
+      border-color: rgba(239, 68, 68, 0.5);
+    }
     .spin-active {
       animation: spin 0.75s linear infinite;
     }
@@ -3960,6 +4148,27 @@ const DASHBOARD_HTML = `
             <span class="status-dot online"></span>
             <span id="mobileDropFilesCountText">0 files available</span>
           </span>
+          <span style="font-size: 0.72rem; color: var(--text-muted);">📁 Mobile Upload</span>
+        </div>
+
+        <div class="drop-upload-card" id="dropUploadCardDashboard">
+          <div class="drop-upload-row">
+            <input type="file" id="dashboardFileInput" multiple style="display: none;" onchange="handleMobileUpload(this.files, 'dashboard')">
+            <button type="button" class="btn-drop-upload" onclick="document.getElementById('dashboardFileInput').click()" id="btnUploadDashboard">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+              <span data-i18n="btnUploadToPc">Upload to PC</span>
+            </button>
+            <span style="font-size: 0.73rem; color: var(--text-muted); flex: 1;">Stream: max 4 GB</span>
+          </div>
+          <div class="drop-progress-wrap" id="dashboardUploadProgress">
+            <div class="drop-progress-bar-bg">
+              <div class="drop-progress-bar-fill" id="dashboardProgressBar"></div>
+            </div>
+            <div class="drop-progress-meta">
+              <span id="dashboardProgressText">Uploading...</span>
+              <button type="button" class="btn-cancel-upload" onclick="cancelCurrentUpload()" data-i18n="btnCancelUpload">Cancel</button>
+            </div>
+          </div>
         </div>
 
         <div id="mobileDropContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-top: 12px;"></div>
@@ -4407,6 +4616,100 @@ const DASHBOARD_HTML = `
           setTimeout(() => icon.classList.remove('spin-active'), 500);
         }
       }
+    }
+
+    let activeUploadXhr = null;
+
+    function cancelCurrentUpload() {
+      if (activeUploadXhr) {
+        try {
+          activeUploadXhr.abort();
+        } catch (e) {}
+        activeUploadXhr = null;
+      }
+      const wrap = document.getElementById('dashboardUploadProgress');
+      if (wrap) wrap.style.display = 'none';
+      if (typeof showToast === 'function') {
+        showToast(t('uploadCancelled', 'Upload cancelled.'), 'warning');
+      }
+    }
+
+    async function handleMobileUpload(files, source) {
+      if (!files || files.length === 0) return;
+      const MAX_SIZE = 4 * 1024 * 1024 * 1024; // 4 GB
+
+      const progressWrap = document.getElementById(source === 'dashboard' ? 'dashboardUploadProgress' : 'dropUploadProgress');
+      const progressBar = document.getElementById(source === 'dashboard' ? 'dashboardProgressBar' : 'dropProgressBar');
+      const progressText = document.getElementById(source === 'dashboard' ? 'dashboardProgressText' : 'dropProgressText');
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file.size > MAX_SIZE) {
+          alert(t('uploadLimitError', 'File exceeds maximum size limit (4 GB).'));
+          continue;
+        }
+
+        if (progressWrap) progressWrap.style.display = 'flex';
+        if (progressBar) progressBar.style.width = '0%';
+        if (progressText) progressText.textContent = (files.length > 1 ? '[' + (i + 1) + '/' + files.length + '] ' : '') + t('uploadingProgress', 'Uploading to PC...') + ' 0%';
+
+        const success = await new Promise((resolve) => {
+          const xhr = new XMLHttpRequest();
+          activeUploadXhr = xhr;
+
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const percent = Math.min(100, Math.round((e.loaded / e.total) * 100));
+              if (progressBar) progressBar.style.width = percent + '%';
+              const loadedMb = (e.loaded / (1024 * 1024)).toFixed(1);
+              const totalMb = (e.total / (1024 * 1024)).toFixed(1);
+              if (progressText) {
+                progressText.textContent = (files.length > 1 ? '[' + (i + 1) + '/' + files.length + '] ' : '') + percent + '% (' + loadedMb + ' / ' + totalMb + ' MB)';
+              }
+            }
+          };
+
+          xhr.onload = () => {
+            activeUploadXhr = null;
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve(true);
+            } else {
+              resolve(false);
+            }
+          };
+
+          xhr.onerror = () => {
+            activeUploadXhr = null;
+            resolve(false);
+          };
+
+          xhr.onabort = () => {
+            activeUploadXhr = null;
+            resolve(null);
+          };
+
+          const uploadUrl = '/api/upload/file?filename=' + encodeURIComponent(file.name);
+          xhr.open('POST', uploadUrl, true);
+          xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+          xhr.setRequestHeader('X-Filename', encodeURIComponent(file.name));
+          xhr.send(file);
+        });
+
+        if (success === null) {
+          // Cancelled
+          break;
+        } else if (success) {
+          if (typeof showToast === 'function') {
+            showToast(t('uploadSuccess', 'File uploaded successfully to PC.'), 'success');
+          }
+        } else {
+          alert(t('uploadError', 'Error uploading file.') + ' (' + file.name + ')');
+        }
+      }
+
+      if (progressWrap) progressWrap.style.display = 'none';
+      const fileInput = document.getElementById(source === 'dashboard' ? 'dashboardFileInput' : 'dropFileInput');
+      if (fileInput) fileInput.value = '';
     }
 
     function updateBrilloLabel(val) {
@@ -6992,6 +7295,81 @@ const MOBILE_DROP_HTML = `
       transform: scale(0.95);
       filter: brightness(0.9);
     }
+    .drop-upload-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px dashed rgba(16, 185, 129, 0.35);
+      border-radius: 18px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+    }
+    .drop-upload-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+    }
+    .btn-drop-upload {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(5, 150, 105, 0.2) 100%);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #34d399 !important;
+      padding: 12px 20px;
+      border-radius: 14px;
+      font-weight: 700;
+      font-size: 0.92rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.15s ease;
+      box-sizing: border-box;
+      user-select: none;
+    }
+    .btn-drop-upload:active {
+      transform: scale(0.98);
+      filter: brightness(0.9);
+    }
+    .drop-progress-wrap {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
+    }
+    .drop-progress-bar-bg {
+      width: 100%;
+      height: 10px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      overflow: hidden;
+      position: relative;
+    }
+    .drop-progress-bar-fill {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #10b981 0%, #34d399 100%);
+      border-radius: 999px;
+      transition: width 0.15s linear;
+    }
+    .drop-progress-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    .btn-cancel-upload {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #f87171;
+      font-size: 0.78rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
     .empty-state {
       display: none;
       text-align: center;
@@ -7054,6 +7432,26 @@ const MOBILE_DROP_HTML = `
       <div class="hero-stats">
         <span id="dropStatsCount">0 files available</span>
         <span style="color: #6ee7b7; font-weight: 600;">OLED Fast Mode</span>
+      </div>
+    </div>
+
+    <div class="drop-upload-card" id="dropUploadCardMobile">
+      <div class="drop-upload-row">
+        <input type="file" id="dropFileInput" multiple style="display: none;" onchange="handleMobileUpload(this.files, 'drop')">
+        <button type="button" class="btn-drop-upload" onclick="document.getElementById('dropFileInput').click()" id="btnUploadMobile">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+          <span data-i18n="btnUploadToPc">Upload to PC</span>
+        </button>
+        <span style="font-size: 0.76rem; color: var(--text-muted); flex: 1;">Stream: max 4 GB</span>
+      </div>
+      <div class="drop-progress-wrap" id="dropUploadProgress">
+        <div class="drop-progress-bar-bg">
+          <div class="drop-progress-bar-fill" id="dropProgressBar"></div>
+        </div>
+        <div class="drop-progress-meta">
+          <span id="dropProgressText">Uploading to PC...</span>
+          <button type="button" class="btn-cancel-upload" onclick="cancelCurrentUpload()" data-i18n="btnCancelUpload">Cancel</button>
+        </div>
       </div>
     </div>
 
@@ -7279,6 +7677,96 @@ const MOBILE_DROP_HTML = `
           setTimeout(() => icon.classList.remove('spin-active'), 500);
         }
       }
+    }
+
+    let activeUploadXhr = null;
+
+    function cancelCurrentUpload() {
+      if (activeUploadXhr) {
+        try {
+          activeUploadXhr.abort();
+        } catch (e) {}
+        activeUploadXhr = null;
+      }
+      const wrap = document.getElementById('dropUploadProgress');
+      if (wrap) wrap.style.display = 'none';
+      showToast(t('uploadCancelled', 'Upload cancelled.'));
+    }
+
+    async function handleMobileUpload(files, source) {
+      if (!files || files.length === 0) return;
+      const MAX_SIZE = 4 * 1024 * 1024 * 1024; // 4 GB
+
+      const progressWrap = document.getElementById('dropUploadProgress');
+      const progressBar = document.getElementById('dropProgressBar');
+      const progressText = document.getElementById('dropProgressText');
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file.size > MAX_SIZE) {
+          alert(t('uploadLimitError', 'File exceeds maximum size limit (4 GB).'));
+          continue;
+        }
+
+        if (progressWrap) progressWrap.style.display = 'flex';
+        if (progressBar) progressBar.style.width = '0%';
+        if (progressText) progressText.textContent = (files.length > 1 ? '[' + (i + 1) + '/' + files.length + '] ' : '') + t('uploadingProgress', 'Uploading to PC...') + ' 0%';
+
+        const success = await new Promise((resolve) => {
+          const xhr = new XMLHttpRequest();
+          activeUploadXhr = xhr;
+
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const percent = Math.min(100, Math.round((e.loaded / e.total) * 100));
+              if (progressBar) progressBar.style.width = percent + '%';
+              const loadedMb = (e.loaded / (1024 * 1024)).toFixed(1);
+              const totalMb = (e.total / (1024 * 1024)).toFixed(1);
+              if (progressText) {
+                progressText.textContent = (files.length > 1 ? '[' + (i + 1) + '/' + files.length + '] ' : '') + percent + '% (' + loadedMb + ' / ' + totalMb + ' MB)';
+              }
+            }
+          };
+
+          xhr.onload = () => {
+            activeUploadXhr = null;
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve(true);
+            } else {
+              resolve(false);
+            }
+          };
+
+          xhr.onerror = () => {
+            activeUploadXhr = null;
+            resolve(false);
+          };
+
+          xhr.onabort = () => {
+            activeUploadXhr = null;
+            resolve(null);
+          };
+
+          const uploadUrl = '/api/upload/file?filename=' + encodeURIComponent(file.name);
+          xhr.open('POST', uploadUrl, true);
+          xhr.setRequestHeader('Content-Type', file.type || 'application/octet-stream');
+          xhr.setRequestHeader('X-Filename', encodeURIComponent(file.name));
+          xhr.send(file);
+        });
+
+        if (success === null) {
+          // Cancelled
+          break;
+        } else if (success) {
+          showToast(t('uploadSuccess', 'File uploaded successfully to PC.'));
+        } else {
+          alert(t('uploadError', 'Error uploading file.') + ' (' + file.name + ')');
+        }
+      }
+
+      if (progressWrap) progressWrap.style.display = 'none';
+      const fileInput = document.getElementById('dropFileInput');
+      if (fileInput) fileInput.value = '';
     }
 
     document.addEventListener('DOMContentLoaded', () => {

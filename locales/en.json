@@ -220,5 +220,12 @@
   "btnDeleteFile": "Delete",
   "confirmDeleteFile": "Are you sure you want to delete",
   "fileDeletedSuccess": "File deleted successfully.",
-  "fileDeleteError": "Error deleting file."
+  "fileDeleteError": "Error deleting file.",
+  "btnUploadToPc": "Upload to PC",
+  "uploadingProgress": "Uploading to PC...",
+  "uploadSuccess": "File uploaded successfully to PC.",
+  "uploadCancelled": "Upload cancelled.",
+  "uploadError": "Error uploading file.",
+  "uploadLimitError": "File exceeds maximum size limit (4 GB).",
+  "btnCancelUpload": "Cancel"
 }
