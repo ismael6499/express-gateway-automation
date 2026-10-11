@@ -18,11 +18,9 @@ A lightweight, robust local **API Gateway & Workspace Automation Server** built 
 - **WMI 0% Brightness Drop:** Drops monitor backlight to 0% via WMI (`WmiMonitorBrightnessMethods`) when entering standby, restoring baseline brightness upon physical wake up.
 - **Toast Notification Shield:** Intercepts `GUID_CONSOLE_DISPLAY_STATE` events to re-standby monitors if Windows toast notifications or background processes inadvertently light up the screen.
 
-### 🌐 Persistent Browser Automation & Keepalive
+### 🌐 Persistent Browser Automation
 - **Playwright Chromium Engine:** Headless or headed browser instance with persistent session profiles (`browser_user_data`).
 - **Enterprise SSO Support:** Automated corporate credential handler and re-authentication banner monitor for enterprise web portals.
-- **Customizable Activity Keepalive:** Scheduled window interaction, keystrokes, and mouse movements to maintain persistent online sessions during configurable working hours.
-- **Scheduled Power & Auto-Close:** Define custom start/end active schedules, meal/break pauses, and auto-shutdown crons.
 
 ### 🔊 Audio, Multimedia & Hardware Controls
 - **CoreAudio / COM Native Integration:** High-performance C# helper (`AudioHelper.exe`) for reading and adjusting master volume, mute state, and real-time audio playback status without shell execution lag.
@@ -136,10 +134,6 @@ All requests must provide authentication using the `X-API-KEY` header or a valid
 | Method | Canonical Endpoint | Legacy Alias | Description | Sample Payload |
 |---|---|---|---|---|
 | `POST` | `/browser/window` | `/browser/browser` | Controls browser lifecycle (`open`, `close`, `minimize`, `restore`) | `{"action": "open"}` |
-| `POST` | `/browser/presence` | `/browser/presencia` | Toggles activity keepalive (`start`, `pause`, `temporary_pause`) | `{"action": "start", "intervalMs": 240000}` |
-| `POST` | `/browser/schedule` | `/browser/programacion` | Configures schedule, flex close, and pause intervals | `{"startHour": "09:00", "endHour": "18:00", "closeHour": "18:03"}` |
-| `POST` | `/browser/simulate-action` | `/browser/simular-accion` | Injects immediate test actions (`move-mouse`, `type-search`, `press-shift`) | `{"action": "type-search"}` |
-| `GET` | `/browser/last-activity` | `/browser/ultima-actividad` | Returns timestamp and elapsed seconds since last keepalive | - |
 
 ### System, Screen & Hardware (`/system`)
 
