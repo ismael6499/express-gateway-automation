@@ -283,6 +283,9 @@ function loadSimulationState() {
 // URL del túnel público ngrok
 let ngrokUrl = '';
 let ngrokListener = null;
+let isReconnectingNgrok = false;
+let ngrokConsecutiveFailures = 0;
+let ngrokWatchdogInterval = null;
 
 // ==========================================
 // NATIVE INPUT HELPER (Trackpad, Mouse & Keystrokes)
@@ -8294,6 +8297,10 @@ app.get(['/drop', '/drop.html'], (req, res) => {
 // Manejo centralizado de cierre de proceso
 async function gracefulShutdown() {
   log('Iniciando apagado ordenado del servidor...');
+  if (ngrokWatchdogInterval) {
+    clearInterval(ngrokWatchdogInterval);
+    ngrokWatchdogInterval = null;
+  }
   await cleanupBrowserSession();
   
   if (ngrokListener) {
@@ -8304,6 +8311,9 @@ async function gracefulShutdown() {
       log(`Error al cerrar túnel ngrok: ${err.message}`);
     }
   }
+  try {
+    await ngrok.disconnect();
+  } catch (_) {}
   
   process.exit(0);
 }
@@ -8392,40 +8402,103 @@ app.listen(PORT, async () => {
   loadSimulationState();
   log(`Servidor unificado (API Gateway Local) escuchando en http://localhost:${PORT}`);
   
-  // Inicialización del túnel ngrok con reintentos para evitar el error ERR_NGROK_3200
+  // Gestor de túnel ngrok con autoreconexión y watchdog de salud 24/7
   const token = process.env.NGROK_AUTHTOKEN;
   if (token && token.trim() !== '') {
-    let retriesRemaining = 5;
-    const connectNgrok = async () => {
+    async function connectNgrok(reason = 'Startup') {
+      if (isReconnectingNgrok) return;
+      isReconnectingNgrok = true;
+
+      log(`[Ngrok] Iniciando conexión/reconexión de túnel ngrok (${reason})...`);
+
+      if (ngrokListener) {
+        try {
+          await ngrokListener.close();
+        } catch (_) {}
+        ngrokListener = null;
+      }
       try {
-        log('Iniciando túnel seguro ngrok...');
+        await ngrok.disconnect();
+      } catch (_) {}
+
+      try {
         const forwardOpts = {
           addr: PORT,
           authtoken: token,
-          request_header_add: ['ngrok-skip-browser-warning: true']
+          request_header_add: ['ngrok-skip-browser-warning: true'],
+          onStatusChange: (status) => {
+            log(`[Ngrok Event] Estado del túnel: ${status}`);
+            if (status === 'closed') {
+              log('[Ngrok Event] Túnel cerrado o desconectado remotamente. Programando autoreconexión...');
+              setTimeout(() => {
+                if (!isReconnectingNgrok) {
+                  connectNgrok('Disconnection status=closed');
+                }
+              }, 3000);
+            }
+          }
         };
-        
+
         const domain = process.env.NGROK_DOMAIN;
         if (domain && domain.trim() !== '') {
           forwardOpts.domain = domain;
-          log(`Usando dominio estático configurado: ${domain}`);
+          log(`[Ngrok] Usando dominio estático configurado: ${domain}`);
         }
 
         ngrokListener = await ngrok.forward(forwardOpts);
         ngrokUrl = ngrokListener.url();
-        log(`¡Túnel ngrok establecido! URL Pública: ${ngrokUrl}`);
+        ngrokConsecutiveFailures = 0;
+        log(`¡Túnel ngrok establecido y verificado! URL Pública: ${ngrokUrl}`);
       } catch (error) {
-        log(`Error al establecer el túnel ngrok: ${error.message}`);
-        if (retriesRemaining > 0) {
-          retriesRemaining--;
-          log(`Reintentando conexión ngrok en 5 segundos... (Reintentos restantes: ${retriesRemaining})`);
-          setTimeout(connectNgrok, 5000);
-        } else {
-          log('Se agotaron los reintentos para establecer el túnel ngrok.');
-        }
+        ngrokConsecutiveFailures++;
+        log(`[Ngrok Error] Error al conectar túnel ngrok: ${error.message} (Fallo consecutivo #${ngrokConsecutiveFailures})`);
+        const delay = Math.min(30000, 5000 * Math.min(ngrokConsecutiveFailures, 6));
+        log(`[Ngrok Error] Reintentando conexión ngrok en ${Math.round(delay / 1000)}s...`);
+        setTimeout(() => {
+          isReconnectingNgrok = false;
+          connectNgrok(`Auto-retry after failure #${ngrokConsecutiveFailures}`);
+        }, delay);
+        return;
+      } finally {
+        isReconnectingNgrok = false;
       }
-    };
-    connectNgrok();
+    }
+
+    // Watchdog activo para verificar conectividad del endpoint público
+    async function checkNgrokTunnelHealth() {
+      if (isReconnectingNgrok) return;
+      const domain = process.env.NGROK_DOMAIN;
+      if (!domain) return;
+
+      const probeUrl = `https://${domain}/system/ping`;
+      try {
+        const res = await fetch(probeUrl, {
+          method: 'GET',
+          headers: {
+            'x-api-key': API_KEY,
+            'ngrok-skip-browser-warning': 'true'
+          },
+          signal: AbortSignal.timeout(6000)
+        });
+
+        const ngrokErrorCode = res.headers.get('ngrok-error-code');
+        if (ngrokErrorCode || res.status === 404 || res.status >= 500) {
+          log(`[Ngrok Watchdog] Endpoint público no responde adecuadamente (HTTP ${res.status}, Error: ${ngrokErrorCode || 'none'}). Reconectando túnel...`);
+          await connectNgrok(`Watchdog detected HTTP ${res.status} / ${ngrokErrorCode || 'down'}`);
+          return;
+        }
+
+        ngrokConsecutiveFailures = 0;
+      } catch (err) {
+        log(`[Ngrok Watchdog] Fallo al sondear endpoint público (${err.message}). Reconectando túnel...`);
+        await connectNgrok(`Watchdog probe error: ${err.message}`);
+      }
+    }
+
+    await connectNgrok('Server startup');
+
+    if (ngrokWatchdogInterval) clearInterval(ngrokWatchdogInterval);
+    ngrokWatchdogInterval = setInterval(checkNgrokTunnelHealth, 30000);
   } else {
     log('Variable NGROK_AUTHTOKEN vacía o no configurada. Servidor operando solo localmente.');
   }
