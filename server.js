@@ -364,7 +364,8 @@ app.post('/gateway/login', (req, res) => {
   if (key === API_KEY) {
     res.setHeader('Set-Cookie', [
       `api_key=${encodeURIComponent(key)}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`,
-      `ngrok-skip-browser-warning=true; Path=/; Max-Age=31536000; SameSite=Lax; Secure`
+      `ngrok-skip-browser-warning=true; Path=/; Max-Age=31536000; SameSite=Lax; Secure`,
+      `abuse_interstitial=${encodeURIComponent(process.env.NGROK_DOMAIN || 'endocrine-refocus-sleep.ngrok-free.dev')}; Path=/; Max-Age=31536000; SameSite=None; Secure`
     ]);
     log('Autenticación exitosa en /gateway/login. Cookie de sesión establecida.');
     return res.json({
@@ -4253,9 +4254,9 @@ const DASHBOARD_HTML = `
         </div>
         <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px; width: 100%;">
           <div style="display: flex; gap: 8px; width: 100%;">
-            <button class="btn" id="btnGuardiaToggle" style="flex: 1.2; margin-top: 0; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.4); color: rgb(216, 180, 254); display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="toggleGuardia()" title="Turns off physical display and keeps it off during notifications or ScreenConnect. Wakes on physical key/mouse or by tapping this button.">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-              <span id="btnGuardiaToggleText" data-i18n="btnGuardToggleOn">Turn Off (Guard)</span>
+            <button class="btn btn-danger" style="flex: 1; margin-top: 0; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: rgb(248, 113, 113); display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="controlarTeclado('apagar-pantalla')" title="Traditional display power-off via Alt+X shortcut">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+              <span data-i18n="btnTurnOffAltX">Traditional Off (Alt+X)</span>
             </button>
             <button class="btn btn-success" style="flex: 1; margin-top: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;" onclick="controlarTeclado('encender-pantalla')" title="Turns on physical display and disables guard">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
@@ -4263,9 +4264,9 @@ const DASHBOARD_HTML = `
             </button>
           </div>
           <div style="display: flex; gap: 8px; width: 100%;">
-            <button class="btn btn-danger" style="flex: 1; margin-top: 0; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.25); color: rgb(248, 113, 113); display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.78rem; padding: 7px 10px;" onclick="controlarTeclado('apagar-pantalla')" title="Traditional display power-off via Alt+X shortcut">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
-              <span data-i18n="btnTurnOffAltX">Traditional Off (Alt+X)</span>
+            <button class="btn" id="btnGuardiaToggle" style="flex: 1; margin-top: 0; background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.4); color: rgb(216, 180, 254); display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px;" onclick="toggleGuardia()" title="Turns off physical display and keeps it off during notifications or ScreenConnect. Wakes on physical key/mouse or by tapping this button.">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+              <span id="btnGuardiaToggleText" data-i18n="btnGuardToggleOn">Turn Off (Guard)</span>
             </button>
           </div>
         </div>
@@ -7322,7 +7323,10 @@ app.get('/', (req, res) => {
   let cookieKey = getApiKeyFromCookie(req.headers.cookie);
   const queryKey = req.query.key || req.query.api_key;
 
-  const cookies = ['ngrok-skip-browser-warning=true; Path=/; Max-Age=31536000; SameSite=Lax; Secure'];
+  const cookies = [
+    'ngrok-skip-browser-warning=true; Path=/; Max-Age=31536000; SameSite=Lax; Secure',
+    `abuse_interstitial=${encodeURIComponent(process.env.NGROK_DOMAIN || 'endocrine-refocus-sleep.ngrok-free.dev')}; Path=/; Max-Age=31536000; SameSite=None; Secure`
+  ];
 
   if (queryKey === API_KEY) {
     cookies.push(`api_key=${encodeURIComponent(queryKey)}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`);
@@ -8278,7 +8282,10 @@ app.get(['/drop', '/drop.html'], (req, res) => {
   let cookieKey = getApiKeyFromCookie(req.headers.cookie);
   const queryKey = req.query.key || req.query.api_key;
 
-  const cookies = ['ngrok-skip-browser-warning=true; Path=/; Max-Age=31536000; SameSite=Lax; Secure'];
+  const cookies = [
+    'ngrok-skip-browser-warning=true; Path=/; Max-Age=31536000; SameSite=Lax; Secure',
+    `abuse_interstitial=${encodeURIComponent(process.env.NGROK_DOMAIN || 'endocrine-refocus-sleep.ngrok-free.dev')}; Path=/; Max-Age=31536000; SameSite=None; Secure`
+  ];
 
   if (queryKey === API_KEY) {
     cookies.push(`api_key=${encodeURIComponent(queryKey)}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`);
