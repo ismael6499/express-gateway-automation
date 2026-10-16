@@ -2500,6 +2500,10 @@ const LOGIN_HTML = `
   </div>
 
   <script>
+    if (window.location.search && (window.location.search.includes('key=') || window.location.search.includes('api_key='))) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     const I18N = {
       en: ${JSON.stringify(i18nEn)},
       es: ${JSON.stringify(i18nEs)}
@@ -2535,7 +2539,7 @@ const LOGIN_HTML = `
         } else {
           sessionStorage.removeItem('auto_login_attempts');
           const target = window.location.pathname.startsWith('/drop') ? '/drop' : '/';
-          window.location.href = target + '?key=' + encodeURIComponent(savedKey);
+          window.location.href = target;
         }
       }
     });
@@ -2568,7 +2572,7 @@ const LOGIN_HTML = `
           sessionStorage.removeItem('auto_login_failed');
           sessionStorage.removeItem('auto_login_attempts');
           const target = window.location.pathname.startsWith('/drop') ? '/drop' : '/';
-          window.location.href = target + '?key=' + encodeURIComponent(key);
+          window.location.href = target;
         } else {
           if (isAutoLogin) {
             sessionStorage.setItem('auto_login_failed', 'true');
@@ -4643,6 +4647,11 @@ const DASHBOARD_HTML = `
   <div class="toast-container" id="toastContainer"></div>
 
   <script>
+    // Sanitizar URL inmediatamente para no dejar expuesta ninguna key en la barra de direcciones o historial
+    if (window.location.search && (window.location.search.includes('key=') || window.location.search.includes('api_key='))) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     // Interceptor global para incluir siempre las cabeceras requeridas (ngrok y x-api-key) en las peticiones fetch
     const originalFetch = window.fetch;
     window.fetch = function(url, options = {}) {
@@ -7891,6 +7900,11 @@ const MOBILE_DROP_HTML = `
   <div id="toast"></div>
 
   <script>
+    // Sanitizar URL inmediatamente para no dejar expuesta ninguna key en la barra de direcciones o historial
+    if (window.location.search && (window.location.search.includes('key=') || window.location.search.includes('api_key='))) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
     const I18N = {
       en: ${JSON.stringify(i18nEn)},
       es: ${JSON.stringify(i18nEs)}
