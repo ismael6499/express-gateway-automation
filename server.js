@@ -333,7 +333,7 @@ function sendInputCommand(cmd) {
 
 // Middleware de Autenticación para rutas de la API (interviene en /browser, /sistema, y /gateway/status)
 app.use((req, res, next) => {
-  if (req.path === '/' || req.path === '/drop' || req.path === '/drop.html' || req.path === '/favicon.ico' || req.path === '/sw.js' || req.path === '/manifest.json' || req.path.startsWith('/icon-') || req.path === '/gateway/login' || req.path === '/gateway/restart' || req.path === '/system/restart') {
+  if (req.path === '/' || req.path === '/drop' || req.path === '/drop.html' || req.path === '/favicon.ico' || req.path === '/sw.js' || req.path === '/manifest.json' || req.path.startsWith('/icon-') || req.path === '/gateway/login' || req.path === '/gateway/restart' || req.path === '/system/restart' || req.path === '/reset' || req.path === '/clear') {
     return next();
   }
 
@@ -355,6 +355,13 @@ app.use((req, res, next) => {
 
 // Servir archivos estáticos de PWA (manifest, service worker, iconos) estrictamente protegidos tras autenticación
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Endpoint GET /reset y /clear para purgar automáticamente service workers, cachés y almacenamiento corrupto del navegador
+app.get(['/reset', '/clear'], (req, res) => {
+  res.setHeader('Clear-Site-Data', '"cache", "storage"');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="1;url=/"><meta name="theme-color" content="#0b0f19"><style>body{background:#0b0f19;color:#f1f5f9;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;padding:20px;}</style></head><body><div><h2>Cache & Service Worker Purged</h2><p style="color:#94a3b8;margin-top:10px;">Redirecting back to gateway...</p></div></body></html>`);
+});
 
 // Endpoint POST /gateway/login para autenticación web segura con Set-Cookie de servidor
 app.post('/gateway/login', (req, res) => {
