@@ -333,7 +333,7 @@ function sendInputCommand(cmd) {
 
 // Middleware de Autenticación para rutas de la API (interviene en /browser, /sistema, y /gateway/status)
 app.use((req, res, next) => {
-  if (req.path === '/' || req.path === '/drop' || req.path === '/drop.html' || req.path === '/favicon.ico' || req.path === '/gateway/login' || req.path === '/gateway/restart' || req.path === '/system/restart') {
+  if (req.path === '/' || req.path === '/drop' || req.path === '/drop.html' || req.path === '/favicon.ico' || req.path === '/sw.js' || req.path === '/manifest.json' || req.path.startsWith('/icon-') || req.path === '/gateway/login' || req.path === '/gateway/restart' || req.path === '/system/restart') {
     return next();
   }
 
@@ -2497,8 +2497,8 @@ const LOGIN_HTML = `
 
   <script>
     const I18N = {
-      en: \${JSON.stringify(i18nEn)},
-      es: \${JSON.stringify(i18nEs)}
+      en: ${JSON.stringify(i18nEn)},
+      es: ${JSON.stringify(i18nEs)}
     };
     let currentLang = localStorage.getItem('dashboard_lang') || 'en';
 
