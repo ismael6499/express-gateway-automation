@@ -362,10 +362,13 @@ app.post('/gateway/login', (req, res) => {
   const key = apiKey || req.headers['x-api-key'];
 
   if (key === API_KEY) {
+    const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+    const secSuffix = isHttps ? '; Secure' : '';
+    const sameSiteInter = isHttps ? 'None; Secure' : 'Lax';
     res.setHeader('Set-Cookie', [
-      `api_key=${encodeURIComponent(key)}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`,
-      `ngrok-skip-browser-warning=true; Path=/; Max-Age=31536000; SameSite=Lax; Secure`,
-      `abuse_interstitial=${encodeURIComponent(process.env.NGROK_DOMAIN || 'endocrine-refocus-sleep.ngrok-free.dev')}; Path=/; Max-Age=31536000; SameSite=None; Secure`
+      `api_key=${encodeURIComponent(key)}; Path=/; Max-Age=31536000; SameSite=Lax${secSuffix}`,
+      `ngrok-skip-browser-warning=true; Path=/; Max-Age=31536000; SameSite=Lax${secSuffix}`,
+      `abuse_interstitial=${encodeURIComponent(process.env.NGROK_DOMAIN || 'endocrine-refocus-sleep.ngrok-free.dev')}; Path=/; Max-Age=31536000; SameSite=${sameSiteInter}`
     ]);
     log('Autenticación exitosa en /gateway/login. Cookie de sesión establecida.');
     return res.json({
@@ -2525,8 +2528,14 @@ const LOGIN_HTML = `
       const savedKey = localStorage.getItem('X-API-KEY');
       if (savedKey) {
         document.getElementById('apiKeyInput').value = savedKey;
-        if (!sessionStorage.getItem('auto_login_failed')) {
+        const attempts = parseInt(sessionStorage.getItem('auto_login_attempts') || '0', 10);
+        if (attempts < 2) {
+          sessionStorage.setItem('auto_login_attempts', String(attempts + 1));
           login(true);
+        } else {
+          sessionStorage.removeItem('auto_login_attempts');
+          const target = window.location.pathname.startsWith('/drop') ? '/drop' : '/';
+          window.location.href = target + '?key=' + encodeURIComponent(savedKey);
         }
       }
     });
@@ -2551,10 +2560,15 @@ const LOGIN_HTML = `
         });
 
         if (response.ok) {
-          document.cookie = "api_key=" + encodeURIComponent(key) + "; path=/; max-age=" + (365*24*60*60) + "; SameSite=Lax; Secure";
+          const isHttps = window.location.protocol === 'https:';
+          const secSuffix = isHttps ? '; Secure' : '';
+          document.cookie = "api_key=" + encodeURIComponent(key) + "; path=/; max-age=" + (365*24*60*60) + "; SameSite=Lax" + secSuffix;
+          document.cookie = "ngrok-skip-browser-warning=true; path=/; max-age=" + (365*24*60*60) + "; SameSite=Lax" + secSuffix;
           localStorage.setItem('X-API-KEY', key);
           sessionStorage.removeItem('auto_login_failed');
-          window.location.href = window.location.pathname.startsWith('/drop') ? '/drop' : '/';
+          sessionStorage.removeItem('auto_login_attempts');
+          const target = window.location.pathname.startsWith('/drop') ? '/drop' : '/';
+          window.location.href = target + '?key=' + encodeURIComponent(key);
         } else {
           if (isAutoLogin) {
             sessionStorage.setItem('auto_login_failed', 'true');
@@ -4629,17 +4643,21 @@ const DASHBOARD_HTML = `
   <div class="toast-container" id="toastContainer"></div>
 
   <script>
-    // Interceptor global para incluir siempre la cabecera 'ngrok-skip-browser-warning' en las peticiones fetch
+    // Interceptor global para incluir siempre las cabeceras requeridas (ngrok y x-api-key) en las peticiones fetch
     const originalFetch = window.fetch;
     window.fetch = function(url, options = {}) {
       options = options || {};
       options.headers = options.headers || {};
+      const savedApiKey = localStorage.getItem('X-API-KEY');
       if (options.headers instanceof Headers) {
         options.headers.set('ngrok-skip-browser-warning', 'true');
+        if (savedApiKey && !options.headers.has('x-api-key')) options.headers.set('x-api-key', savedApiKey);
       } else if (Array.isArray(options.headers)) {
         options.headers.push(['ngrok-skip-browser-warning', 'true']);
+        if (savedApiKey) options.headers.push(['x-api-key', savedApiKey]);
       } else {
         options.headers['ngrok-skip-browser-warning'] = 'true';
+        if (savedApiKey && !options.headers['x-api-key']) options.headers['x-api-key'] = savedApiKey;
       }
       return originalFetch(url, options);
     };
@@ -5063,9 +5081,12 @@ const DASHBOARD_HTML = `
     }
 
     function logout() {
-      document.cookie = "api_key=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; Secure; SameSite=Lax";
+      const isHttps = window.location.protocol === 'https:';
+      const secSuffix = isHttps ? '; Secure' : '';
+      document.cookie = "api_key=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax" + secSuffix;
       localStorage.removeItem('X-API-KEY');
       sessionStorage.setItem('auto_login_failed', 'true');
+      sessionStorage.removeItem('auto_login_attempts');
       window.location.href = '/';
     }
 
@@ -7322,14 +7343,17 @@ const DASHBOARD_HTML = `
 app.get('/', (req, res) => {
   let cookieKey = getApiKeyFromCookie(req.headers.cookie);
   const queryKey = req.query.key || req.query.api_key;
+  const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  const secSuffix = isHttps ? '; Secure' : '';
+  const sameSiteInter = isHttps ? 'None; Secure' : 'Lax';
 
   const cookies = [
-    'ngrok-skip-browser-warning=true; Path=/; Max-Age=31536000; SameSite=Lax; Secure',
-    `abuse_interstitial=${encodeURIComponent(process.env.NGROK_DOMAIN || 'endocrine-refocus-sleep.ngrok-free.dev')}; Path=/; Max-Age=31536000; SameSite=None; Secure`
+    `ngrok-skip-browser-warning=true; Path=/; Max-Age=31536000; SameSite=Lax${secSuffix}`,
+    `abuse_interstitial=${encodeURIComponent(process.env.NGROK_DOMAIN || 'endocrine-refocus-sleep.ngrok-free.dev')}; Path=/; Max-Age=31536000; SameSite=${sameSiteInter}`
   ];
 
   if (queryKey === API_KEY) {
-    cookies.push(`api_key=${encodeURIComponent(queryKey)}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`);
+    cookies.push(`api_key=${encodeURIComponent(queryKey)}; Path=/; Max-Age=31536000; SameSite=Lax${secSuffix}`);
     cookieKey = queryKey;
   }
 
@@ -8281,14 +8305,17 @@ const MOBILE_DROP_HTML = `
 app.get(['/drop', '/drop.html'], (req, res) => {
   let cookieKey = getApiKeyFromCookie(req.headers.cookie);
   const queryKey = req.query.key || req.query.api_key;
+  const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
+  const secSuffix = isHttps ? '; Secure' : '';
+  const sameSiteInter = isHttps ? 'None; Secure' : 'Lax';
 
   const cookies = [
-    'ngrok-skip-browser-warning=true; Path=/; Max-Age=31536000; SameSite=Lax; Secure',
-    `abuse_interstitial=${encodeURIComponent(process.env.NGROK_DOMAIN || 'endocrine-refocus-sleep.ngrok-free.dev')}; Path=/; Max-Age=31536000; SameSite=None; Secure`
+    `ngrok-skip-browser-warning=true; Path=/; Max-Age=31536000; SameSite=Lax${secSuffix}`,
+    `abuse_interstitial=${encodeURIComponent(process.env.NGROK_DOMAIN || 'endocrine-refocus-sleep.ngrok-free.dev')}; Path=/; Max-Age=31536000; SameSite=${sameSiteInter}`
   ];
 
   if (queryKey === API_KEY) {
-    cookies.push(`api_key=${encodeURIComponent(queryKey)}; Path=/; Max-Age=31536000; SameSite=Lax; Secure`);
+    cookies.push(`api_key=${encodeURIComponent(queryKey)}; Path=/; Max-Age=31536000; SameSite=Lax${secSuffix}`);
     cookieKey = queryKey;
   }
 
