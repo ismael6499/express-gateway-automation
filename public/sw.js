@@ -217,7 +217,13 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       (async () => {
         try {
-          const networkResponse = await fetch(event.request);
+          const reqHeaders = new Headers(event.request.headers);
+          reqHeaders.set('ngrok-skip-browser-warning', 'true');
+          const reqClone = new Request(event.request, {
+            headers: reqHeaders,
+            credentials: 'include'
+          });
+          const networkResponse = await fetch(reqClone);
           // If response is successful, update cache and return
           if (networkResponse && networkResponse.status === 200) {
             const clone = networkResponse.clone();
@@ -254,7 +260,11 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.endsWith('.png') || url.pathname.endsWith('.json') || url.pathname.endsWith('.ico')) {
     event.respondWith(
       caches.match(event.request).then((cached) => {
-        return cached || fetch(event.request).then((res) => {
+        if (cached) return cached;
+        const reqHeaders = new Headers(event.request.headers);
+        reqHeaders.set('ngrok-skip-browser-warning', 'true');
+        const reqClone = new Request(event.request, { headers: reqHeaders, credentials: 'include' });
+        return fetch(reqClone).then((res) => {
           if (res && res.status === 200) {
             const clone = res.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone)).catch(() => {});
@@ -268,9 +278,16 @@ self.addEventListener('fetch', (event) => {
 
   // Default network with cache fallback
   event.respondWith(
-    fetch(event.request).catch(async () => {
-      const cached = await caches.match(event.request);
-      return cached || new Response('', { status: 408, statusText: 'Request Timeout' });
-    })
+    (async () => {
+      try {
+        const reqHeaders = new Headers(event.request.headers);
+        reqHeaders.set('ngrok-skip-browser-warning', 'true');
+        const reqClone = new Request(event.request, { headers: reqHeaders, credentials: 'include' });
+        return await fetch(reqClone);
+      } catch (err) {
+        const cached = await caches.match(event.request);
+        return cached || new Response('', { status: 408, statusText: 'Request Timeout' });
+      }
+    })()
   );
 });
