@@ -353,14 +353,41 @@ app.use((req, res, next) => {
   next();
 });
 
-// Servir archivos estáticos de PWA (manifest, service worker, iconos) estrictamente protegidos tras autenticación
+// Servir /sw.js con encabezados estrictos no-cache para forzar actualización inmediata
+app.get('/sw.js', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
+  res.setHeader('Content-Type', 'application/javascript');
+  res.sendFile(path.join(__dirname, 'public', 'sw.js'));
+});
+
+// Servir archivos estáticos de PWA (manifest, iconos) estrictamente protegidos tras autenticación
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Endpoint GET /reset y /clear para purgar automáticamente service workers, cachés y almacenamiento corrupto del navegador
 app.get(['/reset', '/clear'], (req, res) => {
   res.setHeader('Clear-Site-Data', '"cache", "storage"');
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-  res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="1;url=/"><meta name="theme-color" content="#0b0f19"><style>body{background:#0b0f19;color:#f1f5f9;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;padding:20px;}</style></head><body><div><h2>Cache & Service Worker Purged</h2><p style="color:#94a3b8;margin-top:10px;">Redirecting back to gateway...</p></div></body></html>`);
+  res.send(`<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="theme-color" content="#0b0f19"><title>Resetting Gateway</title><style>body{background:#0b0f19;color:#f1f5f9;font-family:-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center;padding:20px;box-sizing:border-box;}.card{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);padding:30px;border-radius:16px;max-width:360px;width:100%;}.spinner{border:3px solid rgba(59,130,246,0.2);border-top-color:#3b82f6;border-radius:50%;width:40px;height:40px;animation:spin 1s linear infinite;margin:0 auto 16px auto;}@keyframes spin{100%{transform:rotate(360deg);}}</style></head><body><div class="card"><div class="spinner"></div><h2 style="font-size:1.2rem;margin-bottom:8px;">Resetting Storage & Workers...</h2><p style="color:#94a3b8;font-size:0.9rem;margin-bottom:16px;">Purging stale caches and unregistering workers. Redirecting in 2s...</p></div><script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(regs) {
+        for (var i = 0; i < regs.length; i++) {
+          regs[i].unregister();
+        }
+      });
+    }
+    if ('caches' in window) {
+      caches.keys().then(function(keys) {
+        for (var j = 0; j < keys.length; j++) {
+          caches.delete(keys[j]);
+        }
+      });
+    }
+    document.cookie = "abuse_interstitial=" + encodeURIComponent(location.hostname) + "; Path=/; Max-Age=31536000; SameSite=None; Secure";
+    document.cookie = "ngrok-skip-browser-warning=true; Path=/; Max-Age=31536000; SameSite=None; Secure";
+    setTimeout(function() {
+      window.location.replace('/');
+    }, 2000);
+  </script></body></html>`);
 });
 
 // Endpoint POST /gateway/login para autenticación web segura con Set-Cookie de servidor
