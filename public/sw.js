@@ -1,10 +1,4 @@
-const CACHE_NAME = 'gateway-pwa-v2';
-const STATIC_ASSETS = [
-  '/',
-  '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png'
-];
+const CACHE_NAME = 'gateway-pwa-v3';
 
 const RECONNECTING_HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -81,31 +75,6 @@ const RECONNECTING_HTML = `<!DOCTYPE html>
       line-height: 1.5;
       margin-bottom: 24px;
     }
-    .countdown-bar {
-      width: 100%;
-      height: 4px;
-      background: rgba(255, 255, 255, 0.08);
-      border-radius: 999px;
-      overflow: hidden;
-      margin-bottom: 20px;
-    }
-    .countdown-fill {
-      height: 100%;
-      width: 100%;
-      background: #3b82f6;
-      transition: width 1s linear;
-    }
-    .status-badge {
-      display: inline-block;
-      font-size: 0.8rem;
-      font-weight: 600;
-      padding: 4px 12px;
-      border-radius: 999px;
-      background: rgba(59, 130, 246, 0.15);
-      color: #60a5fa;
-      border: 1px solid rgba(59, 130, 246, 0.3);
-      margin-bottom: 16px;
-    }
     .btn-retry {
       display: inline-flex;
       align-items: center;
@@ -121,11 +90,6 @@ const RECONNECTING_HTML = `<!DOCTYPE html>
       border: none;
       cursor: pointer;
       text-decoration: none;
-      transition: background 0.2s, transform 0.1s;
-    }
-    .btn-retry:active {
-      transform: scale(0.98);
-      background: #2563eb;
     }
   </style>
 </head>
@@ -135,12 +99,8 @@ const RECONNECTING_HTML = `<!DOCTYPE html>
       <div class="spinner"></div>
       <div class="pulse-dot"></div>
     </div>
-    <div class="status-badge" id="badgeText">Connecting Tunnel</div>
     <h1 id="titleText">Reconnecting to Gateway...</h1>
-    <p id="msgText">The secure tunnel is re-establishing automatically. Retrying in <b id="countdown">4</b>s...</p>
-    <div class="countdown-bar">
-      <div class="countdown-fill" id="countdownFill"></div>
-    </div>
+    <p id="msgText">Re-establishing connection. Retrying in <b id="countdown">3</b>s...</p>
     <button class="btn-retry" onclick="location.reload()">
       🔄 <span id="btnText">Retry Now</span>
     </button>
@@ -148,19 +108,15 @@ const RECONNECTING_HTML = `<!DOCTYPE html>
   <script>
     const isEs = navigator.language && navigator.language.startsWith('es');
     if (isEs) {
-      document.getElementById('badgeText').innerText = 'Conectando Túnel';
       document.getElementById('titleText').innerText = 'Reconectando con el Gateway...';
-      document.getElementById('msgText').innerHTML = 'El túnel seguro se está reestableciendo automáticamente. Reintentando en <b id="countdown">4</b>s...';
+      document.getElementById('msgText').innerHTML = 'Restableciendo conexión. Reintentando en <b id="countdown">3</b>s...';
       document.getElementById('btnText').innerText = 'Reintentar Ahora';
     }
-    let secondsLeft = 4;
-    const total = 4;
-    const countdownEl = document.getElementById('countdown');
-    const fillEl = document.getElementById('countdownFill');
+    let secondsLeft = 3;
     const interval = setInterval(() => {
       secondsLeft--;
-      if (countdownEl) countdownEl.innerText = secondsLeft;
-      if (fillEl) fillEl.style.width = ((secondsLeft / total) * 100) + '%';
+      const el = document.getElementById('countdown');
+      if (el) el.innerText = secondsLeft;
       if (secondsLeft <= 0) {
         clearInterval(interval);
         location.reload();
@@ -172,27 +128,13 @@ const RECONNECTING_HTML = `<!DOCTYPE html>
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(async (cache) => {
-      for (const asset of STATIC_ASSETS) {
-        try {
-          await cache.add(asset);
-        } catch (e) {
-          // Ignore individual asset caching failures during initial install
-        }
-      }
-    })
-  );
 });
 
 self.addEventListener('activate', (event) => {
+  // Purge ALL caches on activation to eliminate any corrupted/white cached responses
   event.waitUntil(
     caches.keys().then((keys) => {
-      return Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_NAME) return caches.delete(key);
-        })
-      );
+      return Promise.all(keys.map((key) => caches.delete(key)));
     }).then(() => self.clients.claim())
   );
 });
@@ -200,94 +142,36 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // Always pass-through non-GET, API calls, and mutation routes directly to network
-  if (
-    event.request.method !== 'GET' ||
-    url.pathname.startsWith('/browser') ||
-    url.pathname.startsWith('/system') ||
-    url.pathname.startsWith('/sistema') ||
-    url.pathname.startsWith('/gateway') ||
-    url.pathname.startsWith('/api')
-  ) {
-    return;
-  }
+  // Always pass-through directly to network with ngrok bypass header
+  const reqHeaders = new Headers(event.request.headers);
+  reqHeaders.set('ngrok-skip-browser-warning', 'true');
+  const reqClone = new Request(event.request, {
+    headers: reqHeaders,
+    credentials: 'include'
+  });
 
-  // Network-first for navigation/pages with bulletproof offline/reconnecting fallback
   if (event.request.mode === 'navigate') {
     event.respondWith(
-      (async () => {
-        try {
-          const reqHeaders = new Headers(event.request.headers);
-          reqHeaders.set('ngrok-skip-browser-warning', 'true');
-          const reqClone = new Request(event.request, {
-            headers: reqHeaders,
-            credentials: 'include'
-          });
-          const networkResponse = await fetch(reqClone);
-          // If response is successful, update cache and return
-          if (networkResponse && networkResponse.status === 200) {
-            const clone = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone)).catch(() => {});
-            return networkResponse;
-          }
-
-          // If ngrok returned 404 (ERR_NGROK_3200) or 502/503/504 edge errors
-          if (!networkResponse || networkResponse.status === 404 || networkResponse.status >= 500) {
-            const cachedPage = await caches.match(event.request) || await caches.match('/');
-            if (cachedPage) return cachedPage;
-            return new Response(RECONNECTING_HTML, {
-              status: 200,
-              headers: { 'Content-Type': 'text/html; charset=utf-8' }
-            });
-          }
-
-          return networkResponse;
-        } catch (networkErr) {
-          // Network failed or offline: try cache first, then reconnecting fallback page
-          const cachedPage = await caches.match(event.request) || await caches.match('/');
-          if (cachedPage) return cachedPage;
+      fetch(reqClone).then((networkResponse) => {
+        // If ngrok returns error code (404/502/503), show reconnecting screen
+        if (!networkResponse || networkResponse.status === 404 || networkResponse.status >= 500) {
           return new Response(RECONNECTING_HTML, {
             status: 200,
             headers: { 'Content-Type': 'text/html; charset=utf-8' }
           });
         }
-      })()
-    );
-    return;
-  }
-
-  // Cache-first for icons and manifest
-  if (url.pathname.endsWith('.png') || url.pathname.endsWith('.json') || url.pathname.endsWith('.ico')) {
-    event.respondWith(
-      caches.match(event.request).then((cached) => {
-        if (cached) return cached;
-        const reqHeaders = new Headers(event.request.headers);
-        reqHeaders.set('ngrok-skip-browser-warning', 'true');
-        const reqClone = new Request(event.request, { headers: reqHeaders, credentials: 'include' });
-        return fetch(reqClone).then((res) => {
-          if (res && res.status === 200) {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone)).catch(() => {});
-          }
-          return res;
-        }).catch(() => cached);
+        return networkResponse;
+      }).catch(() => {
+        return new Response(RECONNECTING_HTML, {
+          status: 200,
+          headers: { 'Content-Type': 'text/html; charset=utf-8' }
+        });
       })
     );
     return;
   }
 
-  // Default network with cache fallback
   event.respondWith(
-    (async () => {
-      try {
-        const reqHeaders = new Headers(event.request.headers);
-        reqHeaders.set('ngrok-skip-browser-warning', 'true');
-        const reqClone = new Request(event.request, { headers: reqHeaders, credentials: 'include' });
-        return await fetch(reqClone);
-      } catch (err) {
-        const cached = await caches.match(event.request);
-        return cached || new Response('', { status: 408, statusText: 'Request Timeout' });
-      }
-    })()
+    fetch(reqClone).catch(() => new Response('', { status: 408, statusText: 'Request Timeout' }))
   );
 });
